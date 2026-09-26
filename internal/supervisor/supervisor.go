@@ -586,6 +586,9 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	kind := "stop"
 	if state == runtime.StatePaused {
 		kind = "pause"
+		if s.pauseWakeTimeout(c) == s.opt.ReclaimWakeTimeout {
+			kind = "reclaimed" // pages come back from the swap device: a different tier in any dashboard
+		}
 		timeout = s.pauseWakeTimeout(c)
 		startTook, err = s.rt.Unpause(ctx, c.Container)
 	} else {

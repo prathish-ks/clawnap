@@ -624,4 +624,9 @@ func TestReclaimedCellGetsLongerWakeTimeout(t *testing.T) {
 	if _, err := s.Wake(context.Background(), "t"); err != nil {
 		t.Fatalf("reclaimed cell must get the longer timeout: %v", err)
 	}
+	var b strings.Builder
+	s.Metrics().Write(&b, s.Cells())
+	if !strings.Contains(b.String(), `fleetd_wakes_total{kind="reclaimed"} 1`) {
+		t.Fatalf("reclaimed wakes must be labelled separately:\n%s", b.String())
+	}
 }
