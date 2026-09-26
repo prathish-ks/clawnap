@@ -1,6 +1,6 @@
 # fleet-supervisor — living plan
 
-**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 8 of 12 rows done; remaining need a Telegram bot token (rows 4–5), the user's provider outreach (9), a Hetzner account (10), then the Isthmus extraction (11) · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
+**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 10 of 12 rows done; local gate criteria met except session/memory/cron survival (needs a model provider). Remaining: provider outreach (9, user), Hetzner account (10, user), Isthmus extraction (11) · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
 
 How to maintain: edit the status line and the "Now" table every working session; move finished rows to the Changelog with the date; never delete a gate, only mark it passed or failed with evidence.
 
@@ -28,8 +28,8 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 1 | Readiness probe: HTTP GET /health == 200 instead of TCP | done 2026-09-26 | TCP is a false positive on Docker Desktop (experiments/local-measurements-2026-09-26.md) |
 | 2 | Pause tier: `docker pause`/`unpause` as primary hibernation; stop/start as cold tier; per-cell tier policy | done 2026-09-26 (unit-tested; live check in progress) | pause→/health 200 in 0.13 s locally; stop→ready 73–90 s |
 | 3 | Live test on this Mac: 2 live + 3 hibernated cells through fleetd, 20 pause/unpause and 20 stop/start cycles | done 2026-09-26 (5 cells; pause 60/60, p95 1.3–2.2 s under load 52; stop 5/5, 40–155 s; live cells unaffected; pausing frees no RAM) | 1 cell: pause 5/5, wake 0.2–0.4 s; stop 2/2 after per-tier timeout fix, wake 45–72 s; SIGTERM exit 0.3–17 s. Still to do: 2 live + 3 hibernated concurrently, 20 cycles each |
-| 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | partly done 2026-09-26: bot live in polling mode; pause → ingress /hook → wake → proxied 200 in 0.43 s. True push-wake needs a public HTTPS URL (Hetzner); OpenClaw self-registers setWebhook | token stored in gitignored experiments/bots.txt; regenerate in BotFather after tests |
-| 5 | State-survival check after cycles: sessions, memory files, cron, channel auth | blocked: bot token shared with the running isthmus-fresh-clone-test install (getUpdates conflict); needs a dedicated bot or that service paused | Mode A gate |
+| 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | done 2026-09-26 (local scope): dedicated bot @Ocfleet_bot; pause → ingress wake 0.43 s; messages sent during pause delivered on wake and answered. Push-wake via public HTTPS is a Hetzner item | token stored in gitignored experiments/bots.txt; regenerate in BotFather after tests |
+| 5 | State-survival check after cycles: sessions, memory files, cron, channel auth | done 2026-09-26 for channel state (auth, polling offset, delivery survive pause; 48 s freeze tolerated, 3 h freeze not). Sessions/memory/cron still untested: needs a model provider | Mode A gate |
 | 6 | Cron-aware wake (interim: never hibernate when a job is due within idle window) | done 2026-09-26 (interim: `-next-due` set by operator; pre-wake 2 min; reading schedules from the cell is backlog) | upstream #119035 |
 | 7 | WAL checkpoint after stop-tier hibernate (host-side, pure-Go SQLite, bind mounts only) | done 2026-09-26 (unit-tested; live check pending) | upstream #143524 WAL growth |
 | 8 | Daemon crash/restart consistency test | done 2026-09-26 (unit: adopts external pause/exit without fighting it; registry writes are atomic) | live kill test on Hetzner remains |
@@ -60,6 +60,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: end-to-end Telegram test passed with a dedicated bot: messages sent during pause delivered and answered on wake; long-freeze self-exit and self-registered webhook documented.
 - 2026-09-26: concurrent 5-cell live test passed (experiments/local-measurements-2026-09-26.md); interim cron-aware wake, daemon-restart reconciliation, host-side WAL checkpoint added; commits 09a3da1, 6211c02, a843098.
 - 2026-09-26: plan restructured as a living document; HTTP /health readiness and pause/stop tiers implemented with tests (`fleetd cells add -tier pause|stop`).
 
