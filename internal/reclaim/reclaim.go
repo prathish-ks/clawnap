@@ -90,8 +90,13 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64)
 	// 4 GiB request against a 152 MiB cell). Bound the wait as well; the
 	// syscall cannot be cancelled, so a slow write is abandoned to its
 	// goroutine and the caller gets the stats as they stand.
-	if cur, err := readInt(filepath.Join(d, "memory.current")); err == nil && cur < bytes {
-		bytes = cur
+	// Leave a floor: the last few tens of MiB are kernel/pinned pages the
+	// kernel cannot reclaim, and asking for them makes the write spin until
+	// the wait bound (observed: 190 MiB request against 190 MiB resident ->
+	// 20 MiB left, write returned only at 60 s).
+	const floor = 48 << 20
+	if cur, err := readInt(filepath.Join(d, "memory.current")); err == nil && cur-floor < bytes {
+		bytes = cur - floor
 	}
 	if bytes <= 0 {
 		return r.Stats(containerID)

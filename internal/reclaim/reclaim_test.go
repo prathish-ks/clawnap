@@ -27,7 +27,8 @@ func TestDirStatsAndReclaimAcrossLayouts(t *testing.T) {
 	if _, err := r.Reclaim(context.Background(), id, 900<<20); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "943718400" {
+	// request is clamped to memory.current minus the 48 MiB floor
+	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "776994816" {
 		t.Fatalf("wrote %q", b)
 	}
 	if _, err := r.Dir("nope"); err == nil {

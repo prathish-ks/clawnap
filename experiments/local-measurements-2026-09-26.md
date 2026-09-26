@@ -108,3 +108,7 @@ Conclusions:
 2. The price is wake latency, set by the swap device: ~17 s on this disk. Expected on Hetzner: zram (compressed in RAM, no disk) → sub-second to low-seconds wake with ~2–3x space saving; NVMe swap → low-seconds wake with ~35x saving. Phase 0b measures both.
 3. Tiers become: pause (resident, <1 s), pause+reclaim (20 MiB, seconds), stop (0, 40–150 s). The supervisor should reclaim on a schedule after pause (e.g. after N minutes paused), not immediately, so recently used cells stay sub-second.
 4. `memory.reclaim` on the container cgroup is the mechanism; it is Linux-only and needs write access to /sys/fs/cgroup (the supervisor runs as root on a fleet host). On systemd hosts the cgroup path is /sys/fs/cgroup/system.slice/docker-<id>.scope; on cgroupfs hosts /sys/fs/cgroup/docker/<id>.
+
+### Reclaim driven by the supervisor itself (Linux build of fleetd run inside the Docker VM)
+- `fleetd reconcile` adopted the externally paused cell (PausedAt set on adoption — fixed today), then `-reclaim-after 1s` reclaimed it: **190 → 20 MiB resident, 663 MiB in swap**.
+- First attempt requested the full resident amount and the kernel write only returned at the 60 s wait bound (it spins on the last unreclaimable pages); requests are now capped at memory.current minus a 48 MiB floor. Second timed pass recorded below the table in the plan changelog.
