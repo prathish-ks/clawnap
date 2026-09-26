@@ -124,3 +124,19 @@ Conclusions:
 - Wake after reclaim: unpause 0.41 s, /health 200 after **12.9 s** — no slower than the light cell (16.7 s earlier on the same disk). The filler's 400 MiB never paged back in. **Wake time tracks the pages the gateway touches, not the cell's total size.** A heavy cell costs more swap space, not more wake time.
 - Consequence: reclaim must be chunked (64 MiB steps, stop when a chunk frees < 16 MiB) instead of one request with a fixed floor; implemented after this test.
 - Caveat: the filler is idle bytes. A real browser or a large live heap is touched by the gateway on some code paths (health does not touch them; a first agent turn might), so first-message latency after reclaim on a heavy cell is a Hetzner measurement with a real model.
+
+## Two-cell concurrency run, supervisor running inside the Docker VM (2026-09-26, 12:08–12:10 UTC)
+Second cell (`tg3`) created with `fleetd cells create` (first live use of the provisioning helper). Linux build of fleetd served from a host-network container in the VM with `-reclaim-after 20s -interval 10s`; driven through its own endpoints.
+
+| Step | Result |
+|---|---|
+| Hibernate both via POST /hibernate | 540 ms, 294 ms |
+| Reclaim both (automatic) | tg2 212 → 140 MiB; tg3 649 → 522 MiB; only ~200 MiB freed in total |
+| Wake both at once via POST /wake | tg3 ready 1.94 s; tg2 ready 9.11 s (847 MiB of it was in swap from earlier) |
+| Hibernate tg2 again, wake 28 s later | ready 1.33 s |
+| Failures / interleaving problems | none; 3 wakes, 3 hibernates, 2 reclaims, 0 failures |
+
+Findings:
+- **Reclaim is bounded by swap capacity, not by the algorithm.** The VM has a 1 GiB swap file and it was already 932 MiB used, so the chunked loop correctly stopped when chunks freed almost nothing. Provisioning rule for Phase 0b: swap capacity (zram size or NVMe swap file) must exceed the sum of resident memory of the cells you intend to reclaim. This is what a provider sizes, and what the host checker should warn about.
+- Concurrent wakes of two cells proceed independently; wake time is per-cell page-in, not serialised.
+- The intended "wake during reclaim" overlap did not occur live (the wake arrived one reconcile tick before the second reclaim started); preemption is covered by the unit test `TestReclaimYieldsToPendingWake` and remains to be observed live on Hetzner where reclaims are longer.
