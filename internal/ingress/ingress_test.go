@@ -52,7 +52,7 @@ func TestHookWakesThenProxiesWithStrippedPrefix(t *testing.T) {
 	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
 
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
-	_ = reg.Put(registry.Cell{Name: "a", Container: "oc-a", Port: port})
+	_ = reg.Put(registry.Cell{Name: "a", Container: "oc-a", Port: 1, HookPort: port}) // gateway port differs from hook port
 	fw := &fakeWaker{}
 	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
 	defer srv.Close()

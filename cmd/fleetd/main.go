@@ -139,6 +139,7 @@ func cells(args []string) error {
 		name := fs.String("name", "", "cell name")
 		container := fs.String("container", "", "container name")
 		port := fs.Int("port", 0, "loopback gateway port (readiness probe)")
+		hookPort := fs.Int("hook-port", 0, "loopback webhook listener port (0 = same as -port)")
 		class := fs.String("class", "hibernate", "hibernate|always-on")
 		tier := fs.String("tier", "pause", "pause|stop (how a hibernate-class cell sleeps)")
 		idle := fs.Duration("idle", 10*time.Minute, "idle timeout before hibernation")
@@ -154,7 +155,7 @@ func cells(args []string) error {
 			}
 			nextDue = t
 		}
-		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue})
+		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, HookPort: *hookPort, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue})
 	case "rm":
 		fs := flag.NewFlagSet("rm", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")

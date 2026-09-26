@@ -51,7 +51,8 @@ const (
 type Cell struct {
 	Name      string        `json:"name"`
 	Container string        `json:"container"`
-	Port      int           `json:"port"` // loopback port the gateway listens on
+	Port      int           `json:"port"`      // loopback port the gateway listens on
+	HookPort  int           `json:"hook_port"` // loopback port for inbound webhooks (0 = same as Port); OpenClaw serves Telegram webhooks on a separate listener
 	Class     Class         `json:"class"`
 	Tier      Tier          `json:"tier"`
 	IdleAfter time.Duration `json:"idle_after"`

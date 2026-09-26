@@ -84,7 +84,11 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cell unavailable", http.StatusBadGateway)
 		return
 	}
-	target := &url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(c.Port)}
+	hookPort := c.HookPort
+	if hookPort == 0 {
+		hookPort = c.Port
+	}
+	target := &url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(hookPort)}
 	prefix := "/hook/" + name
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {

@@ -28,7 +28,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 1 | Readiness probe: HTTP GET /health == 200 instead of TCP | done 2026-09-26 | TCP is a false positive on Docker Desktop (experiments/local-measurements-2026-09-26.md) |
 | 2 | Pause tier: `docker pause`/`unpause` as primary hibernation; stop/start as cold tier; per-cell tier policy | done 2026-09-26 (unit-tested; live check in progress) | pause→/health 200 in 0.13 s locally; stop→ready 73–90 s |
 | 3 | Live test on this Mac: 2 live + 3 hibernated cells through fleetd, 20 pause/unpause and 20 stop/start cycles | done 2026-09-26 (5 cells; pause 60/60, p95 1.3–2.2 s under load 52; stop 5/5, 40–155 s; live cells unaffected; pausing frees no RAM) | 1 cell: pause 5/5, wake 0.2–0.4 s; stop 2/2 after per-tier timeout fix, wake 45–72 s; SIGTERM exit 0.3–17 s. Still to do: 2 live + 3 hibernated concurrently, 20 cycles each |
-| 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | todo | needs a bot token (free, BotFather) |
+| 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | partly done 2026-09-26: bot live in polling mode; pause → ingress /hook → wake → proxied 200 in 0.43 s. True push-wake needs a public HTTPS URL (Hetzner); OpenClaw self-registers setWebhook | token stored in gitignored experiments/bots.txt; regenerate in BotFather after tests |
 | 5 | State-survival check after cycles: sessions, memory files, cron, channel auth | todo | Mode A gate |
 | 6 | Cron-aware wake (interim: never hibernate when a job is due within idle window) | done 2026-09-26 (interim: `-next-due` set by operator; pre-wake 2 min; reading schedules from the cell is backlog) | upstream #119035 |
 | 7 | WAL checkpoint after stop-tier hibernate (host-side, pure-Go SQLite, bind mounts only) | done 2026-09-26 (unit-tested; live check pending) | upstream #143524 WAL growth |
@@ -39,6 +39,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
+- Stale gateway owner lease after unclean stop (exit 1 on restart until timeout): locate the lease, decide whether the supervisor clears it on OOM/crash recovery.
 - Investigate live-cell state-dir growth (1.4 MB → 59 MB in 12 min idle) before Hetzner: logs, cache, or SQLite? — see appendix for the original hour-level plan
 - Density stack CSVs on Hetzner: trim, overcommit, zram, KSM, CRIU, pause tier, stop tier.
 - WhatsApp always-on class; Discord keeper; Slack Events path verification.

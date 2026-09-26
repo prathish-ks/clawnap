@@ -53,3 +53,14 @@ Cells started 20 s apart; all five reached /health 200 within 10–55 s of their
 | State dir growth | live cell 1.4 MB → 59 MB in 12 min idle; hibernated cell 4.1 MB — investigate what grows (logs/cache) before Hetzner |
 
 Local gate status: pause wake < 1 s at p50 but p95 up to 2.2 s under a load average of 52; on an idle host it was 0.2–0.4 s. Stop tier is a minutes-class SLA. Not yet done for the local gate: real Telegram bot end-to-end wake, and the state-survival check after cycles (needs the bot).
+
+## Real Telegram bot cell (2026-09-26, evening)
+
+Config that works (docs were wrong about `startup.auth`): `channels.telegram.botToken` in `openclaw.json`, `gateway.mode: "local"`, `gateway.auth.mode: "token"`. Validate with `openclaw config validate` before starting.
+
+Findings:
+- **Webhook mode is self-registering.** With `channels.telegram.webhookUrl` set, the channel starts a separate listener on `webhookHost:webhookPort` (default 127.0.0.1:8787, path `/telegram-webhook`) and calls Telegram `setWebhook` itself on every channel start, retrying 10 times. Telegram rejects unresolvable hosts, so webhook mode needs the ingress's real public HTTPS URL per cell. Consequence for the supervisor: the cell's `webhookUrl` must be `https://<ingress>/hook/<cell>/telegram-webhook` and `-hook-port` must map to the cell's 8787, not the gateway port.
+- **Polling mode has a spool.** Log: `isolated polling ingress started spool=<state>/telegram/ingress-spool-default`. Messages sent while a cell is paused are held by Telegram (24 h) and fetched on wake.
+- **Stale owner lease after an unclean stop.** After `docker rm -f` of a running cell, the next start failed: `Another Gateway owner lease is still active for this state directory` (exit 1). A later start succeeded, consistent with a lease timeout of roughly one to two minutes. The supervisor's stop tier uses a graceful stop, but OOM kills and host crashes will hit this; the pause tier does not. Needs a proper look on Linux: where the lease lives and whether `gateway status --deep` can clear it.
+- **Wake through the ingress against the real cell:** paused → `GET /hook/tg/health` → cell unpaused and answered `{"ok":true,"status":"live"}` in 0.43 s end to end (wake 155 ms).
+- Test note: a `find -iname '*lease*' -delete` intended for the lease also removed cached control-UI asset files under `state/cache/`; they are a cache and the gateway rebuilt them, but the real lease was not among them.
