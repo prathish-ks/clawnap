@@ -38,3 +38,18 @@ Cell ready (/health 200) ~50 s after `docker run` on an otherwise idle host.
 Re-run after the fix (fresh cell): stop tier 2/2 healthy; hibernate 0.28 s and 17.3 s (second stop exceeded the 10 s SIGTERM grace, so Docker killed it); wake to /health 200 in 71.5 s and 45.3 s.
 
 Fix applied: wake timeout is now per tier (`WakeTimeout` 15 s for pause, `StopWakeTimeout` 3 min for stop). The stop tier also shows OpenClaw does not exit promptly on SIGTERM (6.8–10.4 s), which matters for the "cooperative suspension" question in docs/upstream-watch.md.
+
+## Concurrent test: 5 cells on the 3.9 GB Docker Desktop VM (2026-09-26, 15:41–15:53)
+
+Cells started 20 s apart; all five reached /health 200 within 10–55 s of their own start. Host load average peaked at 52 on a 4-thread CPU.
+
+| Measurement | Value |
+|---|---|
+| Live memory, 5 cells idle | 528–639 MiB each; VM 3,193 MB used, 144 MB free |
+| After pausing 3 of 5 | 3,142 MB used — **pause frees no RAM by itself** (zram/swap needed; Hetzner question) |
+| Pause tier, 20 cycles × 3 cells, under load | 60/60 healthy; wake p50 0.67–0.95 s, p95 1.30–2.23 s, max 6.4 s |
+| Live cells during the 60 cycles | both stayed /health 200 |
+| Stop tier, 5 cycles on one cell, under load | 5/5 healthy; wake 39.5–155.5 s (first cycle 155 s while other cells were booting) |
+| State dir growth | live cell 1.4 MB → 59 MB in 12 min idle; hibernated cell 4.1 MB — investigate what grows (logs/cache) before Hetzner |
+
+Local gate status: pause wake < 1 s at p50 but p95 up to 2.2 s under a load average of 52; on an idle host it was 0.2–0.4 s. Stop tier is a minutes-class SLA. Not yet done for the local gate: real Telegram bot end-to-end wake, and the state-survival check after cycles (needs the bot).

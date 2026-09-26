@@ -1,6 +1,6 @@
 # fleet-supervisor — living plan
 
-**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness) in progress · pause tier proven live (0.2–0.4 s wake), stop tier proven live (45–72 s wake) · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
+**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 8 of 12 rows done; remaining need a Telegram bot token (rows 4–5), the user's provider outreach (9), a Hetzner account (10), then the Isthmus extraction (11) · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
 
 How to maintain: edit the status line and the "Now" table every working session; move finished rows to the Changelog with the date; never delete a gate, only mark it passed or failed with evidence.
 
@@ -27,7 +27,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 |---|---|---|---|
 | 1 | Readiness probe: HTTP GET /health == 200 instead of TCP | done 2026-09-26 | TCP is a false positive on Docker Desktop (experiments/local-measurements-2026-09-26.md) |
 | 2 | Pause tier: `docker pause`/`unpause` as primary hibernation; stop/start as cold tier; per-cell tier policy | done 2026-09-26 (unit-tested; live check in progress) | pause→/health 200 in 0.13 s locally; stop→ready 73–90 s |
-| 3 | Live test on this Mac: 2 live + 3 hibernated cells through fleetd, 20 pause/unpause and 20 stop/start cycles | partly done | 1 cell: pause 5/5, wake 0.2–0.4 s; stop 2/2 after per-tier timeout fix, wake 45–72 s; SIGTERM exit 0.3–17 s. Still to do: 2 live + 3 hibernated concurrently, 20 cycles each |
+| 3 | Live test on this Mac: 2 live + 3 hibernated cells through fleetd, 20 pause/unpause and 20 stop/start cycles | done 2026-09-26 (5 cells; pause 60/60, p95 1.3–2.2 s under load 52; stop 5/5, 40–155 s; live cells unaffected; pausing frees no RAM) | 1 cell: pause 5/5, wake 0.2–0.4 s; stop 2/2 after per-tier timeout fix, wake 45–72 s; SIGTERM exit 0.3–17 s. Still to do: 2 live + 3 hibernated concurrently, 20 cycles each |
 | 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | todo | needs a bot token (free, BotFather) |
 | 5 | State-survival check after cycles: sessions, memory files, cron, channel auth | todo | Mode A gate |
 | 6 | Cron-aware wake (interim: never hibernate when a job is due within idle window) | done 2026-09-26 (interim: `-next-due` set by operator; pre-wake 2 min; reading schedules from the cell is backlog) | upstream #119035 |
@@ -38,7 +38,8 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 11 | Extract Isthmus packages into a shared module; Release 0 host checker | after 1–5 | |
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
-## Backlog (Phase 0b onward) — see appendix for the original hour-level plan
+## Backlog (Phase 0b onward)
+- Investigate live-cell state-dir growth (1.4 MB → 59 MB in 12 min idle) before Hetzner: logs, cache, or SQLite? — see appendix for the original hour-level plan
 - Density stack CSVs on Hetzner: trim, overcommit, zram, KSM, CRIU, pause tier, stop tier.
 - WhatsApp always-on class; Discord keeper; Slack Events path verification.
 - Metering, Prometheus, dashboard with one customer-visible feature (status page / security badge).
@@ -57,6 +58,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: concurrent 5-cell live test passed (experiments/local-measurements-2026-09-26.md); interim cron-aware wake, daemon-restart reconciliation, host-side WAL checkpoint added; commits 09a3da1, 6211c02, a843098.
 - 2026-09-26: plan restructured as a living document; HTTP /health readiness and pause/stop tiers implemented with tests (`fleetd cells add -tier pause|stop`).
 
 ---
