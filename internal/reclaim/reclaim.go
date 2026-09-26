@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Stats is a cell's memory accounting from its cgroup.
@@ -84,17 +85,41 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64)
 	if _, err := os.Stat(p); err != nil {
 		return Stats{}, ErrUnsupported
 	}
-	f, err := os.OpenFile(p, os.O_WRONLY, 0)
-	if err != nil {
-		return Stats{}, err
+	// Never ask for more than is resident: the kernel keeps scanning toward
+	// an unreachable target and the write blocks for minutes (observed with a
+	// 4 GiB request against a 152 MiB cell). Bound the wait as well; the
+	// syscall cannot be cancelled, so a slow write is abandoned to its
+	// goroutine and the caller gets the stats as they stand.
+	if cur, err := readInt(filepath.Join(d, "memory.current")); err == nil && cur < bytes {
+		bytes = cur
 	}
-	_, werr := f.WriteString(strconv.FormatInt(bytes, 10))
-	_ = f.Close()
-	if werr != nil && !strings.Contains(strings.ToLower(werr.Error()), "resource temporarily unavailable") {
-		return Stats{}, werr
+	if bytes <= 0 {
+		return r.Stats(containerID)
 	}
-	if err := ctx.Err(); err != nil {
-		return Stats{}, err
+	done := make(chan error, 1)
+	go func() {
+		f, err := os.OpenFile(p, os.O_WRONLY, 0)
+		if err != nil {
+			done <- err
+			return
+		}
+		_, werr := f.WriteString(strconv.FormatInt(bytes, 10))
+		_ = f.Close()
+		done <- werr
+	}()
+	wait := 60 * time.Second
+	if dl, ok := ctx.Deadline(); ok && time.Until(dl) < wait {
+		wait = time.Until(dl)
+	}
+	select {
+	case werr := <-done:
+		if werr != nil && !strings.Contains(strings.ToLower(werr.Error()), "resource temporarily unavailable") {
+			return Stats{}, werr
+		}
+	case <-time.After(wait):
+		return r.Stats(containerID) // partial reclaim; report what happened
+	case <-ctx.Done():
+		return Stats{}, ctx.Err()
 	}
 	return r.Stats(containerID)
 }
