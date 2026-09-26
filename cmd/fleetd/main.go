@@ -137,10 +137,13 @@ func run(args []string) error {
 		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 		listen := fs.String("listen", "127.0.0.1:8080", "ingress listen address")
 		token := fs.String("token", os.Getenv("FLEETD_TOKEN"), "bearer token for /wake")
+		maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this")
+		fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
+		interval := fs.Duration("interval", 30*time.Second, "reconcile interval")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		reg, sup, err := open(supervisor.Options{})
+		reg, sup, err := open(supervisor.Options{MaxPause: *maxPause, PauseFallthrough: *fallthrough_, Interval: *interval})
 		if err != nil {
 			return err
 		}

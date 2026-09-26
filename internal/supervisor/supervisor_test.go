@@ -266,3 +266,51 @@ func TestDaemonRestartReconcilesExternalPause(t *testing.T) {
 		t.Fatalf("expected adoption as hibernated without action, phase=%s calls=%v", c.Phase, fr.calls)
 	}
 }
+
+func TestPauseCapPulsesLongFrozenCell(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-z": runtime.StateRunning}, netio: map[string]string{"oc-z": "1kB / 1kB"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	okProbe := func(context.Context, int) error { return nil }
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: okProbe, MaxPause: 10 * time.Minute, PulseWindow: time.Millisecond})
+	_ = reg.Put(registry.Cell{Name: "z", Container: "oc-z", Port: 1, IdleAfter: time.Minute})
+	s.ReconcileOnce(context.Background())
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background()) // hibernates (pause)
+	c, _ := reg.Get("z")
+	if c.Phase != registry.PhaseHibernated || c.PausedAt.IsZero() {
+		t.Fatalf("expected paused with PausedAt, got %+v", c)
+	}
+	now = now.Add(5 * time.Minute) // under cap
+	s.ReconcileOnce(context.Background())
+	if fr.has("unpause") {
+		t.Fatal("must not pulse before the cap")
+	}
+	now = now.Add(6 * time.Minute) // 11 min frozen > 10 min cap
+	s.ReconcileOnce(context.Background())
+	c, _ = reg.Get("z")
+	pauses := 0
+	fr.mu.Lock()
+	for _, x := range fr.calls {
+		if x == "pause oc-z" {
+			pauses++
+		}
+	}
+	fr.mu.Unlock()
+	if !fr.has("unpause oc-z") || pauses != 2 || c.Phase != registry.PhaseHibernated || !c.PausedAt.Equal(now) {
+		t.Fatalf("expected pulse (unpause, re-pause, fresh PausedAt): calls=%v cell=%+v", fr.calls, c)
+	}
+}
+
+func TestPauseCapStopFallthrough(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-y": runtime.StatePaused}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, MaxPause: 10 * time.Minute, PauseFallthrough: "stop"})
+	_ = reg.Put(registry.Cell{Name: "y", Container: "oc-y", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), IdleAfter: time.Minute})
+	s.ReconcileOnce(context.Background())
+	c, _ := reg.Get("y")
+	if !fr.has("unpause oc-y") || !fr.has("stop -t 10 oc-y") || c.Phase != registry.PhaseHibernated || !c.PausedAt.IsZero() {
+		t.Fatalf("expected unpause+stop fallthrough: calls=%v cell=%+v", fr.calls, c)
+	}
+}

@@ -29,6 +29,14 @@ type Options struct {
 	NoiseBytes      int64         // per-sample traffic ignored as background
 	MaxRestarts     int           // always-on self-heal budget per cell
 	PreWake         time.Duration // wake a hibernated cell this long before NextDueAt
+	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
+	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
+	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
+	// heartbeat runs, then re-paused) or, with PauseFallthrough="stop",
+	// stopped instead.
+	MaxPause         time.Duration
+	PulseWindow      time.Duration
+	PauseFallthrough string // "pulse" (default) or "stop"
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -62,6 +70,15 @@ func (o *Options) defaults() {
 	}
 	if o.PreWake == 0 {
 		o.PreWake = 2 * time.Minute // covers a stop-tier boot (45–90 s measured)
+	}
+	if o.MaxPause == 0 {
+		o.MaxPause = 20 * time.Minute // under the 30 min lease constant; measure the real threshold on Linux
+	}
+	if o.PulseWindow == 0 {
+		o.PulseWindow = 5 * time.Second
+	}
+	if o.PauseFallthrough == "" {
+		o.PauseFallthrough = "pulse"
 	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
@@ -149,6 +166,9 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			_, err := s.Wake(ctx, c.Name)
 			return err
 		}
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
+			return s.capPause(ctx, c)
+		}
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
 			return nil // expected
 		}
@@ -221,6 +241,46 @@ func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
 	s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
 }
 
+// capPause handles a cell frozen longer than MaxPause. "pulse": unpause,
+// give the gateway PulseWindow to run its lease/liveness heartbeat (and
+// require /health to answer), then pause again with a fresh PausedAt.
+// "stop": unpause then stop, so the cell sleeps on the stop tier instead.
+func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
+	frozen := s.opt.Now().Sub(c.PausedAt)
+	if s.opt.PauseFallthrough == "stop" {
+		if _, err := s.rt.Unpause(ctx, c.Container); err != nil {
+			return err
+		}
+		took, err := s.rt.Stop(ctx, c.Container, s.opt.StopGrace)
+		if err != nil {
+			return err
+		}
+		s.checkpointWAL(ctx, c)
+		s.opt.Logger.Info("pause cap: fell through to stop", "cell", c.Name, "frozen", frozen, "took", took)
+		return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = time.Time{} })
+	}
+	if _, err := s.rt.Unpause(ctx, c.Container); err != nil {
+		return err
+	}
+	if err := s.waitReady(ctx, c.Port, s.opt.WakeTimeout); err != nil {
+		// gateway did not come back healthy after the thaw: leave it running
+		// and let the next reconcile observe it (self-exit shows as exited).
+		s.opt.Logger.Warn("pause cap: pulse, gateway not ready", "cell", c.Name, "err", err)
+		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseActive; x.PausedAt = time.Time{} })
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(s.opt.PulseWindow):
+	}
+	took, err := s.rt.Pause(ctx, c.Container)
+	if err != nil {
+		return err
+	}
+	s.opt.Logger.Info("pause cap: pulsed", "cell", c.Name, "frozen", frozen, "window", s.opt.PulseWindow, "repause", took)
+	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now() })
+}
+
 // dueSoon: a hibernated cell whose next job is within PreWake should wake now.
 func (s *Supervisor) dueSoon(c registry.Cell) bool {
 	return !c.NextDueAt.IsZero() && !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
@@ -261,7 +321,11 @@ func (s *Supervisor) Hibernate(ctx context.Context, name string) error {
 	}
 	s.opt.Logger.Info("hibernated", "cell", name, "tier", c.Tier, "took", took)
 	delete(s.last, name)
-	return s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated })
+	pausedAt := time.Time{}
+	if c.Tier != registry.TierStop {
+		pausedAt = s.opt.Now()
+	}
+	return s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated; x.PausedAt = pausedAt })
 }
 
 // WakeResult reports timings a provider cares about.
@@ -339,6 +403,7 @@ func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) 
 	return res, s.reg.Update(name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseActive
 		x.LastActivity = s.opt.Now()
+		x.PausedAt = time.Time{}
 		x.LastError = ""
 	})
 }
