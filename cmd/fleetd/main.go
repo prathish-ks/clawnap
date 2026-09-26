@@ -142,10 +142,19 @@ func cells(args []string) error {
 		class := fs.String("class", "hibernate", "hibernate|always-on")
 		tier := fs.String("tier", "pause", "pause|stop (how a hibernate-class cell sleeps)")
 		idle := fs.Duration("idle", 10*time.Minute, "idle timeout before hibernation")
+		due := fs.String("next-due", "", "RFC3339 time of the cell's next scheduled job (interim cron-aware wake)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle})
+		var nextDue time.Time
+		if *due != "" {
+			t, err := time.Parse(time.RFC3339, *due)
+			if err != nil {
+				return fmt.Errorf("-next-due: %w", err)
+			}
+			nextDue = t
+		}
+		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue})
 	case "rm":
 		fs := flag.NewFlagSet("rm", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")

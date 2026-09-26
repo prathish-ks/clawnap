@@ -222,3 +222,42 @@ func TestWakeTimeoutMarksFailed(t *testing.T) {
 		t.Fatalf("phase=%s", c.Phase)
 	}
 }
+
+func TestCronAwareNoSleepWhenJobDueInsideWindow(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-j": runtime.StateRunning}, netio: map[string]string{"oc-j": "1kB / 1kB"}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "j", Container: "oc-j", Port: 1, IdleAfter: 10 * time.Minute, NextDueAt: now.Add(15 * time.Minute)})
+	s.ReconcileOnce(context.Background())
+	now = now.Add(11 * time.Minute) // idle, but the job is 4 min away (< 10 min window)
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause") || fr.has("stop") {
+		t.Fatalf("must not hibernate with a job inside the idle window: %v", fr.calls)
+	}
+}
+
+func TestCronAwarePreWakeOfHibernatedCell(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-p": runtime.StatePaused}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "p", Container: "oc-p", Port: 1, Phase: registry.PhaseHibernated, IdleAfter: time.Minute, NextDueAt: now.Add(90 * time.Second)})
+	s.ReconcileOnce(context.Background()) // 90 s away < 2 min PreWake => wake now
+	c, _ := reg.Get("p")
+	if !fr.has("unpause oc-p") || c.Phase != registry.PhaseActive {
+		t.Fatalf("expected pre-wake, phase=%s calls=%v", c.Phase, fr.calls)
+	}
+}
+
+func TestDaemonRestartReconcilesExternalPause(t *testing.T) {
+	// Registry says active (daemon died mid-flight), runtime says paused:
+	// on restart the supervisor must adopt the real state, not fight it.
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-r": runtime.StatePaused}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "r", Container: "oc-r", Port: 1, Phase: registry.PhaseActive, IdleAfter: time.Hour})
+	s.ReconcileOnce(context.Background())
+	c, _ := reg.Get("r")
+	if c.Phase != registry.PhaseHibernated || fr.has("unpause") || fr.has("start") {
+		t.Fatalf("expected adoption as hibernated without action, phase=%s calls=%v", c.Phase, fr.calls)
+	}
+}

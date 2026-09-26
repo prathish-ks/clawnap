@@ -49,19 +49,24 @@ const (
 
 // Cell is one managed instance.
 type Cell struct {
-	Name         string        `json:"name"`
-	Container    string        `json:"container"`
-	Port         int           `json:"port"` // loopback port the gateway listens on
-	Class        Class         `json:"class"`
-	Tier         Tier          `json:"tier"`
-	IdleAfter    time.Duration `json:"idle_after"`
-	Phase        Phase         `json:"phase"`
-	LastActivity time.Time     `json:"last_activity"`
-	RxBytes      int64         `json:"rx_bytes"`
-	TxBytes      int64         `json:"tx_bytes"`
-	Restarts     int           `json:"restarts"`
-	LastError    string        `json:"last_error,omitempty"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	Name      string        `json:"name"`
+	Container string        `json:"container"`
+	Port      int           `json:"port"` // loopback port the gateway listens on
+	Class     Class         `json:"class"`
+	Tier      Tier          `json:"tier"`
+	IdleAfter time.Duration `json:"idle_after"`
+	// NextDueAt is the earliest time a scheduled job (cron) inside the cell
+	// is due. Interim cron-aware wake (upstream #119035): a cell is never
+	// hibernated while a job is due inside its idle window, and a
+	// hibernated cell is woken shortly before NextDueAt. Zero = no schedule.
+	NextDueAt    time.Time `json:"next_due_at"`
+	Phase        Phase     `json:"phase"`
+	LastActivity time.Time `json:"last_activity"`
+	RxBytes      int64     `json:"rx_bytes"`
+	TxBytes      int64     `json:"tx_bytes"`
+	Restarts     int       `json:"restarts"`
+	LastError    string    `json:"last_error,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Store is a file-backed cell registry safe for concurrent use in-process.

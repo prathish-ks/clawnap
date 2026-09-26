@@ -27,6 +27,7 @@ type Options struct {
 	MaxConcurrent   int           // simultaneous wakes/restarts
 	NoiseBytes      int64         // per-sample traffic ignored as background
 	MaxRestarts     int           // always-on self-heal budget per cell
+	PreWake         time.Duration // wake a hibernated cell this long before NextDueAt
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -57,6 +58,9 @@ func (o *Options) defaults() {
 	}
 	if o.MaxRestarts == 0 {
 		o.MaxRestarts = 5
+	}
+	if o.PreWake == 0 {
+		o.PreWake = 2 * time.Minute // covers a stop-tier boot (45–90 s measured)
 	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
@@ -140,12 +144,20 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 	case runtime.StateRunning:
 		return s.observeRunning(ctx, c)
 	case runtime.StatePaused:
+		if s.dueSoon(c) {
+			_, err := s.Wake(ctx, c.Name)
+			return err
+		}
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
 			return nil // expected
 		}
 		// paused by someone else: record it as hibernated; wake on demand
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated })
 	case runtime.StateExited, runtime.StateCreated:
+		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
+			_, err := s.Wake(ctx, c.Name)
+			return err
+		}
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
 			return nil // expected
 		}
@@ -178,10 +190,29 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 	}); err != nil {
 		return err
 	}
-	if d.ShouldSleep && c.Class == registry.ClassHibernate {
+	if d.ShouldSleep && c.Class == registry.ClassHibernate && !s.jobInsideIdleWindow(c) {
 		return s.Hibernate(ctx, c.Name)
 	}
 	return nil
+}
+
+// dueSoon: a hibernated cell whose next job is within PreWake should wake now.
+func (s *Supervisor) dueSoon(c registry.Cell) bool {
+	return !c.NextDueAt.IsZero() && !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
+}
+
+// jobInsideIdleWindow: never hibernate a cell that would only have to be
+// woken again before its idle timeout elapsed (interim rule until cron
+// schedules are read from the cell itself).
+func (s *Supervisor) jobInsideIdleWindow(c registry.Cell) bool {
+	if c.NextDueAt.IsZero() {
+		return false
+	}
+	window := c.IdleAfter
+	if window < s.opt.PreWake {
+		window = s.opt.PreWake
+	}
+	return !c.NextDueAt.After(s.opt.Now().Add(window))
 }
 
 // Hibernate puts a cell to sleep according to its tier and records it.
