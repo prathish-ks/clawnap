@@ -49,13 +49,20 @@ const (
 
 // Cell is one managed instance.
 type Cell struct {
-	Name      string        `json:"name"`
-	Container string        `json:"container"`
-	Port      int           `json:"port"`      // loopback port the gateway listens on
-	HookPort  int           `json:"hook_port"` // loopback port for inbound webhooks (0 = same as Port); OpenClaw serves Telegram webhooks on a separate listener
-	Class     Class         `json:"class"`
-	Tier      Tier          `json:"tier"`
-	IdleAfter time.Duration `json:"idle_after"`
+	Name      string `json:"name"`
+	Container string `json:"container"`
+	Port      int    `json:"port"`      // loopback port the gateway listens on
+	HookPort  int    `json:"hook_port"` // loopback port for inbound webhooks (0 = same as Port); OpenClaw serves Telegram webhooks on a separate listener
+	// HookVerifier names how inbound webhooks for this cell prove themselves
+	// before the cell is woken: "" or "none" (accept), "telegram" (header
+	// secret), "slack" (HMAC v0 with timestamp), "github" (X-Hub-Signature-256),
+	// "whatsapp" (X-Hub-Signature-256 + hub.challenge handshake), "bearer".
+	// HookSecretFile holds the verify-only secret; never a bot token.
+	HookVerifier   string        `json:"hook_verifier,omitempty"`
+	HookSecretFile string        `json:"hook_secret_file,omitempty"`
+	Class          Class         `json:"class"`
+	Tier           Tier          `json:"tier"`
+	IdleAfter      time.Duration `json:"idle_after"`
 	// NextDueAt is the earliest time a scheduled job (cron) inside the cell
 	// is due. Interim cron-aware wake (upstream #119035): a cell is never
 	// hibernated while a job is due inside its idle window, and a

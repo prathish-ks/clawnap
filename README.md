@@ -35,6 +35,8 @@ curl -X POST -H 'Authorization: Bearer dev' http://127.0.0.1:8080/wake/a
 
 ## Design rules
 
+- The host never holds a channel credential and never parses a message. The ingress routes by `/hook/<cell>/` path and verifies each webhook with a verify-only secret (Telegram header secret, Slack or GitHub/Meta HMAC, bearer) before waking the cell; a bot token never leaves the tenant's cell.
+
 - The supervisor never modifies the guest; it only owns container lifecycle, ingress, limits and validation.
 - One process on the host issues runtime commands for managed cells.
 - Every non-goal of upstream OpenClaw's fleet feature (lightweight tenancy, multi-host, metering) is in scope here; everything upstream owns (the gateway itself) is not.

@@ -79,6 +79,34 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cell has no port", http.StatusBadGateway)
 		return
 	}
+	// Verify before waking: an unverified request must not cost a wake.
+	v, err := verifierFor(c.HookVerifier)
+	if err != nil {
+		s.log().Warn("hook", "cell", name, "err", err)
+		http.Error(w, "cell misconfigured", http.StatusBadGateway)
+		return
+	}
+	if v != nil {
+		secret, err := readSecret(c.HookSecretFile)
+		if err != nil {
+			s.log().Warn("hook secret", "cell", name, "err", err)
+			http.Error(w, "cell misconfigured", http.StatusBadGateway)
+			return
+		}
+		body, err := bufferBody(r)
+		if err != nil {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		if v.Challenge(w, r, body, secret) {
+			return // registration handshake answered on the sleeping cell's behalf
+		}
+		if err := v.Verify(r, body, secret); err != nil {
+			s.log().Warn("hook rejected", "cell", name, "verifier", c.HookVerifier)
+			http.Error(w, "unverified", http.StatusUnauthorized)
+			return
+		}
+	}
 	if _, err := s.Waker.Wake(r.Context(), name); err != nil {
 		s.log().Warn("hook wake failed", "cell", name, "err", err)
 		http.Error(w, "cell unavailable", http.StatusBadGateway)

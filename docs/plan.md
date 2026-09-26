@@ -1,6 +1,6 @@
 # fleet-supervisor — living plan
 
-**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 11 of 12 rows done; local gate met except session/memory/cron survival (needs a model provider). Release 0 host checker built. Remaining: provider access (9, in progress), Hetzner account (10, user). Next code: Telegram polling keeper, pause-duration cap, then Phase 0b on Hetzner · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
+**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 11 of 12 rows done; local gate met except session/memory/cron survival (needs a model provider). Release 0 host checker built. Remaining: provider access (9, in progress), Hetzner account (10, user). Next code: pause-duration cap, then Phase 0b on Hetzner · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
 
 How to maintain: edit the status line and the "Now" table every working session; move finished rows to the Changelog with the date; never delete a gate, only mark it passed or failed with evidence.
 
@@ -40,7 +40,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 
 ## Backlog (Phase 0b onward)
 - Telegram wake without a public address: NOT a getUpdates keeper (it would hold the tenant's bot token and read message content before the cell; unacceptable to the community and races the one-poller-per-bot rule). Order of preference: (1) webhook via the ingress with per-cell secret-token verification, no credential held; (2) opt-in count-only keeper using getWebhookInfo pending_update_count to wake the cell, which then polls itself (leaks a count, holds the token); (3) always-on class. Design principle for the README: the host never holds a channel credential and never parses a message.
-- Ingress verifier plugins (next code item): routing by /hook/<cell>/ path; authenticity by per-cell verifier — header secret (Telegram X-Telegram-Bot-Api-Secret-Token), HMAC-of-body (Slack, GitHub, WhatsApp Cloud), JWT (Google Chat, Teams), bearer (generic). Verify before wake; drop unverified with no wake (anti wake-storm). Ingress answers registration-time challenges (Slack url_verification, WhatsApp hub.challenge) while the cell sleeps. The ingress holds verify-only secrets, never bot tokens.
+- Ingress verifier plugins (done 2026-09-26, commit follows; live check against real Telegram webhook is a Hetzner item): routing by /hook/<cell>/ path; authenticity by per-cell verifier — header secret (Telegram X-Telegram-Bot-Api-Secret-Token), HMAC-of-body (Slack, GitHub, WhatsApp Cloud), JWT (Google Chat, Teams), bearer (generic). Verify before wake; drop unverified with no wake (anti wake-storm). Ingress answers registration-time challenges (Slack url_verification, WhatsApp hub.challenge) while the cell sleeps. The ingress holds verify-only secrets, never bot tokens.
 - Publish the host checker: README, a one-line install, and a post in the OpenClaw Discord self-hosting channel once the Linux egress check is verified on Hetzner.
 - Pause-tier duration cap: OpenClaw exits (code 135) after a ~3 h freeze via its lease/liveness logic; find the TTL, cap pauses below it or fall through to stop tier.
 - Stale gateway owner lease after unclean stop (exit 1 on restart until timeout): locate the lease, decide whether the supervisor clears it on OOM/crash recovery.
@@ -64,6 +64,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: ingress verifiers (Telegram header secret, Slack HMAC+timestamp, GitHub/Meta X-Hub-Signature-256, WhatsApp hub.challenge, bearer); verify before wake, unknown verifier fails closed. `fleetd cells add -hook-verifier -hook-secret-file`.
 - 2026-09-26: Release 0 host checker `fleetd check` (ported Isthmus checks) built and run live; docs/community.md added; outreach plan reframed.
 - 2026-09-26: end-to-end Telegram test passed with a dedicated bot: messages sent during pause delivered and answered on wake; long-freeze self-exit and self-registered webhook documented.
 - 2026-09-26: concurrent 5-cell live test passed (experiments/local-measurements-2026-09-26.md); interim cron-aware wake, daemon-restart reconciliation, host-side WAL checkpoint added; commits 09a3da1, 6211c02, a843098.
