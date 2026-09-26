@@ -267,8 +267,8 @@ func TestDaemonRestartReconcilesExternalPause(t *testing.T) {
 	_ = reg.Put(registry.Cell{Name: "r", Container: "oc-r", Port: 1, Phase: registry.PhaseActive, IdleAfter: time.Hour})
 	s.ReconcileOnce(context.Background())
 	c, _ := reg.Get("r")
-	if c.Phase != registry.PhaseHibernated || fr.has("unpause") || fr.has("start") {
-		t.Fatalf("expected adoption as hibernated without action, phase=%s calls=%v", c.Phase, fr.calls)
+	if c.Phase != registry.PhaseHibernated || fr.has("unpause") || fr.has("start") || !c.PausedAt.Equal(now) {
+		t.Fatalf("expected adoption as hibernated (PausedAt=now) without action, cell=%+v calls=%v", c, fr.calls)
 	}
 }
 

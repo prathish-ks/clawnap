@@ -194,8 +194,13 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
 			return nil // expected
 		}
-		// paused by someone else: record it as hibernated; wake on demand
-		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated })
+		// paused by someone else: adopt it as hibernated from now, so the
+		// pause cap and reclaim rules apply to it too; wake on demand
+		return s.reg.Update(c.Name, func(x *registry.Cell) {
+			x.Phase = registry.PhaseHibernated
+			x.PausedAt = s.opt.Now()
+			x.ReclaimedAt = time.Time{}
+		})
 	case runtime.StateExited, runtime.StateCreated:
 		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
 			_, err := s.Wake(ctx, c.Name)
