@@ -1,0 +1,78 @@
+#cloud-config
+# Bootstrap for the fleet-supervisor experiment host (Ubuntu 24.04).
+# Installs Docker, Go, node_exporter, cAdvisor, zram, CRIU, and hardens SSH.
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - htop
+  - iptables
+  - criu
+  - zram-tools
+  - unattended-upgrades
+  - fail2ban
+  - ufw
+
+users:
+  - name: ops
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - "__SSH_PUBKEY__"
+
+write_files:
+  - path: /etc/default/zramswap
+    content: |
+      ALGO=zstd
+      PERCENT=50
+  - path: /etc/docker/daemon.json
+    content: |
+      { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" },
+        "default-ulimits": { "nofile": { "Name": "nofile", "Hard": 65536, "Soft": 65536 } } }
+  - path: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Prometheus node_exporter
+      [Service]
+      ExecStart=/usr/local/bin/node_exporter --web.listen-address=127.0.0.1:9100
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+  - path: /etc/sysctl.d/90-fleet.conf
+    content: |
+      vm.swappiness=100
+      vm.overcommit_memory=1
+      net.core.somaxconn=4096
+
+runcmd:
+  # Docker (official repo)
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+  # Go (pinned)
+  - ARCH=$(dpkg --print-architecture); curl -fsSL "https://go.dev/dl/go1.24.5.linux-${ARCH}.tar.gz" | tar -C /usr/local -xz
+  - echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' > /etc/profile.d/go.sh
+  # node_exporter (pinned)
+  - ARCH=$(dpkg --print-architecture); curl -fsSL "https://github.com/prometheus/node_exporter/releases/download/v1.12.1/node_exporter-1.12.1.linux-${ARCH}.tar.gz" | tar -xz -C /tmp
+  - install -m 0755 /tmp/node_exporter-1.12.1.linux-*/node_exporter /usr/local/bin/node_exporter
+  - systemctl daemon-reload && systemctl enable --now node_exporter
+  # cAdvisor (pinned), loopback only
+  - docker run -d --name cadvisor --restart=always -p 127.0.0.1:8081:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro --privileged --device=/dev/kmsg gcr.io/cadvisor/cadvisor:v0.60.6
+  # zram + sysctl
+  - systemctl enable --now zramswap || true
+  - sysctl --system
+  # SSH hardening + firewall (SSH only; everything else loopback)
+  - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/; s/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  - systemctl restart ssh
+  - ufw default deny incoming && ufw default allow outgoing && ufw allow 22/tcp && ufw --force enable
+  - systemctl enable --now fail2ban
+  # Experiment tree
+  - sudo -u ops mkdir -p /home/ops/fleet /home/ops/results
+  - echo "bootstrap done $(date -u)" > /home/ops/BOOTSTRAP_OK
