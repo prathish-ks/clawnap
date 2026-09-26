@@ -194,6 +194,26 @@ func ParseSize(s string) (int64, error) {
 	return int64(f * m), nil
 }
 
+// Mount is one bind/volume mount of a container.
+type Mount struct {
+	Type        string `json:"Type"`
+	Source      string `json:"Source"`
+	Destination string `json:"Destination"`
+}
+
+// Mounts returns a container's mounts.
+func (c Client) Mounts(ctx context.Context, name string) ([]Mount, error) {
+	out, err := c.R.Run(ctx, "inspect", "-f", "{{json .Mounts}}", name)
+	if err != nil {
+		return nil, err
+	}
+	var ms []Mount
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &ms); err != nil {
+		return nil, fmt.Errorf("parse mounts: %w", err)
+	}
+	return ms, nil
+}
+
 // ListManaged returns container names carrying the supervisor's label.
 func (c Client) ListManaged(ctx context.Context, label string) ([]string, error) {
 	out, err := c.R.Run(ctx, "ps", "-a", "--filter", "label="+label, "--format", "{{.Names}}")

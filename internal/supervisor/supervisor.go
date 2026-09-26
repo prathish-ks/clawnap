@@ -16,6 +16,7 @@ import (
 	"github.com/prathish-ks/fleet-supervisor/internal/idle"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
+	"github.com/prathish-ks/fleet-supervisor/internal/walcheck"
 )
 
 // Options tune the loop.
@@ -196,6 +197,30 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 	return nil
 }
 
+// checkpointWAL truncates the stopped cell's SQLite WAL from the host, if
+// its state directory is a bind mount we can see. Volumes are skipped.
+func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
+	mounts, err := s.rt.Mounts(ctx, c.Container)
+	if err != nil {
+		s.opt.Logger.Warn("wal checkpoint: mounts", "cell", c.Name, "err", err)
+		return
+	}
+	for _, m := range mounts {
+		if m.Destination != walcheck.StatePathInContainer || m.Type != "bind" {
+			continue
+		}
+		res, err := walcheck.Checkpoint(ctx, m.Source, nil)
+		for _, r := range res {
+			s.opt.Logger.Info("wal checkpoint", "cell", c.Name, "db", r.Path, "wal_before", r.WALBefore, "wal_after", r.WALAfter, "skipped", r.Skipped)
+		}
+		if err != nil {
+			s.opt.Logger.Warn("wal checkpoint", "cell", c.Name, "err", err)
+		}
+		return
+	}
+	s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
+}
+
 // dueSoon: a hibernated cell whose next job is within PreWake should wake now.
 func (s *Supervisor) dueSoon(c registry.Cell) bool {
 	return !c.NextDueAt.IsZero() && !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
@@ -225,6 +250,9 @@ func (s *Supervisor) Hibernate(ctx context.Context, name string) error {
 	switch c.Tier {
 	case registry.TierStop:
 		took, err = s.rt.Stop(ctx, c.Container, s.opt.StopGrace)
+		if err == nil {
+			s.checkpointWAL(ctx, c) // best effort; logged, never fatal
+		}
 	default:
 		took, err = s.rt.Pause(ctx, c.Container)
 	}

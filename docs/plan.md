@@ -31,7 +31,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 4 | Real Telegram bot on one cell; webhook via ingress /hook; wake on message end to end | todo | needs a bot token (free, BotFather) |
 | 5 | State-survival check after cycles: sessions, memory files, cron, channel auth | todo | Mode A gate |
 | 6 | Cron-aware wake (interim: never hibernate when a job is due within idle window) | done 2026-09-26 (interim: `-next-due` set by operator; pre-wake 2 min; reading schedules from the cell is backlog) | upstream #119035 |
-| 7 | WAL checkpoint before stop-tier hibernate | todo | |
+| 7 | WAL checkpoint after stop-tier hibernate (host-side, pure-Go SQLite, bind mounts only) | done 2026-09-26 (unit-tested; live check pending) | upstream #143524 WAL growth |
 | 8 | Daemon crash/restart consistency test | done 2026-09-26 (unit: adopts external pause/exit without fighting it; registry writes are atomic) | live kill test on Hetzner remains |
 | 9 | Provider interview requests ×10 (independent of code) | todo | contact sheet: Molted, Agent37, Clawctl, Blink, xCloud, elest.io, OpenHosst, Lease Packet, MyClaw, Hostinger |
 | 10 | Hetzner account + API token (user); hcloud CLI install (needs approval); provision CX43 | blocked on user | experiments/provision/ |

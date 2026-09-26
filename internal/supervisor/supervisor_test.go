@@ -32,6 +32,9 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 	name := args[len(args)-1]
 	switch args[0] {
 	case "inspect":
+		if len(args) > 2 && args[2] == "{{json .Mounts}}" {
+			return "[]", nil
+		}
 		st, ok := f.state[name]
 		if !ok {
 			return "", errors.New("Error: No such object: " + name)
@@ -54,6 +57,8 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 	case "pause":
 		f.state[name] = runtime.StatePaused
 		return "", nil
+	case "inspect-mounts":
+		return "[]", nil
 	case "unpause":
 		f.state[name] = runtime.StateRunning
 		return "", nil
