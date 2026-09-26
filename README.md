@@ -18,6 +18,7 @@ cell specs. Stock OpenClaw images run unchanged.
 | `internal/supervisor` | Reconcile loop: hibernate idle cells, self-heal always-on cells, bounded coalesced wakes with readiness probe |
 | `internal/ingress` | HTTP front door: `POST /wake/{cell}` and `/hook/{cell}/...` wake-then-proxy |
 | `internal/spec` | Guest-neutral container spec and refusal rules (non-root, pids limit, memory ceiling, no Docker socket or dangerous mounts, no secrets in env) |
+| `internal/supervisor/metrics.go` | Prometheus text exposition at `/metrics`: cells by phase and tier, wakes and failures, hibernates, pulses, wake-to-ready histogram |
 | `internal/hostcheck` | `fleetd check`: read-only host and cell security inspection (runtime class, metadata-egress block, privileged/root/caps/limits, socket and dangerous mounts, secrets in env, public ports). Ported from Isthmus. |
 | `internal/walcheck` | Host-side SQLite WAL truncation after a stop-tier hibernate |
 | `cmd/fleetd` | CLI and daemon |

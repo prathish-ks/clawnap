@@ -118,13 +118,20 @@ type Supervisor struct {
 	mu    sync.Mutex
 	inflt map[string]chan struct{} // per-cell in-flight wake, so concurrent wakes coalesce
 	last  map[string]idle.Sample
+	m     *Metrics
 }
+
+// Metrics exposes the supervisor's counters (for the ingress /metrics handler).
+func (s *Supervisor) Metrics() *Metrics { return s.m }
+
+// Cells lists the registry (for metrics gauges).
+func (s *Supervisor) Cells() []registry.Cell { return s.reg.List() }
 
 // New builds a Supervisor.
 func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 	opt.defaults()
 	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent),
-		inflt: map[string]chan struct{}{}, last: map[string]idle.Sample{}}
+		inflt: map[string]chan struct{}{}, last: map[string]idle.Sample{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done.
@@ -256,6 +263,7 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 			return err
 		}
 		s.checkpointWAL(ctx, c)
+		s.m.fellThrough()
 		s.opt.Logger.Info("pause cap: fell through to stop", "cell", c.Name, "frozen", frozen, "took", took)
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = time.Time{} })
 	}
@@ -277,6 +285,7 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	if err != nil {
 		return err
 	}
+	s.m.pulse()
 	s.opt.Logger.Info("pause cap: pulsed", "cell", c.Name, "frozen", frozen, "window", s.opt.PulseWindow, "repause", took)
 	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now() })
 }
@@ -320,6 +329,7 @@ func (s *Supervisor) Hibernate(ctx context.Context, name string) error {
 		return err
 	}
 	s.opt.Logger.Info("hibernated", "cell", name, "tier", c.Tier, "took", took)
+	s.m.hibernate(string(c.Tier))
 	delete(s.last, name)
 	pausedAt := time.Time{}
 	if c.Tier != registry.TierStop {
@@ -384,21 +394,26 @@ func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) 
 	t0 := s.opt.Now()
 	var startTook time.Duration
 	timeout := s.opt.StopWakeTimeout
+	kind := "stop"
 	if state == runtime.StatePaused {
+		kind = "pause"
 		timeout = s.opt.WakeTimeout
 		startTook, err = s.rt.Unpause(ctx, c.Container)
 	} else {
 		startTook, err = s.rt.Start(ctx, c.Container)
 	}
 	if err != nil {
+		s.m.wakeFail()
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })
 		return WakeResult{}, err
 	}
 	if err := s.waitReady(ctx, c.Port, timeout); err != nil {
+		s.m.wakeFail()
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })
 		return WakeResult{StartTook: startTook}, err
 	}
 	res := WakeResult{StartTook: startTook, ReadyTook: s.opt.Now().Sub(t0)}
+	s.m.wake(kind, res.ReadyTook)
 	s.opt.Logger.Info("woke", "cell", name, "start", res.StartTook, "ready", res.ReadyTook)
 	return res, s.reg.Update(name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseActive
@@ -436,6 +451,7 @@ func (s *Supervisor) selfHeal(ctx context.Context, c registry.Cell) error {
 		})
 	}
 	_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.Restarts++ })
+	s.m.selfHeal()
 	_, err := s.Wake(ctx, c.Name)
 	return err
 }

@@ -314,3 +314,21 @@ func TestPauseCapStopFallthrough(t *testing.T) {
 		t.Fatalf("expected unpause+stop fallthrough: calls=%v cell=%+v", fr.calls, c)
 	}
 }
+
+func TestMetricsExposition(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-m": runtime.StateExited}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "m", Container: "oc-m", Port: 1, Phase: registry.PhaseHibernated, Tier: registry.TierStop})
+	if _, err := s.Wake(context.Background(), "m"); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	s.Metrics().Write(&b, s.Cells())
+	out := b.String()
+	for _, want := range []string{`fleetd_wakes_total{kind="stop"} 1`, `fleetd_cells{phase="active"} 1`, `fleetd_wake_ready_seconds_count 1`, `fleetd_wake_failures_total 0`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}

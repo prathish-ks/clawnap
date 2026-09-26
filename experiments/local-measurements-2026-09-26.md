@@ -75,3 +75,16 @@ Findings:
 - 48 s after thaw the gateway logged `host timing gap detected: process was frozen ~48202ms` and `liveness heartbeat delayed … deferring recovery decisions` but kept running (contrast: the ~3 h freeze led to exit 135). Freeze tolerance threshold lies between ~48 s and ~3 h; lease constants in the code are 125 s and 30 min.
 - Within 3 s of wake the polling worker received both held updates (`updateId=271848954`, `271848955`, `queued=2`), spooled them, and the user received a reply from the cell. Channel auth, polling offset and delivery all survived the pause.
 - Not yet exercised: session/memory/cron state (no model provider configured in the cell).
+
+### Freeze-tolerance measurement (same cell, evening)
+| Freeze | Gateway reaction on thaw | Survived? |
+|---|---|---|
+| ~48 s (earlier) | timing-gap notice, liveness "deferring recovery" | yes |
+| ~82 s | timing-gap; Telegram "polling stall detected … forcing restart" | yes, no lease line |
+| ~192 s | timing-gap; memory-pressure warning | yes, no lease line |
+| ~56 min, then 5 s pulse, then full wake | timing-gap; `owner lease heartbeat stopped; process identity remains recorded`; Telegram lease released and polling restarted | yes, still running 40 s later |
+| ~3 h 05 min (morning) | same lease line, then exit 135 ~7 s after thaw | no |
+
+Bounds: the "owner lease heartbeat stopped" state begins somewhere between ~3 min and ~56 min (the 30-min lease constant `LEASE_MS = 18e5` fits); self-exit begins somewhere between ~56 min and ~3 h. The pause cap default of 20 min keeps every freeze under the first bound. Each thaw over ~1–2 min costs a Telegram polling restart (a few seconds), which is why the pulse window is 5 s and not shorter.
+
+Pulse path verified live: `fleetd serve -max-pause 1m` pulsed the 56-min-frozen cell (unpause → /health 200 → 5 s → re-pause in 352 ms).

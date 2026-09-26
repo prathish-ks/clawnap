@@ -25,12 +25,13 @@ type Waker interface {
 	Wake(ctx context.Context, cell string) (readyTook time.Duration, err error)
 }
 
-// Server routes /wake/{cell} and /hook/{cell}/... .
+// Server routes /wake/{cell}, /hook/{cell}/... and /metrics.
 type Server struct {
-	Reg    *registry.Store
-	Waker  Waker
-	Token  string // optional shared bearer token for /wake
-	Logger *slog.Logger
+	Reg     *registry.Store
+	Waker   Waker
+	Token   string                      // optional shared bearer token for /wake
+	Metrics func(w http.ResponseWriter) // optional Prometheus exposition writer
+	Logger  *slog.Logger
 }
 
 // Handler builds the mux.
@@ -39,6 +40,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /wake/{cell}", s.handleWake)
 	mux.HandleFunc("/hook/{cell}/", s.handleHook)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
+		if s.Metrics == nil {
+			http.Error(w, "metrics not configured", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		s.Metrics(w)
+	})
 	return mux
 }
 

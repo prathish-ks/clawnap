@@ -148,7 +148,8 @@ func run(args []string) error {
 			return err
 		}
 		go func() { _ = sup.Run(ctx) }()
-		srv := &http.Server{Addr: *listen, Handler: (&ingress.Server{Reg: reg, Waker: wakeAdapter{sup}, Token: *token}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+		metrics := func(w http.ResponseWriter) { sup.Metrics().Write(w, sup.Cells()) }
+		srv := &http.Server{Addr: *listen, Handler: (&ingress.Server{Reg: reg, Waker: wakeAdapter{sup}, Token: *token, Metrics: metrics}).Handler(), ReadHeaderTimeout: 5 * time.Second}
 		go func() { <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
 		slog.Info("fleetd serving", "listen", *listen)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
