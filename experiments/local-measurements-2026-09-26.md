@@ -111,4 +111,4 @@ Conclusions:
 
 ### Reclaim driven by the supervisor itself (Linux build of fleetd run inside the Docker VM)
 - `fleetd reconcile` adopted the externally paused cell (PausedAt set on adoption — fixed today), then `-reclaim-after 1s` reclaimed it: **190 → 20 MiB resident, 663 MiB in swap**.
-- First attempt requested the full resident amount and the kernel write only returned at the 60 s wait bound (it spins on the last unreclaimable pages); requests are now capped at memory.current minus a 48 MiB floor. Second timed pass recorded below the table in the plan changelog.
+- First attempt requested the full resident amount and the kernel write only returned at the 60 s wait bound (it spins on the last unreclaimable pages); requests are now capped at memory.current minus a 48 MiB floor. Second timed pass with the floor: 376 → 46 MiB resident, 622 MiB in swap, write returned in 7 s.
