@@ -37,3 +37,30 @@ func TestPutGetListPersist(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestTwoStoresOnOneFileDoNotClobber(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "cells.json")
+	daemon, _ := Open(p)
+	_ = daemon.Put(Cell{Name: "a", Container: "oc-a"})
+	cli, _ := Open(p) // a second process
+	_ = cli.Put(Cell{Name: "b", Container: "oc-b"})
+	// the daemon updates a from its stale map; b must survive
+	if err := daemon.Update("a", func(c *Cell) { c.Restarts++ }); err != nil {
+		t.Fatal(err)
+	}
+	fresh, _ := Open(p)
+	l := fresh.List()
+	if len(l) != 2 || l[0].Name != "a" || l[0].Restarts != 1 || l[1].Name != "b" {
+		t.Fatalf("lost update: %+v", l)
+	}
+	// the daemon's List sees the CLI's cell without restart
+	if got := daemon.List(); len(got) != 2 {
+		t.Fatalf("daemon should see b: %+v", got)
+	}
+	// and a CLI delete is not resurrected by the daemon
+	_ = cli.Delete("b")
+	_ = daemon.Update("a", func(c *Cell) { c.Restarts++ })
+	if got, _ := Open(p); len(got.List()) != 1 {
+		t.Fatalf("delete resurrected: %+v", got.List())
+	}
+}

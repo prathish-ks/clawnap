@@ -36,7 +36,7 @@ func TestValidateRejects(t *testing.T) {
 		mut(&s)
 		if err := Validate(s); err == nil {
 			t.Errorf("%s: expected rejection", name)
-		} else if name == "docker.sock" && !strings.Contains(err.Error(), "blocked path") {
+		} else if name == "docker.sock" && !strings.Contains(err.Error(), "runtime socket") {
 			t.Errorf("docker.sock: wrong message %v", err)
 		}
 	}

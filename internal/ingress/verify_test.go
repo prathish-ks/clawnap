@@ -131,3 +131,42 @@ func TestUnknownVerifierFailsClosed(t *testing.T) {
 		t.Fatalf("misspelt verifier must not accept: %d woke=%v", res.StatusCode, fw.woke)
 	}
 }
+
+func TestEmptySecretFileFailsClosed(t *testing.T) {
+	for _, v := range []string{"github", "slack", "whatsapp", "telegram", "bearer"} {
+		srv, fw, _ := setup(t, v)
+		// overwrite the secret file with whitespace
+		reg := srv // keep linter quiet about unused
+		_ = reg
+		sf := ""
+		// find the secret file via a fresh registry read is awkward; recreate server with empty secret
+		_ = sf
+		_ = fw
+	}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	defer backend.Close()
+	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
+	sf := filepath.Join(t.TempDir(), "secret")
+	_ = os.WriteFile(sf, []byte("  \n"), 0o600)
+	for _, v := range []string{"github", "slack", "whatsapp"} {
+		reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+		_ = reg.Put(registry.Cell{Name: "e", Container: "oc-e", Port: port, HookVerifier: v, HookSecretFile: sf})
+		fw := &fakeWaker{}
+		srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
+		body := `{"x":1}`
+		m := hmac.New(sha256.New, []byte(""))
+		m.Write([]byte(body))
+		req, _ := http.NewRequest("POST", srv.URL+"/hook/e/p", strings.NewReader(body))
+		req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(m.Sum(nil)))
+		res, _ := http.DefaultClient.Do(req)
+		if res.StatusCode == 204 || len(fw.woke) != 0 {
+			t.Fatalf("%s: empty secret must fail closed: %d woke=%v", v, res.StatusCode, fw.woke)
+		}
+		// WhatsApp handshake with an absent verify token must also be refused
+		res, _ = http.Get(srv.URL + "/hook/e/p?hub.mode=subscribe&hub.challenge=1")
+		if res.StatusCode == 200 {
+			t.Fatalf("%s: handshake with empty secret must be refused", v)
+		}
+		srv.Close()
+	}
+}

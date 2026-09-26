@@ -21,6 +21,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	rt "github.com/prathish-ks/fleet-supervisor/internal/runtime"
+	"github.com/prathish-ks/fleet-supervisor/internal/spec"
 )
 
 // Level mirrors Isthmus doctor levels: pass, warn, fail. Checks that cannot
@@ -69,19 +72,6 @@ func hardenedName(rt string) string {
 	return ""
 }
 
-// Dangerous host paths for a tenant cell (Isthmus securitycheck.dangerousRoots
-// plus the Docker/Podman sockets).
-var dangerousRoots = []string{"/", "/etc", "/root", "/home", "/var", "/usr", "/bin", "/sbin", "/boot", "/proc", "/sys", "/dev"}
-var socketPaths = []string{"/var/run/docker.sock", "/run/docker.sock", "/run/podman/podman.sock", "/var/run/podman/podman.sock"}
-
-// Secret-shaped path fragments (Isthmus mount defaultBlockedPatterns).
-var secretPathPatterns = []string{
-	".ssh", ".gnupg", ".gpg", ".aws", ".azure", ".gcloud", ".kube", ".docker",
-	"credentials", ".env", ".netrc", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "private_key", ".secret",
-}
-
-var secretEnvWords = []string{"SECRET", "TOKEN", "PASSWORD", "PASSWD", "API_KEY", "APIKEY", "PRIVATE_KEY", "ACCESS_KEY"}
-
 // Run executes every check and returns results in a stable order.
 func Run(ctx context.Context, r Runner, opt Options) []Result {
 	var out []Result
@@ -90,12 +80,8 @@ func Run(ctx context.Context, r Runner, opt Options) []Result {
 	out = append(out, checkMetadataEgress(ctx, opt))
 	names := opt.Containers
 	if len(names) == 0 && opt.Label != "" {
-		if lst, err := r.Run(ctx, "ps", "-a", "--filter", "label="+opt.Label, "--format", "{{.Names}}"); err == nil {
-			for _, l := range strings.Split(strings.TrimSpace(lst), "\n") {
-				if l = strings.TrimSpace(l); l != "" {
-					names = append(names, l)
-				}
-			}
+		if lst, err := (rt.Client{R: r}).ListManaged(ctx, opt.Label); err == nil {
+			names = lst
 		}
 	}
 	if len(names) == 0 {
@@ -111,6 +97,9 @@ func Run(ctx context.Context, r Runner, opt Options) []Result {
 func checkRuntime(ctx context.Context, r Runner) Result {
 	const name = "container runtime"
 	out, err := r.Run(ctx, "info", "--format", "{{.ServerVersion}} {{.OperatingSystem}} cgroup={{.CgroupVersion}}")
+	if err != nil { // Podman nests these fields
+		out, err = r.Run(ctx, "info", "--format", "{{.Version.Version}} {{.Host.Distribution.Distribution}} cgroup={{.Host.CgroupsVersion}}")
+	}
 	if err != nil {
 		return Result{Name: name, Level: LevelFail, Detail: "daemon not reachable: " + firstLine(err.Error()), Remediation: "start Docker/Podman or point FLEETD_RUNTIME at the right binary"}
 	}
@@ -120,6 +109,9 @@ func checkRuntime(ctx context.Context, r Runner) Result {
 func checkRuntimeClass(ctx context.Context, r Runner) Result {
 	const name = "container runtime class (hardened isolation)"
 	out, err := r.Run(ctx, "info", "--format", "{{.DefaultRuntime}};{{range $n, $_ := .Runtimes}}{{$n}} {{end}}")
+	if err != nil { // Podman
+		out, err = r.Run(ctx, "info", "--format", "{{.Host.OCIRuntime.Name}};{{.Host.OCIRuntime.Name}}")
+	}
 	def, list, ok := strings.Cut(strings.TrimSpace(out), ";")
 	def = strings.TrimSpace(def)
 	if err != nil || !ok || def == "" {
@@ -245,25 +237,21 @@ func checkCell(ctx context.Context, r Runner, name string) []Result {
 	if h := hardenedName(c.HostConfig.Runtime); h != "" {
 		add("runtime", LevelPass, c.HostConfig.Runtime+" ("+h+")", "")
 	}
-	// mounts
+	// mounts: one set of rules, shared with the launcher (spec), so `check`
+	// and `cells create` can never disagree
 	sockHit, dangerHit, secretHit := []string{}, []string{}, []string{}
 	for _, m := range c.Mounts {
 		src := filepath.Clean(m.Source)
-		for _, sp := range socketPaths {
-			if src == sp || m.Destination == sp {
-				sockHit = append(sockHit, src)
-			}
+		switch spec.ClassifyHostPath(src) {
+		case spec.PathRuntimeSocket:
+			sockHit = append(sockHit, src)
+		case spec.PathDangerousRoot:
+			dangerHit = append(dangerHit, src)
+		case spec.PathSecretShaped:
+			secretHit = append(secretHit, src)
 		}
-		for _, dr := range dangerousRoots {
-			if src == dr {
-				dangerHit = append(dangerHit, src)
-			}
-		}
-		for _, p := range secretPathPatterns {
-			if strings.Contains(strings.ToLower(src), p) {
-				secretHit = append(secretHit, src)
-				break
-			}
+		if spec.ClassifyHostPath(m.Destination) == spec.PathRuntimeSocket {
+			sockHit = append(sockHit, src)
 		}
 	}
 	if len(sockHit) > 0 {
@@ -284,16 +272,13 @@ func checkCell(ctx context.Context, r Runner, name string) []Result {
 	// env
 	var secretEnv []string
 	for _, e := range c.Config.Env {
-		k := strings.ToUpper(strings.SplitN(e, "=", 2)[0])
-		for _, w := range secretEnvWords {
-			if strings.Contains(k, w) {
-				secretEnv = append(secretEnv, k)
-				break
-			}
+		k := strings.SplitN(e, "=", 2)[0]
+		if spec.LooksSecretEnvKey(k) {
+			secretEnv = append(secretEnv, k)
 		}
 	}
 	if len(secretEnv) > 0 {
-		add("secrets in env", LevelWarn, "secret-shaped env vars visible to every process in the cell: "+strings.Join(secretEnv, ", "), "prefer token files or a broker; env is readable by any tool the agent runs (OPENCLAW_GATEWAY_TOKEN is expected)")
+		add("secrets in env", LevelWarn, "secret-shaped env vars visible to every process in the cell: "+strings.Join(secretEnv, ", "), "prefer token files or a broker; env is readable by any tool the agent runs")
 	} else {
 		add("secrets in env", LevelPass, "none", "")
 	}

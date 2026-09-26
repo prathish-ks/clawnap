@@ -6,6 +6,7 @@ package supervisor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -44,7 +45,11 @@ type Options struct {
 	// locally: ~790 → ~20 MiB resident; wake then pages in from the swap
 	// device (zram/NVMe on a fleet host, ~17 s on a laptop swap file).
 	ReclaimAfter time.Duration
-	Reclaimer    *reclaim.Reclaimer
+	// ReclaimWakeTimeout bounds readiness after unpausing a cell whose memory
+	// was reclaimed to swap (measured 9–17 s on a laptop swap file; faster
+	// on zram/NVMe). Larger than WakeTimeout, smaller than a full boot.
+	ReclaimWakeTimeout time.Duration
+	Reclaimer          *reclaim.Reclaimer
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -91,6 +96,9 @@ func (o *Options) defaults() {
 	if o.Reclaimer == nil {
 		o.Reclaimer = &reclaim.Reclaimer{}
 	}
+	if o.ReclaimWakeTimeout == 0 {
+		o.ReclaimWakeTimeout = 2 * time.Minute
+	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
 	}
@@ -127,11 +135,25 @@ type Supervisor struct {
 	rt       runtime.Client
 	sem      chan struct{}
 	mu       sync.Mutex
-	inflt    map[string]chan struct{} // per-cell in-flight wake, so concurrent wakes coalesce
-	last     map[string]idle.Sample
+	inflt    map[string]*wakeShare  // per-cell in-flight wake, so concurrent wakes coalesce and share the outcome
 	cell     map[string]*sync.Mutex // per-cell lock: wake, hibernate, reclaim, pulse never interleave on one cell
 	wakeWant map[string]bool        // a wake is waiting for this cell's lock; reclaim yields between chunks
+	recon    chan struct{}          // reconcile pool, separate from the wake semaphore (a reconcile goroutine may itself wake)
 	m        *Metrics
+}
+
+// wakeShare lets coalesced callers observe the leader's real outcome.
+type wakeShare struct {
+	done chan struct{}
+	res  WakeResult
+	err  error
+}
+
+func (s *Supervisor) wakeInFlight(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.inflt[name]
+	return ok
 }
 
 // lockCell returns the mutex for a cell, creating it on first use.
@@ -146,25 +168,6 @@ func (s *Supervisor) lockCell(name string) *sync.Mutex {
 	return l
 }
 
-func (s *Supervisor) sample(name string) (idle.Sample, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p, ok := s.last[name]
-	return p, ok
-}
-
-func (s *Supervisor) setSample(name string, v idle.Sample) {
-	s.mu.Lock()
-	s.last[name] = v
-	s.mu.Unlock()
-}
-
-func (s *Supervisor) dropSample(name string) {
-	s.mu.Lock()
-	delete(s.last, name)
-	s.mu.Unlock()
-}
-
 // Metrics exposes the supervisor's counters (for the ingress /metrics handler).
 func (s *Supervisor) Metrics() *Metrics { return s.m }
 
@@ -175,7 +178,8 @@ func (s *Supervisor) Cells() []registry.Cell { return s.reg.List() }
 func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 	opt.defaults()
 	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent),
-		inflt: map[string]chan struct{}{}, last: map[string]idle.Sample{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
+		recon: make(chan struct{}, opt.MaxConcurrent*4),
+		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done.
@@ -209,10 +213,16 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 			}
 			defer l.Unlock()
 			select {
-			case s.sem <- struct{}{}:
-				defer func() { <-s.sem }()
+			case s.recon <- struct{}{}: // reconcile pool: never the wake semaphore, which a reconcile-driven wake needs
+				defer func() { <-s.recon }()
 			case <-ctx.Done():
 				return
+			}
+			// A persisted Waking phase with no wake in flight is a crash
+			// leftover; adopt the runtime's real state instead of honouring it.
+			if c.Phase == registry.PhaseWaking && !s.wakeInFlight(c.Name) {
+				c.Phase = registry.PhaseActive
+				_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseActive })
 			}
 			if err := s.reconcileCell(ctx, c); err != nil {
 				s.opt.Logger.Warn("reconcile", "cell", c.Name, "err", err)
@@ -235,6 +245,7 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		return s.observeRunning(ctx, c)
 	case runtime.StatePaused:
 		if s.dueSoon(c) {
+			_ = s.advanceDue(c.Name)
 			_, err := s.wakeLocked(ctx, c.Name)
 			return err
 		}
@@ -245,22 +256,29 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			c.ReclaimedAt.Before(c.PausedAt) && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter {
 			return s.reclaimCell(ctx, c)
 		}
-		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
+		if c.Phase == registry.PhaseHibernated {
 			return nil // expected
 		}
-		// paused by someone else: adopt it as hibernated from now, so the
-		// pause cap and reclaim rules apply to it too; wake on demand
+		if c.Phase == registry.PhaseFailed && !c.PausedAt.IsZero() {
+			// a wake failed mid-pause: keep the original pause clock so the
+			// cap and the once-per-freeze reclaim still hold; retry on demand
+			return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated })
+		}
+		// paused by someone else, age unknown: adopt it as hibernated and
+		// treat it as already at the pause cap, so the next pass pulses it
+		// rather than trusting a clock we never saw start.
 		return s.reg.Update(c.Name, func(x *registry.Cell) {
 			x.Phase = registry.PhaseHibernated
-			x.PausedAt = s.opt.Now()
+			x.PausedAt = s.opt.Now().Add(-s.opt.MaxPause)
 			x.ReclaimedAt = time.Time{}
 		})
 	case runtime.StateExited, runtime.StateCreated:
 		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
+			_ = s.advanceDue(c.Name)
 			_, err := s.wakeLocked(ctx, c.Name)
 			return err
 		}
-		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
+		if c.Phase == registry.PhaseHibernated {
 			return nil // expected
 		}
 		if c.Class == registry.ClassAlwaysOn {
@@ -278,11 +296,7 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 		return err
 	}
 	cur := idle.Sample{At: s.opt.Now(), RxBytes: st.Net.RxBytes, TxBytes: st.Net.TxBytes}
-	prev, seen := s.sample(c.Name)
-	s.setSample(c.Name, cur)
-	if !seen {
-		prev = idle.Sample{At: cur.At, RxBytes: c.RxBytes, TxBytes: c.TxBytes}
-	}
+	prev := idle.Sample{RxBytes: c.RxBytes, TxBytes: c.TxBytes} // last persisted counters
 	d := idle.Evaluate(prev, cur, c.LastActivity, c.IdleAfter, s.opt.NoiseBytes)
 	if err := s.reg.Update(c.Name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseActive
@@ -336,11 +350,14 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	stop := func() bool { return s.wakeWanted(c.Name) }
 	after, err := s.opt.Reclaimer.ReclaimUntil(rctx, id, 8<<30, stop)
 	if err != nil {
-		if err == reclaim.ErrUnsupported {
-			s.opt.Logger.Info("reclaim unsupported on this host; leaving cell resident", "cell", c.Name)
+		if errors.Is(err, reclaim.ErrUnsupported) || errors.Is(err, reclaim.ErrNoCgroup) {
+			s.opt.Logger.Info("reclaim not possible on this host; leaving cell resident", "cell", c.Name, "reason", err)
 			return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
 		}
 		return err
+	}
+	if s.wakeWanted(c.Name) && after.CurrentBytes >= before.CurrentBytes {
+		return nil // interrupted before anything moved; leave it re-armed
 	}
 	s.m.reclaimed(before.CurrentBytes - after.CurrentBytes)
 	s.opt.Logger.Info("reclaimed", "cell", c.Name, "before_mib", before.CurrentBytes>>20, "after_mib", after.CurrentBytes>>20, "swap_mib", after.SwapBytes>>20)
@@ -369,7 +386,7 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	if _, err := s.rt.Unpause(ctx, c.Container); err != nil {
 		return err
 	}
-	if err := s.waitReady(ctx, c.Port, s.opt.WakeTimeout); err != nil {
+	if err := s.waitReady(ctx, c.Port, s.pauseWakeTimeout(c)); err != nil {
 		// gateway did not come back healthy after the thaw: leave it running
 		// and let the next reconcile observe it (self-exit shows as exited).
 		s.opt.Logger.Warn("pause cap: pulse, gateway not ready", "cell", c.Name, "err", err)
@@ -389,16 +406,47 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now(); x.ReclaimedAt = time.Time{} })
 }
 
+// pauseWakeTimeout: a reclaimed cell pages in from swap and needs longer
+// than a merely frozen one.
+func (s *Supervisor) pauseWakeTimeout(c registry.Cell) time.Duration {
+	if !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt) {
+		return s.opt.ReclaimWakeTimeout
+	}
+	return s.opt.WakeTimeout
+}
+
 // dueSoon: a hibernated cell whose next job is within PreWake should wake now.
+// A due time already in the past by more than PreWake is stale (the job has
+// fired, or the operator set a one-shot) and is ignored until advanced.
 func (s *Supervisor) dueSoon(c registry.Cell) bool {
-	return !c.NextDueAt.IsZero() && !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
+	if c.NextDueAt.IsZero() {
+		return false
+	}
+	now := s.opt.Now()
+	return !c.NextDueAt.After(now.Add(s.opt.PreWake)) && c.NextDueAt.After(now.Add(-s.opt.PreWake))
+}
+
+// advanceDue moves a fired due time forward by NextDueEvery, or clears a
+// one-shot, so a cell can never become permanently un-hibernatable.
+func (s *Supervisor) advanceDue(name string) error {
+	return s.reg.Update(name, func(x *registry.Cell) {
+		if x.NextDueEvery > 0 {
+			// advance past the pre-wake window so this pass's wake is not refired
+			horizon := s.opt.Now().Add(s.opt.PreWake)
+			for !x.NextDueAt.After(horizon) {
+				x.NextDueAt = x.NextDueAt.Add(x.NextDueEvery)
+			}
+			return
+		}
+		x.NextDueAt = time.Time{}
+	})
 }
 
 // jobInsideIdleWindow: never hibernate a cell that would only have to be
 // woken again before its idle timeout elapsed (interim rule until cron
-// schedules are read from the cell itself).
+// schedules are read from the cell itself). Past due times do not count.
 func (s *Supervisor) jobInsideIdleWindow(c registry.Cell) bool {
-	if c.NextDueAt.IsZero() {
+	if c.NextDueAt.IsZero() || c.NextDueAt.Before(s.opt.Now()) {
 		return false
 	}
 	window := c.IdleAfter
@@ -436,7 +484,6 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 	}
 	s.opt.Logger.Info("hibernated", "cell", name, "tier", c.Tier, "took", took)
 	s.m.hibernate(string(c.Tier))
-	s.dropSample(name)
 	pausedAt := time.Time{}
 	if c.Tier != registry.TierStop {
 		pausedAt = s.opt.Now()
@@ -456,32 +503,40 @@ type WakeResult struct {
 // lock, so it waits for any in-progress hibernate/pulse and interrupts an
 // in-progress reclaim at its next chunk (reclaim polls wakeWanted).
 func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) {
-	// coalesce
+	// coalesce: followers wait for the leader and receive its real outcome
 	s.mu.Lock()
-	if ch, ok := s.inflt[name]; ok {
+	if sh, ok := s.inflt[name]; ok {
 		s.mu.Unlock()
 		select {
-		case <-ch:
-			return WakeResult{AlreadyRunning: true}, nil
+		case <-sh.done:
+			if sh.err != nil {
+				return WakeResult{}, sh.err
+			}
+			return WakeResult{AlreadyRunning: true, ReadyTook: sh.res.ReadyTook}, nil
 		case <-ctx.Done():
 			return WakeResult{}, ctx.Err()
 		}
 	}
-	ch := make(chan struct{})
-	s.inflt[name] = ch
+	sh := &wakeShare{done: make(chan struct{})}
+	s.inflt[name] = sh
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		delete(s.inflt, name)
 		s.mu.Unlock()
-		close(ch)
+		close(sh.done)
 	}()
+	// The wake itself must not die with the caller (a webhook client that
+	// gives up mid-boot): run it under a detached, bounded context.
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.opt.StopWakeTimeout+30*time.Second)
+	defer cancel()
 	s.setWakeWanted(name, true)
 	l := s.lockCell(name)
 	l.Lock()
 	defer l.Unlock()
 	s.setWakeWanted(name, false)
-	return s.wakeLocked(ctx, name)
+	sh.res, sh.err = s.wakeLocked(wctx, name)
+	return sh.res, sh.err
 }
 
 func (s *Supervisor) setWakeWanted(name string, v bool) {
@@ -531,7 +586,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	kind := "stop"
 	if state == runtime.StatePaused {
 		kind = "pause"
-		timeout = s.opt.WakeTimeout
+		timeout = s.pauseWakeTimeout(c)
 		startTook, err = s.rt.Unpause(ctx, c.Container)
 	} else {
 		startTook, err = s.rt.Start(ctx, c.Container)
@@ -553,6 +608,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		x.Phase = registry.PhaseActive
 		x.LastActivity = s.opt.Now()
 		x.PausedAt = time.Time{}
+		x.ReclaimedAt = time.Time{}
 		x.LastError = ""
 	})
 }

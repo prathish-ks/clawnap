@@ -40,14 +40,24 @@ func readSecret(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(b)), nil
+	secret := strings.TrimSpace(string(b))
+	if secret == "" {
+		// an empty key makes every HMAC "valid" and matches an absent verify
+		// token; never verify against it
+		return "", errors.New("hook secret file is empty")
+	}
+	return secret, nil
 }
 
 // verifierFor maps a registry name to an implementation. Unknown names fail
-// closed: a misspelt verifier must never mean "accept everything".
+// closed: a misspelt verifier must never mean "accept everything", and an
+// unset one is a configuration error, not an open relay. Only the explicit
+// "none" disables verification.
 func verifierFor(name string) (Verifier, error) {
 	switch strings.ToLower(name) {
-	case "", "none":
+	case "":
+		return nil, errors.New("no hook verifier configured for this cell (set -hook-verifier, or 'none' to accept unverified hooks)")
+	case "none":
 		return nil, nil
 	case "telegram":
 		return telegramVerifier{}, nil

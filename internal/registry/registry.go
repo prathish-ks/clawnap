@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -67,16 +68,17 @@ type Cell struct {
 	// is due. Interim cron-aware wake (upstream #119035): a cell is never
 	// hibernated while a job is due inside its idle window, and a
 	// hibernated cell is woken shortly before NextDueAt. Zero = no schedule.
-	NextDueAt    time.Time `json:"next_due_at"`
-	Phase        Phase     `json:"phase"`
-	PausedAt     time.Time `json:"paused_at,omitempty"`    // when the current pause began (pause tier)
-	ReclaimedAt  time.Time `json:"reclaimed_at,omitempty"` // when the paused cell's memory was last reclaimed to swap
-	LastActivity time.Time `json:"last_activity"`
-	RxBytes      int64     `json:"rx_bytes"`
-	TxBytes      int64     `json:"tx_bytes"`
-	Restarts     int       `json:"restarts"`
-	LastError    string    `json:"last_error,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	NextDueAt    time.Time     `json:"next_due_at"`
+	NextDueEvery time.Duration `json:"next_due_every,omitempty"` // recurrence for NextDueAt; 0 = one-shot (cleared after it fires)
+	Phase        Phase         `json:"phase"`
+	PausedAt     time.Time     `json:"paused_at,omitempty"`    // when the current pause began (pause tier)
+	ReclaimedAt  time.Time     `json:"reclaimed_at,omitempty"` // when the paused cell's memory was last reclaimed to swap
+	LastActivity time.Time     `json:"last_activity"`
+	RxBytes      int64         `json:"rx_bytes"`
+	TxBytes      int64         `json:"tx_bytes"`
+	Restarts     int           `json:"restarts"`
+	LastError    string        `json:"last_error,omitempty"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 // Store is a file-backed cell registry safe for concurrent use in-process.
@@ -92,21 +94,59 @@ var ErrNotFound = errors.New("registry: cell not found")
 // Open loads (or creates) the registry file.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, cells: map[string]Cell{}}
-	b, err := os.ReadFile(path)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	if err := s.reload(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// reload replaces the in-memory map with the file's contents. Caller holds
+// mu (or is Open). A missing file is an empty registry.
+func (s *Store) reload() error {
+	b, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return s, os.MkdirAll(filepath.Dir(path), 0o700)
+		s.cells = map[string]Cell{}
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var list []Cell
 	if err := json.Unmarshal(b, &list); err != nil {
-		return nil, err
+		return err
 	}
+	m := make(map[string]Cell, len(list))
 	for _, c := range list {
-		s.cells[c.Name] = c
+		m[c.Name] = c
 	}
-	return s, nil
+	s.cells = m
+	return nil
+}
+
+// withFileLock serialises mutations across processes: it takes an advisory
+// lock on <path>.lock, re-reads the file so another process's writes are
+// never clobbered, applies fn, and flushes. `fleetd cells add` while
+// `fleetd serve` runs is therefore safe in both directions.
+func (s *Store) withFileLock(fn func() error) error {
+	lf, err := os.OpenFile(s.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer func() { _ = syscall.Flock(int(lf.Fd()), syscall.LOCK_UN) }()
+	if err := s.reload(); err != nil {
+		return err
+	}
+	if err := fn(); err != nil {
+		return err
+	}
+	return s.flush()
 }
 
 // Put inserts or replaces a cell.
@@ -126,8 +166,7 @@ func (s *Store) Put(c Cell) error {
 		c.Phase = PhaseActive
 	}
 	c.UpdatedAt = time.Now().UTC()
-	s.cells[c.Name] = c
-	return s.flush()
+	return s.withFileLock(func() error { s.cells[c.Name] = c; return nil })
 }
 
 // Get returns one cell.
@@ -145,17 +184,21 @@ func (s *Store) Get(name string) (Cell, error) {
 func (s *Store) Delete(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.cells[name]; !ok {
-		return ErrNotFound
-	}
-	delete(s.cells, name)
-	return s.flush()
+	return s.withFileLock(func() error {
+		if _, ok := s.cells[name]; !ok {
+			return ErrNotFound
+		}
+		delete(s.cells, name)
+		return nil
+	})
 }
 
-// List returns cells sorted by name.
+// List returns cells sorted by name, re-reading the file first so a
+// long-running daemon sees cells added or removed by the CLI.
 func (s *Store) List() []Cell {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.reload() // best effort; on error keep the last good map
 	out := make([]Cell, 0, len(s.cells))
 	for _, c := range s.cells {
 		out = append(out, c)
@@ -168,14 +211,16 @@ func (s *Store) List() []Cell {
 func (s *Store) Update(name string, fn func(*Cell)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c, ok := s.cells[name]
-	if !ok {
-		return ErrNotFound
-	}
-	fn(&c)
-	c.UpdatedAt = time.Now().UTC()
-	s.cells[name] = c
-	return s.flush()
+	return s.withFileLock(func() error {
+		c, ok := s.cells[name]
+		if !ok {
+			return ErrNotFound
+		}
+		fn(&c)
+		c.UpdatedAt = time.Now().UTC()
+		s.cells[name] = c
+		return nil
+	})
 }
 
 // flush writes the file atomically (temp + rename). Caller holds mu.
@@ -190,7 +235,19 @@ func (s *Store) flush() error {
 		return err
 	}
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil { // the rename is only atomic if the bytes are durable first
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.path)

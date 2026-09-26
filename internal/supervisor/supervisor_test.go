@@ -268,8 +268,9 @@ func TestDaemonRestartReconcilesExternalPause(t *testing.T) {
 	_ = reg.Put(registry.Cell{Name: "r", Container: "oc-r", Port: 1, Phase: registry.PhaseActive, IdleAfter: time.Hour})
 	s.ReconcileOnce(context.Background())
 	c, _ := reg.Get("r")
-	if c.Phase != registry.PhaseHibernated || fr.has("unpause") || fr.has("start") || !c.PausedAt.Equal(now) {
-		t.Fatalf("expected adoption as hibernated (PausedAt=now) without action, cell=%+v calls=%v", c, fr.calls)
+	// unknown-age pauses are adopted as already at the cap, so the next pass pulses rather than trusting a clock we never saw start
+	if c.Phase != registry.PhaseHibernated || fr.has("unpause") || fr.has("start") || !c.PausedAt.Equal(now.Add(-20*time.Minute)) {
+		t.Fatalf("expected adoption as hibernated (PausedAt=now-MaxPause) without action, cell=%+v calls=%v", c, fr.calls)
 	}
 }
 
@@ -476,5 +477,151 @@ func TestReclaimYieldsToPendingWake(t *testing.T) {
 	fmt.Sscan(string(cur), &n)
 	if n <= 800000000-20*32<<20 {
 		t.Fatalf("reclaim should have stopped early, current=%d", n)
+	}
+}
+
+// Regression for the semaphore double-acquire: N always-on cells exited with
+// MaxConcurrent=N and a slow inspect must all be restarted, not deadlock.
+func TestReconcileWakesDoNotDeadlockOnSemaphore(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &slowRunner{fakeRunner: fakeRunner{state: map[string]runtime.State{}, netio: map[string]string{}}, slowOp: "inspect", delay: 100 * time.Millisecond}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	for _, n := range []string{"a", "b", "c", "d"} {
+		fr.state["oc-"+n] = runtime.StateExited
+		_ = reg.Put(registry.Cell{Name: n, Container: "oc-" + n, Port: 1, Class: registry.ClassAlwaysOn, IdleAfter: time.Hour})
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, MaxConcurrent: 4})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { s.ReconcileOnce(ctx); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("ReconcileOnce deadlocked")
+	}
+	starts := 0
+	fr.mu.Lock()
+	for _, c := range fr.calls {
+		if strings.HasPrefix(c, "start oc-") {
+			starts++
+		}
+	}
+	fr.mu.Unlock()
+	if starts != 4 {
+		t.Fatalf("expected 4 starts, got %d (calls=%v)", starts, fr.calls)
+	}
+}
+
+func TestCoalescedFollowersSeeLeaderFailure(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &slowRunner{fakeRunner: fakeRunner{state: map[string]runtime.State{"oc-f": runtime.StateExited}, netio: map[string]string{}, failOn: "start"}, slowOp: "start", delay: 200 * time.Millisecond}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "f", Container: "oc-f", Port: 1, Phase: registry.PhaseHibernated, Tier: registry.TierStop})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }})
+	errs := make(chan error, 3)
+	for i := 0; i < 3; i++ {
+		go func() { _, err := s.Wake(context.Background(), "f"); errs <- err }()
+		time.Sleep(20 * time.Millisecond)
+	}
+	for i := 0; i < 3; i++ {
+		if err := <-errs; err == nil {
+			t.Fatal("a follower reported success although the leader's start failed")
+		}
+	}
+}
+
+func TestWakeSurvivesCallerCancellation(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &slowRunner{fakeRunner: fakeRunner{state: map[string]runtime.State{"oc-c": runtime.StateExited}, netio: map[string]string{}}, slowOp: "start", delay: 300 * time.Millisecond}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "c", Container: "oc-c", Port: 1, Phase: registry.PhaseHibernated, Tier: registry.TierStop})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(50 * time.Millisecond); cancel() }() // the webhook client gives up mid-boot
+	res, err := s.Wake(ctx, "c")
+	if err != nil || res.AlreadyRunning {
+		t.Fatalf("wake must complete despite caller cancellation: %+v %v", res, err)
+	}
+	c, _ := reg.Get("c")
+	if c.Phase != registry.PhaseActive {
+		t.Fatalf("phase=%s", c.Phase)
+	}
+}
+
+func TestOneShotDueTimeIsClearedAfterWake(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-o": runtime.StatePaused}, netio: map[string]string{"oc-o": "1kB / 1kB"}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "o", Container: "oc-o", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now, IdleAfter: time.Minute, NextDueAt: now.Add(time.Minute)})
+	s.ReconcileOnce(context.Background()) // pre-wake fires
+	c, _ := reg.Get("o")
+	if c.Phase != registry.PhaseActive || !c.NextDueAt.IsZero() {
+		t.Fatalf("one-shot due time must be cleared after the wake: %+v", c)
+	}
+	// and a stale past due time never blocks hibernation
+	_ = reg.Update("o", func(x *registry.Cell) { x.NextDueAt = now.Add(-time.Hour) })
+	fr.state["oc-o"] = runtime.StateRunning
+	s.ReconcileOnce(context.Background())
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-o") {
+		t.Fatalf("stale due time must not keep the cell awake: %v", fr.calls)
+	}
+}
+
+func TestRecurringDueTimeAdvances(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-q": runtime.StatePaused}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "q", Container: "oc-q", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now, IdleAfter: time.Minute, NextDueAt: now.Add(time.Minute), NextDueEvery: 24 * time.Hour})
+	s.ReconcileOnce(context.Background())
+	c, _ := reg.Get("q")
+	if !c.NextDueAt.Equal(now.Add(time.Minute + 24*time.Hour)) {
+		t.Fatalf("recurring due time must advance by one period: %v", c.NextDueAt)
+	}
+}
+
+func TestStaleWakingPhaseIsAdoptedAfterRestart(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-s": runtime.StateExited}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "s", Container: "oc-s", Port: 1, Class: registry.ClassAlwaysOn, Phase: registry.PhaseWaking, IdleAfter: time.Hour})
+	s.ReconcileOnce(context.Background()) // no wake in flight: Waking is a crash leftover
+	c, _ := reg.Get("s")
+	if !fr.has("start oc-s") || c.Phase != registry.PhaseActive || c.Restarts != 1 {
+		t.Fatalf("stale Waking must be adopted and the always-on cell self-healed: %+v calls=%v", c, fr.calls)
+	}
+}
+
+func TestFailedWakeKeepsPauseClock(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-k": runtime.StatePaused}, netio: map[string]string{}}
+	s, reg := newSup(t, fr, &now)
+	paused := now.Add(-19 * time.Minute)
+	_ = reg.Put(registry.Cell{Name: "k", Container: "oc-k", Port: 1, Phase: registry.PhaseFailed, PausedAt: paused, ReclaimedAt: now.Add(-10 * time.Minute), IdleAfter: time.Minute})
+	s.ReconcileOnce(context.Background())
+	c, _ := reg.Get("k")
+	if c.Phase != registry.PhaseHibernated || !c.PausedAt.Equal(paused) || c.ReclaimedAt.IsZero() {
+		t.Fatalf("failed wake must keep the original pause clock and reclaim mark: %+v", c)
+	}
+}
+
+func TestReclaimedCellGetsLongerWakeTimeout(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-t": runtime.StatePaused}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "t", Container: "oc-t", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), ReclaimedAt: now.Add(-30 * time.Minute)})
+	calls := 0
+	slowProbe := func(context.Context, int) error {
+		calls++
+		if calls < 4 {
+			return errors.New("paging in")
+		}
+		return nil
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: slowProbe, WakeTimeout: 300 * time.Millisecond, ReclaimWakeTimeout: 5 * time.Second})
+	if _, err := s.Wake(context.Background(), "t"); err != nil {
+		t.Fatalf("reclaimed cell must get the longer timeout: %v", err)
 	}
 }

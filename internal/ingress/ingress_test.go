@@ -57,7 +57,7 @@ func TestHookWakesThenProxiesWithStrippedPrefix(t *testing.T) {
 	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
 
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
-	_ = reg.Put(registry.Cell{Name: "a", Container: "oc-a", Port: 1, HookPort: port}) // gateway port differs from hook port
+	_ = reg.Put(registry.Cell{Name: "a", Container: "oc-a", Port: 1, HookPort: port, HookVerifier: "none"}) // explicit none; gateway port differs from hook port
 	fw := &fakeWaker{}
 	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
 	defer srv.Close()
@@ -72,6 +72,18 @@ func TestHookWakesThenProxiesWithStrippedPrefix(t *testing.T) {
 	res, _ = http.Post(srv.URL+"/hook/nope/x", "text/plain", nil)
 	if res.StatusCode != 404 {
 		t.Fatalf("unknown cell should 404, got %d", res.StatusCode)
+	}
+}
+
+func TestUnsetVerifierFailsClosed(t *testing.T) {
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	_ = reg.Put(registry.Cell{Name: "u", Container: "oc-u", Port: 1}) // no verifier set
+	fw := &fakeWaker{}
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
+	defer srv.Close()
+	res, _ := http.Post(srv.URL+"/hook/u/x", "application/json", strings.NewReader("{}"))
+	if res.StatusCode != 502 || len(fw.woke) != 0 {
+		t.Fatalf("unset verifier must not wake or proxy: %d woke=%v", res.StatusCode, fw.woke)
 	}
 }
 

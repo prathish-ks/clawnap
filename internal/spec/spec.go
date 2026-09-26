@@ -33,10 +33,61 @@ type ContainerSpec struct {
 	Privileged bool     `json:"privileged"`
 }
 
-// Dangerous host paths that must never be bind-mounted into a tenant cell.
-var blockedPrefixes = []string{
-	"/var/run/docker.sock", "/run/docker.sock", "/run/podman", "/var/run/podman",
-	"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/var/lib/docker",
+// PathClass is what a host path looks like to a tenant cell.
+type PathClass int
+
+const (
+	PathOK            PathClass = iota
+	PathRuntimeSocket           // Docker/Podman control socket: root on the host
+	PathDangerousRoot           // host root paths: /etc, /proc, /var/lib/docker, / ...
+	PathSecretShaped            // credential material: .ssh, .aws, .env, id_rsa ...
+)
+
+var runtimeSockets = []string{"/var/run/docker.sock", "/run/docker.sock", "/run/podman", "/var/run/podman"}
+
+// dangerousPrefixes are refused as a mount source together with everything
+// under them: system trees and the runtime's own state.
+var dangerousPrefixes = []string{"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/var/lib/docker", "/var/lib/containers", "/usr", "/bin", "/sbin"}
+
+// dangerousExact are refused only when mounted as a whole (Isthmus
+// securitycheck.dangerousRoots): /home/ops/cells/a is fine, /home is not.
+var dangerousExact = []string{"/home", "/var", "/opt", "/srv"}
+
+// secretPathPatterns are Isthmus mount defaultBlockedPatterns.
+var secretPathPatterns = []string{
+	".ssh", ".gnupg", ".gpg", ".aws", ".azure", ".gcloud", ".kube", ".docker",
+	"credentials", ".env", ".netrc", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "private_key", ".secret",
+}
+
+// ClassifyHostPath is the single rule set shared by the launcher (Validate)
+// and the inspector (hostcheck), so the two can never disagree.
+func ClassifyHostPath(p string) PathClass {
+	hp := filepath.Clean(p)
+	if hp == "/" {
+		return PathDangerousRoot
+	}
+	for _, sp := range runtimeSockets {
+		if hp == sp || strings.HasPrefix(hp, sp+"/") {
+			return PathRuntimeSocket
+		}
+	}
+	for _, dr := range dangerousPrefixes {
+		if hp == dr || strings.HasPrefix(hp, dr+"/") {
+			return PathDangerousRoot
+		}
+	}
+	for _, dr := range dangerousExact {
+		if hp == dr {
+			return PathDangerousRoot
+		}
+	}
+	lower := strings.ToLower(hp)
+	for _, pat := range secretPathPatterns {
+		if strings.Contains(lower, pat) {
+			return PathSecretShaped
+		}
+	}
+	return PathOK
 }
 
 // Validate returns every violated invariant, or nil.
@@ -63,27 +114,30 @@ func Validate(s ContainerSpec) error {
 			errs = append(errs, fmt.Errorf("mount %q must be absolute", m.HostPath))
 			continue
 		}
-		if hp == "/" {
-			errs = append(errs, errors.New("mounting / is refused"))
-		}
-		for _, b := range blockedPrefixes {
-			if hp == b || strings.HasPrefix(hp, b+"/") {
-				errs = append(errs, fmt.Errorf("mount %q is under blocked path %s", m.HostPath, b))
-			}
+		switch ClassifyHostPath(hp) {
+		case PathRuntimeSocket:
+			errs = append(errs, fmt.Errorf("mount %q is a container runtime socket (blocked path)", m.HostPath))
+		case PathDangerousRoot:
+			errs = append(errs, fmt.Errorf("mount %q is under a blocked host root path", m.HostPath))
+		case PathSecretShaped:
+			errs = append(errs, fmt.Errorf("mount %q looks like credential material; inject secrets via a broker instead", m.HostPath))
 		}
 	}
 	for _, e := range s.Env {
 		k := strings.SplitN(e, "=", 2)[0]
-		if looksSecret(k) {
+		if LooksSecretEnvKey(k) {
 			errs = append(errs, fmt.Errorf("env %s looks like a secret; inject via broker, not env", k))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func looksSecret(k string) bool {
+var secretEnvWords = []string{"SECRET", "TOKEN", "PASSWORD", "PASSWD", "API_KEY", "APIKEY", "PRIVATE_KEY", "ACCESS_KEY"}
+
+// LooksSecretEnvKey reports whether an env var name looks like a credential.
+func LooksSecretEnvKey(k string) bool {
 	k = strings.ToUpper(k)
-	for _, w := range []string{"SECRET", "TOKEN", "PASSWORD", "API_KEY", "APIKEY", "PRIVATE_KEY"} {
+	for _, w := range secretEnvWords {
 		if strings.Contains(k, w) {
 			return true
 		}

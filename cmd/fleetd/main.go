@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -47,14 +48,30 @@ func dataDir() string {
 	return filepath.Join(h, ".fleetd")
 }
 
+func newRunner() runtime.ExecRunner { return runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")} }
+
+func openRegistry() (*registry.Store, error) {
+	return registry.Open(filepath.Join(dataDir(), "cells.json"))
+}
+
 func open(opt supervisor.Options) (*registry.Store, *supervisor.Supervisor, error) {
-	reg, err := registry.Open(filepath.Join(dataDir(), "cells.json"))
+	reg, err := openRegistry()
 	if err != nil {
 		return nil, nil, err
 	}
-	bin := os.Getenv("FLEETD_RUNTIME")
-	rt := runtime.Client{R: runtime.ExecRunner{Binary: bin}}
-	return reg, supervisor.New(reg, rt, opt), nil
+	return reg, supervisor.New(reg, runtime.Client{R: newRunner()}, opt), nil
+}
+
+// loopFlags registers the reconcile-loop options once, for every subcommand
+// that runs the loop, so they cannot drift apart.
+func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
+	interval := fs.Duration("interval", 30*time.Second, "reconcile interval")
+	reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
+	maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this")
+	fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
+	return func() supervisor.Options {
+		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_}
+	}
 }
 
 func run(args []string) error {
@@ -69,12 +86,11 @@ func run(args []string) error {
 	case "reconcile":
 		fs := flag.NewFlagSet("reconcile", flag.ContinueOnError)
 		loop := fs.Bool("loop", false, "run continuously")
-		interval := fs.Duration("interval", 30*time.Second, "sampling interval")
-		reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
+		opts := loopFlags(fs)
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		_, sup, err := open(supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter})
+		_, sup, err := open(opts())
 		if err != nil {
 			return err
 		}
@@ -109,7 +125,7 @@ func run(args []string) error {
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		rt := runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")}
+		rt := newRunner()
 		hostExec := func(ctx context.Context, name string, a ...string) (string, error) {
 			out, err := exec.CommandContext(ctx, name, a...).CombinedOutput()
 			return string(out), err
@@ -140,15 +156,15 @@ func run(args []string) error {
 	case "serve":
 		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 		listen := fs.String("listen", "127.0.0.1:8080", "ingress listen address")
-		token := fs.String("token", os.Getenv("FLEETD_TOKEN"), "bearer token for /wake")
-		maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this")
-		fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
-		interval := fs.Duration("interval", 30*time.Second, "reconcile interval")
-		reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
+		token := fs.String("token", os.Getenv("FLEETD_TOKEN"), "bearer token for /wake and /hibernate (required unless listening on loopback)")
+		opts := loopFlags(fs)
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		reg, sup, err := open(supervisor.Options{MaxPause: *maxPause, PauseFallthrough: *fallthrough_, Interval: *interval, ReclaimAfter: *reclaimAfter})
+		if *token == "" && !isLoopback(*listen) {
+			return fmt.Errorf("refusing to serve /wake and /hibernate unauthenticated on %s: pass -token or FLEETD_TOKEN", *listen)
+		}
+		reg, sup, err := open(opts())
 		if err != nil {
 			return err
 		}
@@ -163,6 +179,18 @@ func run(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown command %q", args[0])
+}
+
+func isLoopback(listen string) bool {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 type wakeAdapter struct{ s *supervisor.Supervisor }
@@ -181,7 +209,7 @@ func cells(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: fleetd cells <add|create|list|rm>")
 	}
-	reg, _, err := open(supervisor.Options{})
+	reg, err := openRegistry()
 	if err != nil {
 		return err
 	}
@@ -192,12 +220,13 @@ func cells(args []string) error {
 		container := fs.String("container", "", "container name")
 		port := fs.Int("port", 0, "loopback gateway port (readiness probe)")
 		hookPort := fs.Int("hook-port", 0, "loopback webhook listener port (0 = same as -port)")
-		hookVerifier := fs.String("hook-verifier", "", "none|telegram|slack|github|whatsapp|bearer (verify inbound webhooks before waking)")
+		hookVerifier := fs.String("hook-verifier", "", "telegram|slack|github|whatsapp|bearer, or 'none' to accept unverified hooks; unset = /hook refused for this cell")
 		hookSecretFile := fs.String("hook-secret-file", "", "file holding the verify-only webhook secret (never a bot token)")
 		class := fs.String("class", "hibernate", "hibernate|always-on")
 		tier := fs.String("tier", "pause", "pause|stop (how a hibernate-class cell sleeps)")
 		idle := fs.Duration("idle", 10*time.Minute, "idle timeout before hibernation")
 		due := fs.String("next-due", "", "RFC3339 time of the cell's next scheduled job (interim cron-aware wake)")
+		dueEvery := fs.Duration("next-due-every", 0, "recurrence for -next-due (0 = one-shot, cleared after it fires)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -209,7 +238,7 @@ func cells(args []string) error {
 			}
 			nextDue = t
 		}
-		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, HookPort: *hookPort, HookVerifier: *hookVerifier, HookSecretFile: *hookSecretFile, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue})
+		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, HookPort: *hookPort, HookVerifier: *hookVerifier, HookSecretFile: *hookSecretFile, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue, NextDueEvery: *dueEvery})
 	case "create":
 		fs := flag.NewFlagSet("create", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name (plain identifier)")
@@ -220,9 +249,10 @@ func cells(args []string) error {
 		ingressURL := fs.String("ingress-url", "", "public base URL of the ingress; empty = polling mode")
 		tokenFile := fs.String("telegram-token-file", "", "file containing the Telegram bot token (written into the cell config only)")
 		tier := fs.String("tier", "pause", "pause|stop")
-		idle := fs.String("idle", "10m", "idle timeout before hibernation")
+		idle := fs.Duration("idle", 10*time.Minute, "idle timeout before hibernation")
 		mem := fs.Int("memory-mib", 1024, "memory limit")
 		pids := fs.Int("pids", 512, "pids limit")
+		user := fs.String("user", "1000:1000", "uid:gid the cell runs as; state dirs are owned by it")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -234,9 +264,8 @@ func cells(args []string) error {
 			}
 			tok = strings.TrimSpace(string(b))
 		}
-		rt := runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")}
 		res, err := provision.Create(ctx, provision.Spec{Name: *name, Image: *image, StateRoot: *root, Port: *port, HookPort: *hookPort,
-			IngressURL: *ingressURL, TelegramToken: tok, Tier: registry.Tier(*tier), IdleAfter: *idle, MemMiB: *mem, Pids: *pids}, rt, reg)
+			IngressURL: *ingressURL, TelegramToken: tok, Tier: registry.Tier(*tier), IdleAfter: *idle, MemMiB: *mem, Pids: *pids, User: *user}, newRunner(), reg)
 		if err != nil {
 			return err
 		}

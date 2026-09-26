@@ -74,7 +74,8 @@ func (s *Server) handleWake(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("cell")
 	took, err := s.Waker.Wake(r.Context(), name)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		s.log().Warn("wake failed", "cell", name, "err", err)
+		http.Error(w, "wake failed", http.StatusBadGateway) // generic: never leak cell existence or runtime errors
 		return
 	}
 	w.Header().Set("X-Wake-Ready-Ms", strconv.FormatInt(took.Milliseconds(), 10))
@@ -93,7 +94,8 @@ func (s *Server) handleHibernate(w http.ResponseWriter, r *http.Request) {
 	}
 	t := time.Now()
 	if err := h.Hibernate(r.Context(), r.PathValue("cell")); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		s.log().Warn("hibernate failed", "cell", r.PathValue("cell"), "err", err)
+		http.Error(w, "hibernate failed", http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("X-Hibernate-Ms", strconv.FormatInt(time.Since(t).Milliseconds(), 10))
@@ -107,11 +109,11 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("cell")
 	c, err := s.Reg.Get(name)
 	if err != nil {
-		http.Error(w, "unknown cell", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	if c.Port == 0 {
-		http.Error(w, "cell has no port", http.StatusBadGateway)
+		http.Error(w, "cell misconfigured", http.StatusBadGateway)
 		return
 	}
 	// Verify before waking: an unverified request must not cost a wake.

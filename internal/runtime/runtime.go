@@ -6,6 +6,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,17 +25,36 @@ type Runner interface {
 // ExecRunner shells out to a real binary ("docker" or "podman").
 type ExecRunner struct{ Binary string }
 
-// Run implements Runner.
+// Run implements Runner. Only stdout is returned as data: runtime warnings
+// on stderr (Podman banners, Docker deprecations) must never be parsed as
+// a status word, JSON, or a container id. stderr goes into the error only.
 func (e ExecRunner) Run(ctx context.Context, args ...string) (string, error) {
 	bin := e.Binary
 	if bin == "" {
 		bin = "docker"
 	}
-	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	cmd := exec.CommandContext(ctx, bin, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s %s: %w: %s", bin, strings.Join(redactArgs(args), " "), err, strings.TrimSpace(stderr.String()))
 	}
-	return string(out), nil
+	return stdout.String(), nil
+}
+
+// redactArgs hides the value of -e/--env KEY=VALUE pairs so a failed
+// `docker run` never prints a token into logs.
+func redactArgs(args []string) []string {
+	out := make([]string, len(args))
+	copy(out, args)
+	for i := range out {
+		if i > 0 && (out[i-1] == "-e" || out[i-1] == "--env") {
+			if k, _, ok := strings.Cut(out[i], "="); ok {
+				out[i] = k + "=<redacted>"
+			}
+		}
+	}
+	return out
 }
 
 // State is a container's lifecycle state as reported by the runtime.

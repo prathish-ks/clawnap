@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -40,5 +41,25 @@ func TestParseNetIO(t *testing.T) {
 	rx, tx, err := ParseNetIO("1.2kB / 3.4MB")
 	if err != nil || rx != 1200 || tx != 3400000 {
 		t.Fatalf("got %d %d %v", rx, tx, err)
+	}
+}
+
+func TestRedactArgs(t *testing.T) {
+	got := redactArgs([]string{"run", "-e", "OPENCLAW_GATEWAY_TOKEN=abc", "--env", "X=1", "img"})
+	if got[2] != "OPENCLAW_GATEWAY_TOKEN=<redacted>" || got[4] != "X=<redacted>" || got[5] != "img" {
+		t.Fatalf("redaction wrong: %v", got)
+	}
+}
+
+func TestExecRunnerSeparatesStderr(t *testing.T) {
+	// sh -c prints a warning on stderr and the real answer on stdout
+	r := ExecRunner{Binary: "sh"}
+	out, err := r.Run(context.Background(), "-c", "echo WARN >&2; echo running")
+	if err != nil || out != "running\n" {
+		t.Fatalf("stdout must be clean: %q %v", out, err)
+	}
+	_, err = r.Run(context.Background(), "-c", "echo boom >&2; exit 3")
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("stderr must reach the error: %v", err)
 	}
 }

@@ -33,6 +33,11 @@ type Reclaimer struct {
 // ErrUnsupported is returned off Linux or without cgroup v2 memory.reclaim.
 var ErrUnsupported = errors.New("memory reclaim unsupported on this host")
 
+// ErrNoCgroup is returned when no known cgroup layout holds the container
+// (cgroup v1, rootless slices); callers treat it as terminal, like
+// ErrUnsupported, rather than retrying every tick.
+var ErrNoCgroup = errors.New("container cgroup not found")
+
 // Dir locates the cgroup directory for a container id under the common
 // layouts: cgroupfs driver (docker/<id>), systemd driver
 // (system.slice/docker-<id>.scope), and podman's slice variants.
@@ -52,7 +57,7 @@ func (r Reclaimer) Dir(containerID string) (string, error) {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("cgroup for container %s not found under %s", containerID, fs)
+	return "", fmt.Errorf("%w: %s under %s", ErrNoCgroup, containerID, fs)
 }
 
 // Stats reads memory.current and memory.swap.current.
