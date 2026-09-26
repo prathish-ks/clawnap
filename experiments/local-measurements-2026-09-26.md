@@ -112,3 +112,15 @@ Conclusions:
 ### Reclaim driven by the supervisor itself (Linux build of fleetd run inside the Docker VM)
 - `fleetd reconcile` adopted the externally paused cell (PausedAt set on adoption — fixed today), then `-reclaim-after 1s` reclaimed it: **190 → 20 MiB resident, 663 MiB in swap**.
 - First attempt requested the full resident amount and the kernel write only returned at the 60 s wait bound (it spins on the last unreclaimable pages); requests are now capped at memory.current minus a 48 MiB floor. Second timed pass with the floor: 376 → 46 MiB resident, 622 MiB in swap, write returned in 7 s.
+
+### Heavy-cell simulation (no Chromium in the image; a 400 MiB resident filler process stands in for a browser/heavy heap; limit raised to 2 GiB)
+| Point | Resident | In swap |
+|---|---|---|
+| light cell running (gateway mostly already swapped from the previous test) | 120 MiB | 517 MiB |
+| + 400 MiB filler, running | 542 MiB | 488 MiB |
+| paused, after supervisor reclaim (63 s: the 48 MiB floor was not enough at this size, kernel spun to the wait bound) | 84 MiB | 933 MiB |
+| 8 s after wake, serving | 163 MiB | 864 MiB |
+
+- Wake after reclaim: unpause 0.41 s, /health 200 after **12.9 s** — no slower than the light cell (16.7 s earlier on the same disk). The filler's 400 MiB never paged back in. **Wake time tracks the pages the gateway touches, not the cell's total size.** A heavy cell costs more swap space, not more wake time.
+- Consequence: reclaim must be chunked (64 MiB steps, stop when a chunk frees < 16 MiB) instead of one request with a fixed floor; implemented after this test.
+- Caveat: the filler is idle bytes. A real browser or a large live heap is touched by the gateway on some code paths (health does not touch them; a first agent turn might), so first-message latency after reclaim on a heavy cell is a Hetzner measurement with a real model.

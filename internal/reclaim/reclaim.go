@@ -69,11 +69,12 @@ func (r Reclaimer) Stats(containerID string) (Stats, error) {
 	return Stats{CurrentBytes: cur, SwapBytes: sw}, nil
 }
 
-// Reclaim asks the kernel to reclaim up to `bytes` from the cell. The kernel
-// answers EAGAIN when it could not reclaim the full amount; for our purpose
-// that is success (everything reclaimable was reclaimed), so it is not an
-// error here. Returns stats after the attempt.
-func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64) (Stats, error) {
+// Reclaim pushes the cell's memory to swap in chunks, stopping when a chunk
+// no longer reduces memory.current by at least a quarter of its size. Chunked
+// requests return promptly; a single request for "everything" makes the
+// kernel spin toward pages it cannot reclaim (observed: 60 s stalls). `max`
+// bounds the total. Returns stats after the last chunk.
+func (r Reclaimer) Reclaim(ctx context.Context, containerID string, max int64) (Stats, error) {
 	if runtime.GOOS != "linux" && r.FS == "" {
 		return Stats{}, ErrUnsupported
 	}
@@ -85,22 +86,38 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64)
 	if _, err := os.Stat(p); err != nil {
 		return Stats{}, ErrUnsupported
 	}
-	// Never ask for more than is resident: the kernel keeps scanning toward
-	// an unreachable target and the write blocks for minutes (observed with a
-	// 4 GiB request against a 152 MiB cell). Bound the wait as well; the
-	// syscall cannot be cancelled, so a slow write is abandoned to its
-	// goroutine and the caller gets the stats as they stand.
-	// Leave a floor: the last few tens of MiB are kernel/pinned pages the
-	// kernel cannot reclaim, and asking for them makes the write spin until
-	// the wait bound (observed: 190 MiB request against 190 MiB resident ->
-	// 20 MiB left, write returned only at 60 s).
-	const floor = 48 << 20
-	if cur, err := readInt(filepath.Join(d, "memory.current")); err == nil && cur-floor < bytes {
-		bytes = cur - floor
+	const chunk = int64(64 << 20)
+	var total int64
+	for total < max {
+		before, err := readInt(filepath.Join(d, "memory.current"))
+		if err != nil {
+			return Stats{}, err
+		}
+		if before <= chunk/2 {
+			break
+		}
+		if err := writeReclaim(ctx, p, chunk); err != nil {
+			return Stats{}, err
+		}
+		after, err := readInt(filepath.Join(d, "memory.current"))
+		if err != nil {
+			return Stats{}, err
+		}
+		freed := before - after
+		total += chunk
+		if freed < chunk/4 {
+			break // stalled: the rest is unreclaimable
+		}
+		if err := ctx.Err(); err != nil {
+			return Stats{}, err
+		}
 	}
-	if bytes <= 0 {
-		return r.Stats(containerID)
-	}
+	return r.Stats(containerID)
+}
+
+// writeReclaim writes one request and bounds the wait; the syscall cannot be
+// cancelled, so a slow write is abandoned to its goroutine.
+func writeReclaim(ctx context.Context, p string, bytes int64) error {
 	done := make(chan error, 1)
 	go func() {
 		f, err := os.OpenFile(p, os.O_WRONLY, 0)
@@ -112,21 +129,21 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64)
 		_ = f.Close()
 		done <- werr
 	}()
-	wait := 60 * time.Second
+	wait := 15 * time.Second
 	if dl, ok := ctx.Deadline(); ok && time.Until(dl) < wait {
 		wait = time.Until(dl)
 	}
 	select {
 	case werr := <-done:
 		if werr != nil && !strings.Contains(strings.ToLower(werr.Error()), "resource temporarily unavailable") {
-			return Stats{}, werr
+			return werr
 		}
+		return nil
 	case <-time.After(wait):
-		return r.Stats(containerID) // partial reclaim; report what happened
+		return nil // treat as a stalled chunk; caller re-reads memory.current
 	case <-ctx.Done():
-		return Stats{}, ctx.Err()
+		return ctx.Err()
 	}
-	return r.Stats(containerID)
 }
 
 func readInt(p string) (int64, error) {

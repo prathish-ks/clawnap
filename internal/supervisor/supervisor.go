@@ -279,7 +279,7 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	before, _ := s.opt.Reclaimer.Stats(id)
 	rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	after, err := s.opt.Reclaimer.Reclaim(rctx, id, before.CurrentBytes)
+	after, err := s.opt.Reclaimer.Reclaim(rctx, id, 8<<30)
 	if err != nil {
 		if err == reclaim.ErrUnsupported {
 			s.opt.Logger.Info("reclaim unsupported on this host; leaving cell resident", "cell", c.Name)

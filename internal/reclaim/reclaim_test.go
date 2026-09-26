@@ -24,11 +24,12 @@ func TestDirStatsAndReclaimAcrossLayouts(t *testing.T) {
 	if err != nil || st.CurrentBytes != 827326464 || st.SwapBytes != 0 {
 		t.Fatalf("Stats: %+v %v", st, err)
 	}
+	// a fake cgroup never shrinks memory.current, so the first 64 MiB chunk
+	// "stalls" and the loop stops after exactly one write
 	if _, err := r.Reclaim(context.Background(), id, 900<<20); err != nil {
 		t.Fatal(err)
 	}
-	// request is clamped to memory.current minus the 48 MiB floor
-	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "776994816" {
+	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "67108864" {
 		t.Fatalf("wrote %q", b)
 	}
 	if _, err := r.Dir("nope"); err == nil {
