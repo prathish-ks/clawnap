@@ -140,3 +140,16 @@ Findings:
 - **Reclaim is bounded by swap capacity, not by the algorithm.** The VM has a 1 GiB swap file and it was already 932 MiB used, so the chunked loop correctly stopped when chunks freed almost nothing. Provisioning rule for Phase 0b: swap capacity (zram size or NVMe swap file) must exceed the sum of resident memory of the cells you intend to reclaim. This is what a provider sizes, and what the host checker should warn about.
 - Concurrent wakes of two cells proceed independently; wake time is per-cell page-in, not serialised.
 - The intended "wake during reclaim" overlap did not occur live (the wake arrived one reconcile tick before the second reclaim started); preemption is covered by the unit test `TestReclaimYieldsToPendingWake` and remains to be observed live on Hetzner where reclaims are longer.
+
+## Two-cell run repeated with the reviewed build (2026-09-26, 12:45–12:48 UTC)
+Same setup as before (Linux fleetd inside the VM, `-reclaim-after 20s -interval 10s`, both cells pause tier), driven through the daemon's endpoints.
+
+| Step | Result |
+|---|---|
+| Hibernate both | 218 ms, 728 ms |
+| Reclaim both (automatic) | tg2 265 → 89 MiB; tg3 607 → 558 MiB (swap file full at ~930 MiB, as before) |
+| Wake both at once; tg2 hit three times | tg3 ready 2.27 s; tg2 ready 15.26 s and **both coalesced followers returned the leader's real 15,260 ms and 200** (before the review they returned 0 ms) |
+| Reclaimed-cell wake at 15.26 s | passed under the new 2 min ReclaimWakeTimeout; would have failed the old 15 s timeout |
+| `fleetd cells add ghost` while the daemon ran | survived two daemon ticks and was reconciled (container missing → failed); before the review it was erased |
+| Hibernate tg2, reclaim, wake | 189 → 66 MiB, wake ready 6.23 s |
+| Totals | 3 wakes, 3 hibernates, 3 reclaims, 0 failures |
