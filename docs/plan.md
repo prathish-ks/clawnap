@@ -39,7 +39,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
-- Telegram polling keeper: supervisor-side getUpdates watcher that wakes the cell and hands the offset over (one poller per bot).
+- Telegram wake without a public address: NOT a getUpdates keeper (it would hold the tenant's bot token and read message content before the cell; unacceptable to the community and races the one-poller-per-bot rule). Order of preference: (1) webhook via the ingress with per-cell secret-token verification, no credential held; (2) opt-in count-only keeper using getWebhookInfo pending_update_count to wake the cell, which then polls itself (leaks a count, holds the token); (3) always-on class. Design principle for the README: the host never holds a channel credential and never parses a message.
 - Publish the host checker: README, a one-line install, and a post in the OpenClaw Discord self-hosting channel once the Linux egress check is verified on Hetzner.
 - Pause-tier duration cap: OpenClaw exits (code 135) after a ~3 h freeze via its lease/liveness logic; find the TTL, cap pauses below it or fall through to stop tier.
 - Stale gateway owner lease after unclean stop (exit 1 on restart until timeout): locate the lease, decide whether the supervisor clears it on OOM/crash recovery.
@@ -51,6 +51,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - Driver interface as a cell tree; Isthmus driver second, stock NanoClaw third.
 
 ## Decisions log
+- 2026-09-26: no content-reading polling keeper; webhook-first with ingress secret verification, count-only keeper as opt-in only.
 - 2026-09-19: OpenClaw fleet supervisor chosen over Paperclip (docs/opportunity-scout-2026-09-19.md).
 - 2026-09-19: Hetzner CX43 (~EUR 16/mo) for the experiment host; AMD CPX plans avoided after June 2026 price rise.
 - 2026-09-26: Hibernation is tiered (pause → CRIU → stop) after local measurement showed 70–90 s gateway start; readiness is HTTP /health.
