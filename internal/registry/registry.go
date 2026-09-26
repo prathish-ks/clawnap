@@ -69,7 +69,8 @@ type Cell struct {
 	// hibernated cell is woken shortly before NextDueAt. Zero = no schedule.
 	NextDueAt    time.Time `json:"next_due_at"`
 	Phase        Phase     `json:"phase"`
-	PausedAt     time.Time `json:"paused_at,omitempty"` // when the current pause began (pause tier)
+	PausedAt     time.Time `json:"paused_at,omitempty"`    // when the current pause began (pause tier)
+	ReclaimedAt  time.Time `json:"reclaimed_at,omitempty"` // when the paused cell's memory was last reclaimed to swap
 	LastActivity time.Time `json:"last_activity"`
 	RxBytes      int64     `json:"rx_bytes"`
 	TxBytes      int64     `json:"tx_bytes"`

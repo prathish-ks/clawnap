@@ -70,10 +70,11 @@ func run(args []string) error {
 		fs := flag.NewFlagSet("reconcile", flag.ContinueOnError)
 		loop := fs.Bool("loop", false, "run continuously")
 		interval := fs.Duration("interval", 30*time.Second, "sampling interval")
+		reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		_, sup, err := open(supervisor.Options{Interval: *interval})
+		_, sup, err := open(supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter})
 		if err != nil {
 			return err
 		}
@@ -143,10 +144,11 @@ func run(args []string) error {
 		maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this")
 		fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
 		interval := fs.Duration("interval", 30*time.Second, "reconcile interval")
+		reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		reg, sup, err := open(supervisor.Options{MaxPause: *maxPause, PauseFallthrough: *fallthrough_, Interval: *interval})
+		reg, sup, err := open(supervisor.Options{MaxPause: *maxPause, PauseFallthrough: *fallthrough_, Interval: *interval, ReclaimAfter: *reclaimAfter})
 		if err != nil {
 			return err
 		}

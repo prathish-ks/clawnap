@@ -22,6 +22,8 @@ type Metrics struct {
 	pulses       int
 	fellThru     int
 	selfHeals    int
+	reclaims     int
+	reclaimedB   int64
 	readyBuckets []float64 // seconds
 	readyCounts  []int     // cumulative per bucket
 	readySum     float64
@@ -55,6 +57,7 @@ func (m *Metrics) hibernate(tier string) { m.mu.Lock(); m.hibernates[tier]++; m.
 func (m *Metrics) pulse()                { m.mu.Lock(); m.pulses++; m.mu.Unlock() }
 func (m *Metrics) fellThrough()          { m.mu.Lock(); m.fellThru++; m.mu.Unlock() }
 func (m *Metrics) selfHeal()             { m.mu.Lock(); m.selfHeals++; m.mu.Unlock() }
+func (m *Metrics) reclaimed(b int64)     { m.mu.Lock(); m.reclaims++; m.reclaimedB += b; m.mu.Unlock() }
 
 // Write renders the exposition. cells supplies the current phase gauges.
 func (m *Metrics) Write(w io.Writer, cells []registry.Cell) {
@@ -88,6 +91,8 @@ func (m *Metrics) Write(w io.Writer, cells []registry.Cell) {
 	fmt.Fprintf(w, "# HELP fleetd_pulses_total Pause-cap pulses.\n# TYPE fleetd_pulses_total counter\nfleetd_pulses_total %d\n", m.pulses)
 	fmt.Fprintf(w, "# HELP fleetd_pause_fallthrough_total Pause-cap fallthroughs to the stop tier.\n# TYPE fleetd_pause_fallthrough_total counter\nfleetd_pause_fallthrough_total %d\n", m.fellThru)
 	fmt.Fprintf(w, "# HELP fleetd_self_heals_total Always-on cells restarted after exit.\n# TYPE fleetd_self_heals_total counter\nfleetd_self_heals_total %d\n", m.selfHeals)
+	fmt.Fprintf(w, "# HELP fleetd_reclaims_total Paused cells whose memory was reclaimed to swap.\n# TYPE fleetd_reclaims_total counter\nfleetd_reclaims_total %d\n", m.reclaims)
+	fmt.Fprintf(w, "# HELP fleetd_reclaimed_bytes_total Bytes moved out of RAM by reclaims.\n# TYPE fleetd_reclaimed_bytes_total counter\nfleetd_reclaimed_bytes_total %d\n", m.reclaimedB)
 	fmt.Fprintln(w, "# HELP fleetd_wake_ready_seconds Time from wake to readiness.\n# TYPE fleetd_wake_ready_seconds histogram")
 	for i, b := range m.readyBuckets {
 		fmt.Fprintf(w, "fleetd_wake_ready_seconds_bucket{le=\"%g\"} %d\n", b, m.readyCounts[i])

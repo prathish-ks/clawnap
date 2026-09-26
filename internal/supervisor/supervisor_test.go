@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
 )
@@ -34,6 +36,9 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 	case "inspect":
 		if len(args) > 2 && args[2] == "{{json .Mounts}}" {
 			return "[]", nil
+		}
+		if len(args) > 2 && args[2] == "{{.Id}}" {
+			return "cid-" + name, nil
 		}
 		st, ok := f.state[name]
 		if !ok {
@@ -330,5 +335,36 @@ func TestMetricsExposition(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+func TestReclaimAfterPauseWritesCgroup(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-r": runtime.StatePaused}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	cg := t.TempDir()
+	d := filepath.Join(cg, "docker", "cid-oc-r")
+	_ = os.MkdirAll(d, 0o755)
+	_ = os.WriteFile(filepath.Join(d, "memory.current"), []byte("800000000"), 0o644)
+	_ = os.WriteFile(filepath.Join(d, "memory.swap.current"), []byte("0"), 0o644)
+	_ = os.WriteFile(filepath.Join(d, "memory.reclaim"), []byte(""), 0o644)
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, ReclaimAfter: 5 * time.Minute, MaxPause: time.Hour, Reclaimer: &reclaim.Reclaimer{FS: cg}})
+	_ = reg.Put(registry.Cell{Name: "r", Container: "oc-r", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-2 * time.Minute), IdleAfter: time.Minute})
+	s.ReconcileOnce(context.Background())
+	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "" {
+		t.Fatal("must not reclaim before ReclaimAfter")
+	}
+	now = now.Add(4 * time.Minute) // 6 min paused
+	s.ReconcileOnce(context.Background())
+	b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim"))
+	c, _ := reg.Get("r")
+	if string(b) == "" || c.ReclaimedAt.IsZero() {
+		t.Fatalf("expected reclaim write and ReclaimedAt: %q %+v", b, c)
+	}
+	_ = os.WriteFile(filepath.Join(d, "memory.reclaim"), []byte(""), 0o644)
+	now = now.Add(time.Minute)
+	s.ReconcileOnce(context.Background())
+	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "" {
+		t.Fatal("must not reclaim twice for the same pause")
 	}
 }

@@ -1,0 +1,108 @@
+// Package reclaim pushes a paused cell's memory out of RAM by writing to the
+// container cgroup's memory.reclaim (cgroup v2, Linux ≥ 5.19). Measured
+// locally: a paused OpenClaw cell drops from ~790 MiB to ~20 MiB resident;
+// the pages return lazily on wake, at the speed of the swap device (zram or
+// NVMe on a fleet host). The supervisor calls this some time after a pause,
+// not immediately, so recently active cells keep sub-second wakes.
+package reclaim
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+)
+
+// Stats is a cell's memory accounting from its cgroup.
+type Stats struct {
+	CurrentBytes int64
+	SwapBytes    int64
+}
+
+// Reclaimer finds a container's cgroup and reclaims it. FS defaults to
+// /sys/fs/cgroup; tests point it at a temp tree.
+type Reclaimer struct {
+	FS string
+}
+
+// ErrUnsupported is returned off Linux or without cgroup v2 memory.reclaim.
+var ErrUnsupported = errors.New("memory reclaim unsupported on this host")
+
+// Dir locates the cgroup directory for a container id under the common
+// layouts: cgroupfs driver (docker/<id>), systemd driver
+// (system.slice/docker-<id>.scope), and podman's slice variants.
+func (r Reclaimer) Dir(containerID string) (string, error) {
+	fs := r.FS
+	if fs == "" {
+		fs = "/sys/fs/cgroup"
+	}
+	candidates := []string{
+		filepath.Join(fs, "docker", containerID),
+		filepath.Join(fs, "system.slice", "docker-"+containerID+".scope"),
+		filepath.Join(fs, "machine.slice", "libpod-"+containerID+".scope"),
+		filepath.Join(fs, "user.slice", "libpod-"+containerID+".scope"),
+	}
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("cgroup for container %s not found under %s", containerID, fs)
+}
+
+// Stats reads memory.current and memory.swap.current.
+func (r Reclaimer) Stats(containerID string) (Stats, error) {
+	d, err := r.Dir(containerID)
+	if err != nil {
+		return Stats{}, err
+	}
+	cur, err := readInt(filepath.Join(d, "memory.current"))
+	if err != nil {
+		return Stats{}, err
+	}
+	sw, _ := readInt(filepath.Join(d, "memory.swap.current")) // absent when swap is off
+	return Stats{CurrentBytes: cur, SwapBytes: sw}, nil
+}
+
+// Reclaim asks the kernel to reclaim up to `bytes` from the cell. The kernel
+// answers EAGAIN when it could not reclaim the full amount; for our purpose
+// that is success (everything reclaimable was reclaimed), so it is not an
+// error here. Returns stats after the attempt.
+func (r Reclaimer) Reclaim(ctx context.Context, containerID string, bytes int64) (Stats, error) {
+	if runtime.GOOS != "linux" && r.FS == "" {
+		return Stats{}, ErrUnsupported
+	}
+	d, err := r.Dir(containerID)
+	if err != nil {
+		return Stats{}, err
+	}
+	p := filepath.Join(d, "memory.reclaim")
+	if _, err := os.Stat(p); err != nil {
+		return Stats{}, ErrUnsupported
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY, 0)
+	if err != nil {
+		return Stats{}, err
+	}
+	_, werr := f.WriteString(strconv.FormatInt(bytes, 10))
+	_ = f.Close()
+	if werr != nil && !strings.Contains(strings.ToLower(werr.Error()), "resource temporarily unavailable") {
+		return Stats{}, werr
+	}
+	if err := ctx.Err(); err != nil {
+		return Stats{}, err
+	}
+	return r.Stats(containerID)
+}
+
+func readInt(p string) (int64, error) {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+}

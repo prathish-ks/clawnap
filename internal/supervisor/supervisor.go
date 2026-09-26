@@ -10,10 +10,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/prathish-ks/fleet-supervisor/internal/idle"
+	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
 	"github.com/prathish-ks/fleet-supervisor/internal/walcheck"
@@ -37,6 +39,12 @@ type Options struct {
 	MaxPause         time.Duration
 	PulseWindow      time.Duration
 	PauseFallthrough string // "pulse" (default) or "stop"
+	// ReclaimAfter: once a cell has been paused this long, push its memory to
+	// swap via cgroup memory.reclaim (Linux, cgroup v2). 0 disables. Measured
+	// locally: ~790 → ~20 MiB resident; wake then pages in from the swap
+	// device (zram/NVMe on a fleet host, ~17 s on a laptop swap file).
+	ReclaimAfter time.Duration
+	Reclaimer    *reclaim.Reclaimer
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -79,6 +87,9 @@ func (o *Options) defaults() {
 	}
 	if o.PauseFallthrough == "" {
 		o.PauseFallthrough = "pulse"
+	}
+	if o.Reclaimer == nil {
+		o.Reclaimer = &reclaim.Reclaimer{}
 	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
@@ -176,6 +187,10 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
 			return s.capPause(ctx, c)
 		}
+		if c.Phase == registry.PhaseHibernated && s.opt.ReclaimAfter > 0 && !c.PausedAt.IsZero() &&
+			c.ReclaimedAt.Before(c.PausedAt) && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter {
+			return s.reclaimCell(ctx, c)
+		}
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
 			return nil // expected
 		}
@@ -248,6 +263,28 @@ func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
 	s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
 }
 
+// reclaimCell pushes a paused cell's memory to swap. Unsupported hosts are
+// logged once per cell and never retried until the next pause.
+func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
+	id, err := s.rt.R.Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+	if err != nil {
+		return err
+	}
+	id = strings.TrimSpace(id)
+	before, _ := s.opt.Reclaimer.Stats(id)
+	after, err := s.opt.Reclaimer.Reclaim(ctx, id, 4<<30)
+	if err != nil {
+		if err == reclaim.ErrUnsupported {
+			s.opt.Logger.Info("reclaim unsupported on this host; leaving cell resident", "cell", c.Name)
+			return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
+		}
+		return err
+	}
+	s.m.reclaimed(before.CurrentBytes - after.CurrentBytes)
+	s.opt.Logger.Info("reclaimed", "cell", c.Name, "before_mib", before.CurrentBytes>>20, "after_mib", after.CurrentBytes>>20, "swap_mib", after.SwapBytes>>20)
+	return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
+}
+
 // capPause handles a cell frozen longer than MaxPause. "pulse": unpause,
 // give the gateway PulseWindow to run its lease/liveness heartbeat (and
 // require /health to answer), then pause again with a fresh PausedAt.
@@ -287,7 +324,7 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	}
 	s.m.pulse()
 	s.opt.Logger.Info("pause cap: pulsed", "cell", c.Name, "frozen", frozen, "window", s.opt.PulseWindow, "repause", took)
-	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now() })
+	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now(); x.ReclaimedAt = time.Time{} })
 }
 
 // dueSoon: a hibernated cell whose next job is within PreWake should wake now.
