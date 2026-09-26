@@ -65,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: heavy-cell simulation (400 MiB filler): reclaim 544 → 84 MiB, wake 12.9 s, no slower than a light cell; reclaim made chunked (64 MiB steps, stop on stall): 590 → 91 MiB in 34 s on Docker Desktop's disk, no more 60 s stalls.
 - 2026-09-26: reclaim-after-pause implemented (`-reclaim-after`, cgroup memory.reclaim, request bounded to resident minus 48 MiB, 60 s wait bound) and verified by running the Linux build of fleetd inside the Docker VM: 376 → 46 MiB resident in 7 s, adoption of external pauses fixed. Commits ce53398…1fc6b4b.
 - 2026-09-26: **memory reclaim of a paused cell measured: 789 → 20 MiB resident (661 MiB to swap) in 7 s; wake 16.7 s on Docker Desktop's disk.** `fleetd cells create` provisioning helper (config + verify secret + hardened run + registry in one step).
 - 2026-09-26: pause-duration cap with pulse/stop fallthrough (verified live on a 56-min-frozen cell); freeze tolerance bounded (~3 min OK … ~56 min lease-stopped but alive … ~3 h self-exit); dependency-free Prometheus /metrics on the ingress.
