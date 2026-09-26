@@ -1,6 +1,6 @@
 # fleet-supervisor — living plan
 
-**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 10 of 12 rows done; local gate criteria met except session/memory/cron survival (needs a model provider). Remaining: provider outreach (9, user), Hetzner account (10, user), Isthmus extraction (11) · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
+**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 11 of 12 rows done; local gate met except session/memory/cron survival (needs a model provider). Release 0 host checker built. Remaining: provider access (9, in progress), Hetzner account (10, user). Next code: Telegram polling keeper, pause-duration cap, then Phase 0b on Hetzner · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
 
 How to maintain: edit the status line and the "Now" table every working session; move finished rows to the Changelog with the date; never delete a gate, only mark it passed or failed with evidence.
 
@@ -33,12 +33,14 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 6 | Cron-aware wake (interim: never hibernate when a job is due within idle window) | done 2026-09-26 (interim: `-next-due` set by operator; pre-wake 2 min; reading schedules from the cell is backlog) | upstream #119035 |
 | 7 | WAL checkpoint after stop-tier hibernate (host-side, pure-Go SQLite, bind mounts only) | done 2026-09-26 (unit-tested; live check pending) | upstream #143524 WAL growth |
 | 8 | Daemon crash/restart consistency test | done 2026-09-26 (unit: adopts external pause/exit without fighting it; registry writes are atomic) | live kill test on Hetzner remains |
-| 9 | Provider interview requests ×10 (independent of code) | todo | contact sheet: Molted, Agent37, Clawctl, Blink, xCloud, elest.io, OpenHosst, Lease Packet, MyClaw, Hostinger |
+| 9 | Provider access: 3 paid entry plans (Agent37, OpenHosst, Lease Packet), join the venues in docs/community.md, publish the host checker + benchmark, 3 pilot offers | in progress (user browsing Discord); code side proceeds without waiting | replaces the interview plan; see docs/community.md |
 | 10 | Hetzner account + API token (user); hcloud CLI install (needs approval); provision CX43 | blocked on user | experiments/provision/ |
-| 11 | Extract Isthmus packages into a shared module; Release 0 host checker | after 1–5 | |
+| 11 | Release 0 host checker (`fleetd check`): ported from Isthmus doctor/securitycheck/egress/mount rather than extracted as a shared module (Isthmus packages are internal/ and NanoClaw-typed; the port keeps their checks and remediation text). Isthmus can import this package back later | done 2026-09-26 (unit-tested; ran live: 23 pass / 13 warn / 0 fail across a hardened cell and two unhardened containers) | egress check is Linux-only by design |
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
+- Telegram polling keeper: supervisor-side getUpdates watcher that wakes the cell and hands the offset over (one poller per bot).
+- Publish the host checker: README, a one-line install, and a post in the OpenClaw Discord self-hosting channel once the Linux egress check is verified on Hetzner.
 - Pause-tier duration cap: OpenClaw exits (code 135) after a ~3 h freeze via its lease/liveness logic; find the TTL, cap pauses below it or fall through to stop tier.
 - Stale gateway owner lease after unclean stop (exit 1 on restart until timeout): locate the lease, decide whether the supervisor clears it on OOM/crash recovery.
 - Investigate live-cell state-dir growth (1.4 MB → 59 MB in 12 min idle) before Hetzner: logs, cache, or SQLite? — see appendix for the original hour-level plan
@@ -60,6 +62,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: Release 0 host checker `fleetd check` (ported Isthmus checks) built and run live; docs/community.md added; outreach plan reframed.
 - 2026-09-26: end-to-end Telegram test passed with a dedicated bot: messages sent during pause delivered and answered on wake; long-freeze self-exit and self-registered webhook documented.
 - 2026-09-26: concurrent 5-cell live test passed (experiments/local-measurements-2026-09-26.md); interim cron-aware wake, daemon-restart reconciliation, host-side WAL checkpoint added; commits 09a3da1, 6211c02, a843098.
 - 2026-09-26: plan restructured as a living document; HTTP /health readiness and pause/stop tiers implemented with tests (`fleetd cells add -tier pause|stop`).

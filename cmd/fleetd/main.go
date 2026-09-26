@@ -5,6 +5,7 @@
 //	fleetd reconcile [-loop] [-interval 30s]
 //	fleetd hibernate -name a | wake -name a
 //	fleetd serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop)
+//	fleetd check [-label fleet.cell] [-json] [container...]   read-only host + cell security inspection
 package main
 
 import (
@@ -15,11 +16,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/prathish-ks/fleet-supervisor/internal/hostcheck"
 	"github.com/prathish-ks/fleet-supervisor/internal/ingress"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
@@ -94,6 +97,41 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("already_running=%v start=%s ready=%s\n", res.AlreadyRunning, res.StartTook, res.ReadyTook)
+		return nil
+	case "check":
+		fs := flag.NewFlagSet("check", flag.ContinueOnError)
+		label := fs.String("label", "fleet.cell", "inspect containers carrying this label")
+		jsonOut := fs.Bool("json", false, "machine-readable output")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		rt := runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")}
+		hostExec := func(ctx context.Context, name string, a ...string) (string, error) {
+			out, err := exec.CommandContext(ctx, name, a...).CombinedOutput()
+			return string(out), err
+		}
+		res := hostcheck.Run(ctx, rt, hostcheck.Options{Label: *label, Containers: fs.Args(), HostExec: hostExec})
+		if *jsonOut {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(res)
+		}
+		for _, r := range res {
+			mark := map[hostcheck.Level]string{hostcheck.LevelPass: "PASS", hostcheck.LevelWarn: "WARN", hostcheck.LevelFail: "FAIL"}[r.Level]
+			scope := "host"
+			if r.Cell != "" {
+				scope = r.Cell
+			}
+			fmt.Printf("%-4s %-14s %-44s %s\n", mark, scope, r.Name, r.Detail)
+			if r.Remediation != "" && r.Level != hostcheck.LevelPass {
+				fmt.Printf("     %-14s %-44s fix: %s\n", "", "", r.Remediation)
+			}
+		}
+		p, w, f := hostcheck.Summary(res)
+		fmt.Printf("\n%d pass, %d warn, %d fail\n", p, w, f)
+		if f > 0 {
+			os.Exit(2)
+		}
 		return nil
 	case "serve":
 		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
