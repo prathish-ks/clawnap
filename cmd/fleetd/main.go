@@ -5,7 +5,7 @@
 //	fleetd cells list | rm -name a
 //	fleetd reconcile [-loop] [-interval 30s]
 //	fleetd hibernate -name a | wake -name a
-//	fleetd serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop)
+//	fleetd serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop; POST /wake/{cell}, /hibernate/{cell}, /hook/{cell}/..., GET /metrics)
 //	fleetd check [-label fleet.cell] [-json] [container...]   read-only host + cell security inspection
 package main
 
@@ -170,6 +170,10 @@ type wakeAdapter struct{ s *supervisor.Supervisor }
 func (w wakeAdapter) Wake(ctx context.Context, cell string) (time.Duration, error) {
 	r, err := w.s.Wake(ctx, cell)
 	return r.ReadyTook, err
+}
+
+func (w wakeAdapter) Hibernate(ctx context.Context, cell string) error {
+	return w.s.Hibernate(ctx, cell)
 }
 
 func cells(args []string) error {

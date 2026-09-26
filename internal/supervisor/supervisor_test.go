@@ -3,6 +3,7 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -366,5 +367,114 @@ func TestReclaimAfterPauseWritesCgroup(t *testing.T) {
 	s.ReconcileOnce(context.Background())
 	if b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim")); string(b) != "" {
 		t.Fatal("must not reclaim twice for the same pause")
+	}
+}
+
+// slowRunner delays one operation so concurrency can be observed.
+type slowRunner struct {
+	fakeRunner
+	slowOp string
+	delay  time.Duration
+}
+
+func (r *slowRunner) Run(ctx context.Context, args ...string) (string, error) {
+	if args[0] == r.slowOp {
+		time.Sleep(r.delay)
+	}
+	return r.fakeRunner.Run(ctx, args...)
+}
+
+func TestReconcileDoesNotSerialiseCells(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &slowRunner{fakeRunner: fakeRunner{state: map[string]runtime.State{}, netio: map[string]string{}}, slowOp: "stats", delay: 300 * time.Millisecond}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	for _, n := range []string{"a", "b", "c", "d"} {
+		fr.state["oc-"+n] = runtime.StateRunning
+		fr.netio["oc-"+n] = "1kB / 1kB"
+		_ = reg.Put(registry.Cell{Name: n, Container: "oc-" + n, Port: 1, IdleAfter: time.Hour})
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, MaxConcurrent: 4})
+	t0 := time.Now()
+	s.ReconcileOnce(context.Background())
+	if el := time.Since(t0); el > 900*time.Millisecond {
+		t.Fatalf("4 cells x 300 ms stats took %v; expected parallel (~300 ms)", el)
+	}
+}
+
+func TestWakeWaitsForHibernateOnSameCellAndSkipsBusyReconcile(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &slowRunner{fakeRunner: fakeRunner{state: map[string]runtime.State{"oc-h": runtime.StateRunning}, netio: map[string]string{"oc-h": "1kB / 1kB"}}, slowOp: "pause", delay: 400 * time.Millisecond}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "h", Container: "oc-h", Port: 1, IdleAfter: time.Minute})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }})
+	done := make(chan error, 1)
+	go func() { done <- s.Hibernate(context.Background(), "h") }()
+	time.Sleep(50 * time.Millisecond) // hibernate holds the cell lock, inside the slow pause
+	t0 := time.Now()
+	res, err := s.Wake(context.Background(), "h") // must wait, then unpause
+	if err != nil || res.AlreadyRunning || time.Since(t0) < 300*time.Millisecond {
+		t.Fatalf("wake should have waited for the hibernate: %+v %v after %v", res, err, time.Since(t0))
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	c, _ := reg.Get("h")
+	if c.Phase != registry.PhaseActive || !fr.has("unpause oc-h") {
+		t.Fatalf("expected final state active via unpause: %+v calls=%v", c, fr.calls)
+	}
+}
+
+func TestReclaimYieldsToPendingWake(t *testing.T) {
+	// cgroup fake whose memory.current shrinks 32 MiB per 64 MiB request (never stalls)
+	cg := t.TempDir()
+	d := filepath.Join(cg, "docker", "cid-oc-w")
+	_ = os.MkdirAll(d, 0o755)
+	_ = os.WriteFile(filepath.Join(d, "memory.current"), []byte("800000000"), 0o644)
+	_ = os.WriteFile(filepath.Join(d, "memory.swap.current"), []byte("0"), 0o644)
+	_ = os.WriteFile(filepath.Join(d, "memory.reclaim"), []byte(""), 0o644)
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-w": runtime.StatePaused}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "w", Container: "oc-w", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), IdleAfter: time.Minute})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ReclaimAfter: time.Minute, MaxPause: 24 * time.Hour, Reclaimer: &reclaim.Reclaimer{FS: cg}})
+	// drive the fake cgroup: each write shrinks current by 32 MiB, slowly
+	stopDrv := make(chan struct{})
+	go func() {
+		last := ""
+		for {
+			select {
+			case <-stopDrv:
+				return
+			default:
+			}
+			b, _ := os.ReadFile(filepath.Join(d, "memory.reclaim"))
+			if string(b) != "" && string(b) != last {
+				last = string(b)
+				cur, _ := os.ReadFile(filepath.Join(d, "memory.current"))
+				var n int64
+				fmt.Sscan(string(cur), &n)
+				time.Sleep(60 * time.Millisecond)
+				_ = os.WriteFile(filepath.Join(d, "memory.current"), []byte(fmt.Sprint(n-32<<20)), 0o644)
+				_ = os.WriteFile(filepath.Join(d, "memory.reclaim"), []byte(""), 0o644)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	defer close(stopDrv)
+	go s.ReconcileOnce(context.Background()) // starts a long chunked reclaim
+	time.Sleep(150 * time.Millisecond)
+	t0 := time.Now()
+	res, err := s.Wake(context.Background(), "w")
+	if err != nil || res.AlreadyRunning {
+		t.Fatalf("wake failed: %+v %v", res, err)
+	}
+	if el := time.Since(t0); el > 2*time.Second {
+		t.Fatalf("wake should interrupt reclaim within a chunk, took %v", el)
+	}
+	cur, _ := os.ReadFile(filepath.Join(d, "memory.current"))
+	var n int64
+	fmt.Sscan(string(cur), &n)
+	if n <= 800000000-20*32<<20 {
+		t.Fatalf("reclaim should have stopped early, current=%d", n)
 	}
 }

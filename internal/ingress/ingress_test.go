@@ -13,7 +13,12 @@ import (
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 )
 
-type fakeWaker struct{ woke []string }
+type fakeWaker struct{ woke, slept []string }
+
+func (f *fakeWaker) Hibernate(_ context.Context, cell string) error {
+	f.slept = append(f.slept, cell)
+	return nil
+}
 
 func (f *fakeWaker) Wake(_ context.Context, cell string) (time.Duration, error) {
 	f.woke = append(f.woke, cell)
@@ -67,5 +72,18 @@ func TestHookWakesThenProxiesWithStrippedPrefix(t *testing.T) {
 	res, _ = http.Post(srv.URL+"/hook/nope/x", "text/plain", nil)
 	if res.StatusCode != 404 {
 		t.Fatalf("unknown cell should 404, got %d", res.StatusCode)
+	}
+}
+
+func TestHibernateEndpoint(t *testing.T) {
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	fw := &fakeWaker{}
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw, Token: "s3cret"}).Handler())
+	defer srv.Close()
+	req, _ := http.NewRequest("POST", srv.URL+"/hibernate/a", nil)
+	req.Header.Set("Authorization", "Bearer s3cret")
+	res, _ := http.DefaultClient.Do(req)
+	if res.StatusCode != 200 || len(fw.slept) != 1 || fw.slept[0] != "a" {
+		t.Fatalf("hibernate endpoint: %d %v", res.StatusCode, fw.slept)
 	}
 }

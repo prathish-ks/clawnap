@@ -122,14 +122,47 @@ func HTTPHealthProbe(ctx context.Context, port int) error {
 
 // Supervisor owns the loop.
 type Supervisor struct {
-	opt   Options
-	reg   *registry.Store
-	rt    runtime.Client
-	sem   chan struct{}
-	mu    sync.Mutex
-	inflt map[string]chan struct{} // per-cell in-flight wake, so concurrent wakes coalesce
-	last  map[string]idle.Sample
-	m     *Metrics
+	opt      Options
+	reg      *registry.Store
+	rt       runtime.Client
+	sem      chan struct{}
+	mu       sync.Mutex
+	inflt    map[string]chan struct{} // per-cell in-flight wake, so concurrent wakes coalesce
+	last     map[string]idle.Sample
+	cell     map[string]*sync.Mutex // per-cell lock: wake, hibernate, reclaim, pulse never interleave on one cell
+	wakeWant map[string]bool        // a wake is waiting for this cell's lock; reclaim yields between chunks
+	m        *Metrics
+}
+
+// lockCell returns the mutex for a cell, creating it on first use.
+func (s *Supervisor) lockCell(name string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l, ok := s.cell[name]
+	if !ok {
+		l = &sync.Mutex{}
+		s.cell[name] = l
+	}
+	return l
+}
+
+func (s *Supervisor) sample(name string) (idle.Sample, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.last[name]
+	return p, ok
+}
+
+func (s *Supervisor) setSample(name string, v idle.Sample) {
+	s.mu.Lock()
+	s.last[name] = v
+	s.mu.Unlock()
+}
+
+func (s *Supervisor) dropSample(name string) {
+	s.mu.Lock()
+	delete(s.last, name)
+	s.mu.Unlock()
 }
 
 // Metrics exposes the supervisor's counters (for the ingress /metrics handler).
@@ -142,7 +175,7 @@ func (s *Supervisor) Cells() []registry.Cell { return s.reg.List() }
 func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 	opt.defaults()
 	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent),
-		inflt: map[string]chan struct{}{}, last: map[string]idle.Sample{}, m: newMetrics()}
+		inflt: map[string]chan struct{}{}, last: map[string]idle.Sample{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done.
@@ -159,14 +192,35 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}
 }
 
-// ReconcileOnce inspects every cell and acts. Errors are logged per cell.
+// ReconcileOnce inspects every cell and acts, cells in parallel under a
+// bounded pool, so one slow action (a 30 s reclaim, a 90 s stop-tier boot)
+// never stalls the others. A cell already being acted on (e.g. a wake in
+// flight from the ingress) is skipped this pass rather than waited for.
 func (s *Supervisor) ReconcileOnce(ctx context.Context) {
+	var wg sync.WaitGroup
 	for _, c := range s.reg.List() {
-		if err := s.reconcileCell(ctx, c); err != nil {
-			s.opt.Logger.Warn("reconcile", "cell", c.Name, "err", err)
-			_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.LastError = err.Error() })
-		}
+		c := c
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			l := s.lockCell(c.Name)
+			if !l.TryLock() {
+				return // busy: wake/hibernate in progress
+			}
+			defer l.Unlock()
+			select {
+			case s.sem <- struct{}{}:
+				defer func() { <-s.sem }()
+			case <-ctx.Done():
+				return
+			}
+			if err := s.reconcileCell(ctx, c); err != nil {
+				s.opt.Logger.Warn("reconcile", "cell", c.Name, "err", err)
+				_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.LastError = err.Error() })
+			}
+		}()
 	}
+	wg.Wait()
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
@@ -181,7 +235,7 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		return s.observeRunning(ctx, c)
 	case runtime.StatePaused:
 		if s.dueSoon(c) {
-			_, err := s.Wake(ctx, c.Name)
+			_, err := s.wakeLocked(ctx, c.Name)
 			return err
 		}
 		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
@@ -203,7 +257,7 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		})
 	case runtime.StateExited, runtime.StateCreated:
 		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
-			_, err := s.Wake(ctx, c.Name)
+			_, err := s.wakeLocked(ctx, c.Name)
 			return err
 		}
 		if c.Phase == registry.PhaseHibernated || c.Phase == registry.PhaseWaking {
@@ -224,8 +278,8 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 		return err
 	}
 	cur := idle.Sample{At: s.opt.Now(), RxBytes: st.Net.RxBytes, TxBytes: st.Net.TxBytes}
-	prev, seen := s.last[c.Name]
-	s.last[c.Name] = cur
+	prev, seen := s.sample(c.Name)
+	s.setSample(c.Name, cur)
 	if !seen {
 		prev = idle.Sample{At: cur.At, RxBytes: c.RxBytes, TxBytes: c.TxBytes}
 	}
@@ -239,7 +293,7 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 		return err
 	}
 	if d.ShouldSleep && c.Class == registry.ClassHibernate && !s.jobInsideIdleWindow(c) {
-		return s.Hibernate(ctx, c.Name)
+		return s.hibernateLocked(ctx, c.Name)
 	}
 	return nil
 }
@@ -279,7 +333,8 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	before, _ := s.opt.Reclaimer.Stats(id)
 	rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	after, err := s.opt.Reclaimer.Reclaim(rctx, id, 8<<30)
+	stop := func() bool { return s.wakeWanted(c.Name) }
+	after, err := s.opt.Reclaimer.ReclaimUntil(rctx, id, 8<<30, stop)
 	if err != nil {
 		if err == reclaim.ErrUnsupported {
 			s.opt.Logger.Info("reclaim unsupported on this host; leaving cell resident", "cell", c.Name)
@@ -355,6 +410,13 @@ func (s *Supervisor) jobInsideIdleWindow(c registry.Cell) bool {
 
 // Hibernate puts a cell to sleep according to its tier and records it.
 func (s *Supervisor) Hibernate(ctx context.Context, name string) error {
+	l := s.lockCell(name)
+	l.Lock()
+	defer l.Unlock()
+	return s.hibernateLocked(ctx, name)
+}
+
+func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 	c, err := s.reg.Get(name)
 	if err != nil {
 		return err
@@ -374,7 +436,7 @@ func (s *Supervisor) Hibernate(ctx context.Context, name string) error {
 	}
 	s.opt.Logger.Info("hibernated", "cell", name, "tier", c.Tier, "took", took)
 	s.m.hibernate(string(c.Tier))
-	delete(s.last, name)
+	s.dropSample(name)
 	pausedAt := time.Time{}
 	if c.Tier != registry.TierStop {
 		pausedAt = s.opt.Now()
@@ -389,13 +451,11 @@ type WakeResult struct {
 	ReadyTook      time.Duration // until the gateway port accepts connections
 }
 
-// Wake restores a cell and waits until its port accepts TCP. Concurrent
-// wakes of the same cell coalesce; total concurrency is bounded.
+// Wake restores a cell and waits until it is ready. Concurrent wakes of the
+// same cell coalesce; total concurrency is bounded; a wake takes the cell
+// lock, so it waits for any in-progress hibernate/pulse and interrupts an
+// in-progress reclaim at its next chunk (reclaim polls wakeWanted).
 func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) {
-	c, err := s.reg.Get(name)
-	if err != nil {
-		return WakeResult{}, err
-	}
 	// coalesce
 	s.mu.Lock()
 	if ch, ok := s.inflt[name]; ok {
@@ -416,6 +476,36 @@ func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) 
 		s.mu.Unlock()
 		close(ch)
 	}()
+	s.setWakeWanted(name, true)
+	l := s.lockCell(name)
+	l.Lock()
+	defer l.Unlock()
+	s.setWakeWanted(name, false)
+	return s.wakeLocked(ctx, name)
+}
+
+func (s *Supervisor) setWakeWanted(name string, v bool) {
+	s.mu.Lock()
+	if v {
+		s.wakeWant[name] = true
+	} else {
+		delete(s.wakeWant, name)
+	}
+	s.mu.Unlock()
+}
+
+func (s *Supervisor) wakeWanted(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.wakeWant[name]
+}
+
+// wakeLocked does the wake; caller holds the cell lock.
+func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, error) {
+	c, err := s.reg.Get(name)
+	if err != nil {
+		return WakeResult{}, err
+	}
 
 	state, err := s.rt.Inspect(ctx, c.Container)
 	if err != nil {
@@ -496,6 +586,6 @@ func (s *Supervisor) selfHeal(ctx context.Context, c registry.Cell) error {
 	}
 	_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.Restarts++ })
 	s.m.selfHeal()
-	_, err := s.Wake(ctx, c.Name)
+	_, err := s.wakeLocked(ctx, c.Name)
 	return err
 }

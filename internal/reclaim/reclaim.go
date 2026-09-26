@@ -75,6 +75,12 @@ func (r Reclaimer) Stats(containerID string) (Stats, error) {
 // kernel spin toward pages it cannot reclaim (observed: 60 s stalls). `max`
 // bounds the total. Returns stats after the last chunk.
 func (r Reclaimer) Reclaim(ctx context.Context, containerID string, max int64) (Stats, error) {
+	return r.ReclaimUntil(ctx, containerID, max, nil)
+}
+
+// ReclaimUntil is Reclaim with a stop predicate checked between chunks, so a
+// pending wake interrupts a long reclaim within one chunk.
+func (r Reclaimer) ReclaimUntil(ctx context.Context, containerID string, max int64, stop func() bool) (Stats, error) {
 	if runtime.GOOS != "linux" && r.FS == "" {
 		return Stats{}, ErrUnsupported
 	}
@@ -89,6 +95,9 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, max int64) (
 	const chunk = int64(64 << 20)
 	var total int64
 	for total < max {
+		if stop != nil && stop() {
+			break
+		}
 		before, err := readInt(filepath.Join(d, "memory.current"))
 		if err != nil {
 			return Stats{}, err

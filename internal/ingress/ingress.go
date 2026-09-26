@@ -25,6 +25,12 @@ type Waker interface {
 	Wake(ctx context.Context, cell string) (readyTook time.Duration, err error)
 }
 
+// Hibernator is optional: when the Waker also implements it, the ingress
+// serves POST /hibernate/{cell} (token-protected) for operators and tests.
+type Hibernator interface {
+	Hibernate(ctx context.Context, cell string) error
+}
+
 // Server routes /wake/{cell}, /hook/{cell}/... and /metrics.
 type Server struct {
 	Reg     *registry.Store
@@ -38,6 +44,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /wake/{cell}", s.handleWake)
+	mux.HandleFunc("POST /hibernate/{cell}", s.handleHibernate)
 	mux.HandleFunc("/hook/{cell}/", s.handleHook)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
@@ -72,6 +79,25 @@ func (s *Server) handleWake(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Wake-Ready-Ms", strconv.FormatInt(took.Milliseconds(), 10))
 	_, _ = w.Write([]byte("awake\n"))
+}
+
+func (s *Server) handleHibernate(w http.ResponseWriter, r *http.Request) {
+	if !s.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	h, ok := s.Waker.(Hibernator)
+	if !ok {
+		http.Error(w, "not supported", http.StatusNotImplemented)
+		return
+	}
+	t := time.Now()
+	if err := h.Hibernate(r.Context(), r.PathValue("cell")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("X-Hibernate-Ms", strconv.FormatInt(time.Since(t).Milliseconds(), 10))
+	_, _ = w.Write([]byte("hibernated\n"))
 }
 
 // handleHook wakes the cell then reverse-proxies the webhook to it, keeping
