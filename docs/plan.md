@@ -1,6 +1,6 @@
 # fleet-supervisor — living plan
 
-**Status line (update every session):** 2026-09-26 · Phase 0a (local correctness): 11 of 12 rows done; local gate met except session/memory/cron survival (needs a model provider). Release 0 host checker built. Remaining: provider access (9, in progress), Hetzner account (10, user). Pause cap and /metrics done. Next code: Hetzner cell-provisioning helper (write openclaw.json with webhookUrl + verify secret from `fleetd cells add`), then Phase 0b · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
+**Status line (update every session):** 2026-09-26 · Phase 0a complete except Hetzner. **Density lever measured locally: paused+reclaimed cell 789 → 20 MiB (≈35x), wake 16.7 s on a slow disk.** Phase 0a (local correctness): 11 of 12 rows done; local gate met except session/memory/cron survival (needs a model provider). Release 0 host checker built. Remaining: provider access (9, in progress), Hetzner account (10, user). Pause cap, /metrics and `fleetd cells create` done. Next code: reclaim-after-pause tier (cgroup memory.reclaim, Linux). Then Phase 0b measures zram vs NVMe swap wake latency · next gate: local go/no-go · Hetzner account: not yet created · thesis-watch routine: daily 21:00 UTC, last verdict NO CHANGE (2026-09-26).
 
 How to maintain: edit the status line and the "Now" table every working session; move finished rows to the Changelog with the date; never delete a gate, only mark it passed or failed with evidence.
 
@@ -13,7 +13,7 @@ Stop if: upstream ships hibernation or multi-host fleet; a credible open-source 
 | Phase | Where | Goal | Gate to leave |
 |---|---|---|---|
 | 0a Local correctness | This Mac, 2 live cells + 3–5 hibernated | Every lifecycle path works and state survives | Zero state loss over 20 hibernate/wake cycles with a real Telegram bot; pause-tier wake < 1 s on /health; stop-tier readiness measured and documented; ingress wake works end to end; daemon survives its own restart |
-| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
+| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers: pause+reclaim with zram vs NVMe swap, wake latency per tier | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
 | 0c Upstream engagement | GitHub | Validate the host-side split with OpenClaw | Comment posted on #114145 (and #119035 if cron wake is implemented) with numbers; any maintainer or Codex response recorded in docs/upstream-watch.md |
 | Commercial gate A | Interviews | Someone will pay | ≥2 of 10 providers: density top-3 cost and ≥$500/mo intent; 3 pilot offers sent |
 | 1 Single-host MVP + OSS release | Hetzner + laptop | Public Apache-2.0 release, first paid pilot | Gate B: release public, 1 pilot live |
@@ -39,7 +39,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
-- Cell provisioning helper: `fleetd cells create` that writes a cell's openclaw.json (gateway.mode local, channel webhookUrl = https://<ingress>/hook/<cell>/<path>, webhookSecret) and the matching verify-secret file, so ingress and cell always agree.
+- (done 2026-09-26) Cell provisioning helper: `fleetd cells create` that writes a cell's openclaw.json (gateway.mode local, channel webhookUrl = https://<ingress>/hook/<cell>/<path>, webhookSecret) and the matching verify-secret file, so ingress and cell always agree.
 - Telegram wake without a public address: NOT a getUpdates keeper (it would hold the tenant's bot token and read message content before the cell; unacceptable to the community and races the one-poller-per-bot rule). Order of preference: (1) webhook via the ingress with per-cell secret-token verification, no credential held; (2) opt-in count-only keeper using getWebhookInfo pending_update_count to wake the cell, which then polls itself (leaks a count, holds the token); (3) always-on class. Design principle for the README: the host never holds a channel credential and never parses a message.
 - Ingress verifier plugins (done 2026-09-26, commit follows; live check against real Telegram webhook is a Hetzner item): routing by /hook/<cell>/ path; authenticity by per-cell verifier — header secret (Telegram X-Telegram-Bot-Api-Secret-Token), HMAC-of-body (Slack, GitHub, WhatsApp Cloud), JWT (Google Chat, Teams), bearer (generic). Verify before wake; drop unverified with no wake (anti wake-storm). Ingress answers registration-time challenges (Slack url_verification, WhatsApp hub.challenge) while the cell sleeps. The ingress holds verify-only secrets, never bot tokens.
 - Publish the host checker: README, a one-line install, and a post in the OpenClaw Discord self-hosting channel once the Linux egress check is verified on Hetzner.
@@ -65,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-19: provisioning scripts (cloud-init, provision-hetzner.sh, deploy.sh) written; versions verified.
 - 2026-09-26: upstream issue review (#114145 Codex review, #127602, #119035, #149684, #63392) recorded in docs/upstream-watch.md; cron-aware wake added.
 - 2026-09-26: local measurement of 3 OpenClaw cells on Docker Desktop (experiments/local-measurements-2026-09-26.md).
+- 2026-09-26: **memory reclaim of a paused cell measured: 789 → 20 MiB resident (661 MiB to swap) in 7 s; wake 16.7 s on Docker Desktop's disk.** `fleetd cells create` provisioning helper (config + verify secret + hardened run + registry in one step).
 - 2026-09-26: pause-duration cap with pulse/stop fallthrough (verified live on a 56-min-frozen cell); freeze tolerance bounded (~3 min OK … ~56 min lease-stopped but alive … ~3 h self-exit); dependency-free Prometheus /metrics on the ingress.
 - 2026-09-26: ingress verifiers (Telegram header secret, Slack HMAC+timestamp, GitHub/Meta X-Hub-Signature-256, WhatsApp hub.challenge, bearer); verify before wake, unknown verifier fails closed. `fleetd cells add -hook-verifier -hook-secret-file`.
 - 2026-09-26: Release 0 host checker `fleetd check` (ported Isthmus checks) built and run live; docs/community.md added; outreach plan reframed.

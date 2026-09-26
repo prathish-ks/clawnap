@@ -88,3 +88,23 @@ Findings:
 Bounds: the "owner lease heartbeat stopped" state begins somewhere between ~3 min and ~56 min (the 30-min lease constant `LEASE_MS = 18e5` fits); self-exit begins somewhere between ~56 min and ~3 h. The pause cap default of 20 min keeps every freeze under the first bound. Each thaw over ~1–2 min costs a Telegram polling restart (a few seconds), which is why the pulse window is 5 s and not shorter.
 
 Pulse path verified live: `fleetd serve -max-pause 1m` pulsed the 56-min-frozen cell (unpause → /health 200 → 5 s → re-pause in 352 ms).
+
+## Memory reclaim of a paused cell (2026-09-26, late) — THE DENSITY LEVER, MEASURED
+
+Docker Desktop VM: kernel 6.10 linuxkit, 1 GiB swap file (no zram), cgroup v2 with `memory.reclaim`.
+Procedure: cell paused → `echo 900M > /sys/fs/cgroup/docker/<id>/memory.reclaim` → unpause → time /health.
+
+| Point | Resident (memory.current) | In swap | anon | file cache |
+|---|---|---|---|---|
+| Paused, before reclaim | 789 MiB | 0 | 661 MiB | 83 MiB |
+| Paused, after reclaim (7 s; rc=EAGAIN means "nothing left to reclaim") | **20 MiB** | 661 MiB | 0 | 0 |
+| 8 s after wake, serving | 145 MiB | 504 MiB | | |
+
+- Wake after reclaim: unpause 0.24 s, /health 200 after **16.65 s** (page-in from a swap file on a 2015 SSD through Docker Desktop's virtual disk). Without reclaim the same wake takes 0.2–0.8 s.
+- The gateway served with only 145 MiB paged back; the rest pages in lazily on demand.
+
+Conclusions:
+1. **A paused-and-reclaimed OpenClaw cell costs ~20 MiB of RAM instead of ~700 MiB (≈35x)**. This is the lever hosting providers do not have today; overcommit alone cannot shrink an idle gateway.
+2. The price is wake latency, set by the swap device: ~17 s on this disk. Expected on Hetzner: zram (compressed in RAM, no disk) → sub-second to low-seconds wake with ~2–3x space saving; NVMe swap → low-seconds wake with ~35x saving. Phase 0b measures both.
+3. Tiers become: pause (resident, <1 s), pause+reclaim (20 MiB, seconds), stop (0, 40–150 s). The supervisor should reclaim on a schedule after pause (e.g. after N minutes paused), not immediately, so recently used cells stay sub-second.
+4. `memory.reclaim` on the container cgroup is the mechanism; it is Linux-only and needs write access to /sys/fs/cgroup (the supervisor runs as root on a fleet host). On systemd hosts the cgroup path is /sys/fs/cgroup/system.slice/docker-<id>.scope; on cgroupfs hosts /sys/fs/cgroup/docker/<id>.

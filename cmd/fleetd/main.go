@@ -1,6 +1,7 @@
 // Command fleetd is the fleet supervisor CLI and daemon.
 //
 //	fleetd cells add -name a -container openclaw-a -port 18801 [-class hibernate|always-on] [-tier pause|stop] [-idle 10m]
+//	fleetd cells create -name a -port 18801 [-hook-port 18901 -ingress-url https://fleet.example] [-telegram-token-file f]
 //	fleetd cells list | rm -name a
 //	fleetd reconcile [-loop] [-interval 30s]
 //	fleetd hibernate -name a | wake -name a
@@ -19,11 +20,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/prathish-ks/fleet-supervisor/internal/hostcheck"
 	"github.com/prathish-ks/fleet-supervisor/internal/ingress"
+	"github.com/prathish-ks/fleet-supervisor/internal/provision"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
 	"github.com/prathish-ks/fleet-supervisor/internal/supervisor"
@@ -168,8 +171,9 @@ func (w wakeAdapter) Wake(ctx context.Context, cell string) (time.Duration, erro
 }
 
 func cells(args []string) error {
+	ctx := context.Background()
 	if len(args) == 0 {
-		return fmt.Errorf("usage: fleetd cells <add|list|rm>")
+		return fmt.Errorf("usage: fleetd cells <add|create|list|rm>")
 	}
 	reg, _, err := open(supervisor.Options{})
 	if err != nil {
@@ -200,6 +204,44 @@ func cells(args []string) error {
 			nextDue = t
 		}
 		return reg.Put(registry.Cell{Name: *name, Container: *container, Port: *port, HookPort: *hookPort, HookVerifier: *hookVerifier, HookSecretFile: *hookSecretFile, Class: registry.Class(*class), Tier: registry.Tier(*tier), IdleAfter: *idle, NextDueAt: nextDue})
+	case "create":
+		fs := flag.NewFlagSet("create", flag.ContinueOnError)
+		name := fs.String("name", "", "cell name (plain identifier)")
+		image := fs.String("image", "ghcr.io/openclaw/openclaw:latest", "cell image")
+		root := fs.String("state-root", filepath.Join(dataDir(), "cells"), "directory holding <name>/{state,auth,secrets}")
+		port := fs.Int("port", 0, "host loopback port for the gateway")
+		hookPort := fs.Int("hook-port", 0, "host loopback port for the webhook listener (needs -ingress-url)")
+		ingressURL := fs.String("ingress-url", "", "public base URL of the ingress; empty = polling mode")
+		tokenFile := fs.String("telegram-token-file", "", "file containing the Telegram bot token (written into the cell config only)")
+		tier := fs.String("tier", "pause", "pause|stop")
+		idle := fs.String("idle", "10m", "idle timeout before hibernation")
+		mem := fs.Int("memory-mib", 1024, "memory limit")
+		pids := fs.Int("pids", 512, "pids limit")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		var tok string
+		if *tokenFile != "" {
+			b, err := os.ReadFile(*tokenFile)
+			if err != nil {
+				return err
+			}
+			tok = strings.TrimSpace(string(b))
+		}
+		rt := runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")}
+		res, err := provision.Create(ctx, provision.Spec{Name: *name, Image: *image, StateRoot: *root, Port: *port, HookPort: *hookPort,
+			IngressURL: *ingressURL, TelegramToken: tok, Tier: registry.Tier(*tier), IdleAfter: *idle, MemMiB: *mem, Pids: *pids}, rt, reg)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("created cell %s\n  state:   %s\n  config:  %s\n", *name, res.StateDir, res.ConfigPath)
+		if res.WebhookURL != "" {
+			fmt.Printf("  webhook: %s (verifier telegram, secret %s)\n", res.WebhookURL, res.SecretPath)
+		} else {
+			fmt.Println("  channel: polling mode (no -ingress-url)")
+		}
+		fmt.Printf("  gateway: http://127.0.0.1:%d  token: %s\n", *port, res.GatewayToken)
+		return nil
 	case "rm":
 		fs := flag.NewFlagSet("rm", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")
