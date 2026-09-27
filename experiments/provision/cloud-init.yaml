@@ -3,6 +3,9 @@
 # Installs Docker, Go, node_exporter, cAdvisor, zram, CRIU, and hardens SSH.
 package_update: true
 package_upgrade: true
+# criu is deliberately absent: Ubuntu 24.04 ships no criu package, and a
+# missing package aborts cloud-init's whole package step. CRIU (the optional
+# checkpoint tier) is installed separately from its PPA when measured.
 packages:
   - ca-certificates
   - curl
@@ -10,7 +13,6 @@ packages:
   - jq
   - htop
   - iptables
-  - criu
   - zram-tools
   - unattended-upgrades
   - fail2ban
@@ -27,8 +29,11 @@ users:
 write_files:
   - path: /etc/default/zramswap
     content: |
+      # compressed swap in RAM: sized to the whole RAM so a fleet of paused
+      # cells can be reclaimed into it (zstd ~2-3x means ~2x RAM of pages)
       ALGO=zstd
-      PERCENT=50
+      PERCENT=100
+      PRIORITY=100
   - path: /etc/docker/daemon.json
     content: |
       { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" },
