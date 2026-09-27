@@ -131,3 +131,23 @@ A pause wake now reads the cell's own log for OpenClaw's freeze-detector line an
 
 ### Confirmation with the tenant's default configuration (12:18 UTC)
 Heartbeat restored to default; cell paused and reclaimed; one question sent. Detector fired at +0.0 s (`host timing gap detected`), the supervisor read it from the cell's log and held the first forward for the remainder of the 3 s window, Telegram saw a single 200, the cell logged **no settlement abort and no "embedded agent failed"**, and exactly one outbound send followed: the answer, ~11 s after the push. **No "heartbeat failed" notice, with nothing changed in the tenant's cell.** The settle covers OpenClaw's post-thaw window from outside the cell, using only the cell's own evidence.
+
+## Volume test: 50 hibernated cells, 10 signed wakes at once (12:30–12:50 UTC)
+Setup: tgw plus 49 more webhook-mode cells (v1..v49, same image, same config, Telegram channel disabled in the 49 because one bot token can only advertise one webhook), booted in batches of 5, then left to the supervisor until all 50 were paused and reclaimed: `paused=50 reclaims=50 used=13.4 GB zram=30.5 GB`, 195 MB free. Ten signed Telegram updates were then POSTed to the public ingress within 12 ms of each other (tgw and v1..v9), each with its own cell's verify secret; the daemon's wake concurrency was left at its default of 3.
+
+| Wave | Cells | Unpause + prefetch | Ready (/health) after the request | Note |
+|---|---|---|---|---|
+| 1 | v1, v5, v9 | 18.2–18.6 s | 24.5–24.7 s | first three page-ins share one saturated zram stream while the host has no free RAM; the earlier single-cell 1.5–2.6 s does not hold here |
+| 2 | v2, v4, v7 | 0.07–0.12 s | 7.2–7.5 s | started after wave 1 released its slots |
+| 3 | v3, v6, v8 | 0.09–0.10 s | 7.1–7.2 s | |
+| 4 | tgw | 0.43 s | 51.7 s | tenth in the queue; its own thaw took about 12 s |
+
+Per request at the ingress: tgw **200 in 54.7 s**, one delivery, no retry; v1..v9 502 after 45–60 s, expected because their Telegram channel was disabled so nothing listened on their hook port after the (successful) wake. Prefetch advised ~4.4 GiB per cell with ~700 MiB in swap and took 2.1–3.8 s each. Detector fired on every cell; each first forward was held 2.6–3.0 s.
+
+After: still paused 40, running 10, exited 0, `wake_failures_total 0`, no OOM kill. Load 25–35 during the wakes, 1.7 four minutes later. Cleanup: the 49 cells removed; host back to 13.9 GB free with tgw paused.
+
+Findings:
+- **Ten simultaneous wakes on a fully reclaimed 50-cell host complete without a failure, but wall time is dominated by page-in contention, not by OpenClaw.** The first wave took 25 s where a lone reclaimed cell takes 2 s: ten cells' ~7 GB of pages had to come back into a host with 195 MB free, so every page-in also evicted someone else's pages to zram, on one zstd stream. Once the first wave was resident the next waves settled to ~7 s each.
+- **The wake queue works as designed** (3 at a time, no wake lost, the tenth answered 200), but the tenth message waited 52 s. At this density the honest SLA for a burst of ten is "under a minute for the last one", and "2 s" only for the first cell woken into free RAM.
+- **Levers, in order of expected effect:** keep RAM headroom of roughly `wake_concurrency × per-cell working set` (here 3 × 700 MiB ≈ 2 GB) rather than filling the host to the last 200 MB; raise wake concurrency only together with that headroom; multi-stream zram or NVMe swap for parallel page-in; and a lower per-cell swapped set (the reclaim floor of 150 MiB already keeps the gateway's hot pages resident, which is why the settle-and-first-turn path still worked). These are Phase 1 tuning items, not blockers.
+- The test also reconfirms the three post-thaw gaps at scale: every cell logged the detector, every first forward was held, and the one cell with a live channel answered on the first delivery.
