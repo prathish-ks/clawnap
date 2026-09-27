@@ -155,8 +155,12 @@ func TestHookRetriesCellNotReadyThenSucceeds(t *testing.T) {
 	// the platform must see a single 204, not a 500 it has to retry
 	var calls int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
 		b, _ := io.ReadAll(r.Body)
+		if string(b) == "{}" { // the ingress's readiness probe; answer it and do not count it
+			w.WriteHeader(401)
+			return
+		}
+		n := atomic.AddInt32(&calls, 1)
 		if string(b) != `{"update_id":7}` {
 			t.Errorf("body not replayed on attempt %d: %q", n, b)
 		}
