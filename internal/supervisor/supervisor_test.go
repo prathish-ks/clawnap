@@ -39,7 +39,7 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 			return "[]", nil
 		}
 		if len(args) > 2 && args[2] == "{{.Id}}" {
-			return "cid-" + name, nil
+			return "cid-" + name + "-0000000000000000", nil // full-length id like docker prints
 		}
 		st, ok := f.state[name]
 		if !ok {
@@ -345,7 +345,7 @@ func TestReclaimAfterPauseWritesCgroup(t *testing.T) {
 	fr := &fakeRunner{state: map[string]runtime.State{"oc-r": runtime.StatePaused}, netio: map[string]string{}}
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
 	cg := t.TempDir()
-	d := filepath.Join(cg, "docker", "cid-oc-r")
+	d := filepath.Join(cg, "docker", "cid-oc-r-0000000000000000")
 	_ = os.MkdirAll(d, 0o755)
 	_ = os.WriteFile(filepath.Join(d, "memory.current"), []byte("800000000"), 0o644)
 	_ = os.WriteFile(filepath.Join(d, "memory.swap.current"), []byte("0"), 0o644)
@@ -428,7 +428,7 @@ func TestWakeWaitsForHibernateOnSameCellAndSkipsBusyReconcile(t *testing.T) {
 func TestReclaimYieldsToPendingWake(t *testing.T) {
 	// cgroup fake whose memory.current shrinks 32 MiB per 64 MiB request (never stalls)
 	cg := t.TempDir()
-	d := filepath.Join(cg, "docker", "cid-oc-w")
+	d := filepath.Join(cg, "docker", "cid-oc-w-0000000000000000")
 	_ = os.MkdirAll(d, 0o755)
 	_ = os.WriteFile(filepath.Join(d, "memory.current"), []byte("800000000"), 0o644)
 	_ = os.WriteFile(filepath.Join(d, "memory.swap.current"), []byte("0"), 0o644)
@@ -611,7 +611,7 @@ func TestReclaimedCellGetsLongerWakeTimeout(t *testing.T) {
 	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 	fr := &fakeRunner{state: map[string]runtime.State{"oc-t": runtime.StatePaused}, netio: map[string]string{}}
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
-	_ = reg.Put(registry.Cell{Name: "t", Container: "oc-t", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), ReclaimedAt: now.Add(-30 * time.Minute)})
+	_ = reg.Put(registry.Cell{Name: "t", Container: "oc-t", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), ReclaimedAt: now.Add(-30 * time.Minute), Swapped: true})
 	calls := 0
 	slowProbe := func(context.Context, int) error {
 		calls++
@@ -628,5 +628,29 @@ func TestReclaimedCellGetsLongerWakeTimeout(t *testing.T) {
 	s.Metrics().Write(&b, s.Cells())
 	if !strings.Contains(b.String(), `fleetd_wakes_total{kind="reclaimed"} 1`) {
 		t.Fatalf("reclaimed wakes must be labelled separately:\n%s", b.String())
+	}
+}
+
+func TestUnsupportedReclaimDoesNotMarkCellReclaimed(t *testing.T) {
+	// a host without memory.reclaim stamps ReclaimedAt to stop retrying, but
+	// the cell must not be treated as swapped: no long timeout, no prefetch,
+	// no "reclaimed" wake kind
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-u": runtime.StatePaused}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "u", Container: "oc-u", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Hour), IdleAfter: time.Minute})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ReclaimAfter: time.Minute, MaxPause: 24 * time.Hour, Reclaimer: &reclaim.Reclaimer{FS: t.TempDir()}}) // empty cgroup tree: ErrNoCgroup
+	s.ReconcileOnce(context.Background())
+	c, _ := reg.Get("u")
+	if c.ReclaimedAt.IsZero() || c.Swapped || reclaimed(c) {
+		t.Fatalf("unsupported reclaim must stamp but not mark swapped: %+v", c)
+	}
+	if _, err := s.Wake(context.Background(), "u"); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	s.Metrics().Write(&b, s.Cells())
+	if strings.Contains(b.String(), `kind="reclaimed"`) {
+		t.Fatalf("never-reclaimed cell must not be counted as a reclaimed wake:\n%s", b.String())
 	}
 }

@@ -214,6 +214,19 @@ func ParseSize(s string) (int64, error) {
 	return int64(f * m), nil
 }
 
+// ID returns the container's full id.
+func (c Client) ID(ctx context.Context, name string) (string, error) {
+	out, err := c.R.Run(ctx, "inspect", "-f", "{{.Id}}", name)
+	if err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(out)
+	if len(id) < 12 {
+		return "", fmt.Errorf("unexpected container id %q for %s", id, name)
+	}
+	return id, nil
+}
+
 // Mount is one bind/volume mount of a container.
 type Mount struct {
 	Type        string `json:"Type"`

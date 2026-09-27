@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -41,33 +42,67 @@ func main() {
 	}
 }
 
+// dataDir holds the registry and, under cells/, every cell's state. As root
+// it is the FHS service location /var/lib/fleetd: cell state is a bind mount
+// into a tenant container and the launcher refuses mounts under /root, so a
+// root-run daemon must not default to its own home. A registry left in the
+// old /root/.fleetd location is read once and migrated.
 func dataDir() string {
 	if d := os.Getenv("FLEETD_DATA"); d != "" {
 		return d
+	}
+	if os.Geteuid() == 0 {
+		return "/var/lib/fleetd"
 	}
 	h, _ := os.UserHomeDir()
 	return filepath.Join(h, ".fleetd")
 }
 
-// cellsRoot is where `cells create` puts state by default. Cell state is a
-// bind mount into a tenant container, and the launcher refuses mounts under
-// /root, /etc and the other system trees, so a root-run daemon must not
-// default to its own home: /srv/fleet/cells is the conventional service
-// data location and passes the mount check.
-func cellsRoot() string {
-	if d := os.Getenv("FLEETD_CELLS"); d != "" {
-		return d
-	}
-	if os.Geteuid() == 0 {
-		return "/srv/fleet/cells"
-	}
-	return filepath.Join(dataDir(), "cells")
-}
+func cellsRoot() string { return filepath.Join(dataDir(), "cells") }
 
 func newRunner() runtime.ExecRunner { return runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")} }
 
 func openRegistry() (*registry.Store, error) {
-	return registry.Open(filepath.Join(dataDir(), "cells.json"))
+	p := filepath.Join(dataDir(), "cells.json")
+	if os.Geteuid() == 0 && os.Getenv("FLEETD_DATA") == "" {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			old := "/root/.fleetd/cells.json"
+			if b, err := os.ReadFile(old); err == nil {
+				_ = os.MkdirAll(filepath.Dir(p), 0o700)
+				if os.WriteFile(p, b, 0o600) == nil {
+					_ = os.Rename(old, old+".migrated")
+				}
+			}
+		}
+	}
+	return registry.Open(p)
+}
+
+// viaDaemon sends a wake or hibernate to a running daemon's ingress when one
+// is reachable, so the CLI never runs a second supervisor that the daemon's
+// reclaim loop cannot see. Returns handled=false when no daemon answers.
+func viaDaemon(ctx context.Context, verb, name string) (handled bool, out string, err error) {
+	addr := os.Getenv("FLEETD_INGRESS")
+	if addr == "" {
+		addr = "http://127.0.0.1:8080"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr+"/"+verb+"/"+name, nil)
+	if err != nil {
+		return false, "", err
+	}
+	if t := os.Getenv("FLEETD_TOKEN"); t != "" {
+		req.Header.Set("Authorization", "Bearer "+t)
+	}
+	res, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
+	if err != nil {
+		return false, "", nil // no daemon: fall back to local
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+	if res.StatusCode != http.StatusOK {
+		return true, "", fmt.Errorf("daemon %s: %s %s", verb, res.Status, strings.TrimSpace(string(b)))
+	}
+	return true, res.Header.Get("X-Wake-Ready-Ms"), nil
 }
 
 func open(opt supervisor.Options) (*registry.Store, *supervisor.Supervisor, error) {
@@ -133,11 +168,11 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		id, err := newRunner().Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+		id, err := (runtime.Client{R: newRunner()}).ID(ctx, c.Container)
 		if err != nil {
 			return err
 		}
-		st, err := (&reclaim.Reclaimer{}).PrefetchMappings(ctx, strings.TrimSpace(id), 0, *files)
+		st, err := (&reclaim.Reclaimer{}).PrefetchMappings(ctx, id, 0, *files)
 		fmt.Printf("mechanism=%s procs=%d mappings=%d advised_mib=%d swap_before_mib=%d swap_after_mib=%d took=%s\n", st.Mechanism, st.Processes, st.Mappings, st.Bytes>>20, st.SwapBefore>>20, st.SwapAfter>>20, st.Took)
 		return err
 	case "hibernate", "wake":
@@ -145,6 +180,17 @@ func run(args []string) error {
 		name := fs.String("name", "", "cell name")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
+		}
+		if handled, ready, err := viaDaemon(ctx, args[0], *name); handled {
+			if err != nil {
+				return err
+			}
+			if ready != "" {
+				fmt.Printf("via daemon: ready_ms=%s\n", ready)
+			} else {
+				fmt.Println("via daemon: ok")
+			}
+			return nil
 		}
 		_, sup, err := open(supervisor.Options{})
 		if err != nil {

@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,14 +28,19 @@ import (
 //  2. Fallback: touch the pages by reading /proc/<pid>/mem in 1 MiB steps,
 //     which faults them in synchronously but still sequentially.
 //
-// Both need the same privilege the reclaim path already needs (root or
-// CAP_SYS_PTRACE over the cell's processes). Works on a paused cell: the
-// freezer stops the processes, not the kernel's page-in on their behalf.
+// process_madvise on another process needs CAP_SYS_NICE as well as ptrace
+// read access; the fallback needs full ptrace attach. In practice the
+// supervisor runs as root on a fleet host, where both hold. Works on a
+// paused cell: the freezer stops the processes, not the kernel's page-in
+// on their behalf. Note that on zram MADV_WILLNEED decompresses inline and
+// the call returns only when the pages are resident, so it is bounded by
+// the device's throughput, not "immediate".
 
 const (
-	sysPidfdOpen      = 434 // x86_64 and arm64 share these numbers
+	sysPidfdOpen      = 434 // x86_64, arm64, arm and 386 share these numbers
 	sysProcessMadvise = 440
 	madvWillNeed      = 3
+	iovMax            = 1024 // IOV_MAX: process_madvise accepts at most this many vectors per call
 )
 
 type mapping struct{ start, end uintptr }
@@ -58,6 +65,11 @@ func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, max
 		return st, err
 	}
 	var errs []error
+	advised := 0
+	budget := int64(math.MaxInt64)
+	if maxBytes > 0 {
+		budget = maxBytes
+	}
 	for _, pid := range pids {
 		maps, err := mappings(pid, includeFiles)
 		if err != nil {
@@ -66,15 +78,17 @@ func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, max
 		}
 		st.Processes++
 		st.Mappings += len(maps)
-		n, mech, err := advise(pid, maps, maxBytes-st.Bytes, maxBytes > 0)
+		n, mech, err := advise(ctx, pid, maps, budget-st.Bytes)
 		st.Bytes += n
 		if mech != "" {
 			st.Mechanism = mech
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("pid %d: %w", pid, err))
+		} else {
+			advised++
 		}
-		if maxBytes > 0 && st.Bytes >= maxBytes {
+		if st.Bytes >= budget {
 			break
 		}
 		if ctx.Err() != nil {
@@ -83,8 +97,13 @@ func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, max
 	}
 	st.SwapAfter, _ = readInt(filepath.Join(d, "memory.swap.current"))
 	st.Took = time.Since(t0)
-	if st.Processes == 0 && len(errs) > 0 {
+	// An error for any process is an error: a silent partial prefetch would
+	// be reported as success while the wake pays the fault-by-fault cost.
+	if len(errs) > 0 {
 		return st, errors.Join(errs...)
+	}
+	if advised == 0 {
+		return st, errors.New("no process advised")
 	}
 	return st, nil
 }
@@ -103,22 +122,25 @@ func cgroupPIDs(dir string) ([]int, error) {
 	return out, nil
 }
 
-// anonMappings lists the mappings worth prefetching: private writable
+// mappings lists the mappings worth prefetching: private writable
 // anonymous ones (heap, V8 arenas, stacks: the pages that were swapped),
 // and, when includeFiles is set, readable file-backed ones too (the node
 // binary, bundles, shared libraries), which reclaim evicts from the page
 // cache and which the gateway otherwise faults back on demand. Special
 // kernel mappings are always skipped.
-func anonMappings(pid int) ([]mapping, error) { return mappings(pid, false) }
-
 func mappings(pid int, includeFiles bool) ([]mapping, error) {
 	f, err := os.Open(fmt.Sprintf("/proc/%d/maps", pid))
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	return parseMaps(f, includeFiles)
+}
+
+// parseMaps applies the selection rules to /proc/<pid>/maps content.
+func parseMaps(r io.Reader, includeFiles bool) ([]mapping, error) {
 	var out []mapping
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<16), 1<<20)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
@@ -155,75 +177,55 @@ func mappings(pid int, includeFiles bool) ([]mapping, error) {
 	return out, sc.Err()
 }
 
-// advise tries process_madvise first, then the /proc/<pid>/mem fallback.
-func advise(pid int, maps []mapping, budget int64, bounded bool) (int64, string, error) {
+// advise issues process_madvise(MADV_WILLNEED) over the mappings in
+// IOV_MAX-sized batches, checking ctx between batches. The earlier
+// /proc/<pid>/mem read fallback is gone: it could only run on kernels too
+// old to have reclaimed the cell in the first place, it needs stricter
+// ptrace access than process_madvise so it never rescues an EPERM, and it
+// copied every range through user space.
+func advise(ctx context.Context, pid int, maps []mapping, budget int64) (int64, string, error) {
 	iov := make([]syscall.Iovec, 0, len(maps))
 	var total int64
 	for _, m := range maps {
 		l := int64(m.end - m.start)
-		if bounded && total+l > budget {
+		if total+l > budget {
 			l = budget - total
 			if l <= 0 {
 				break
 			}
 		}
 		// The address belongs to another process; it is never dereferenced
-		// here, only handed to the kernel, so the uintptr→pointer conversion
-		// vet warns about is the intended use.
-		iov = append(iov, syscall.Iovec{Base: (*byte)(unsafe.Pointer(m.start)), Len: uint64(l)}) //nolint:govet
+		// here, only handed to the kernel. Build the vector from integers so
+		// neither vet's unsafeptr check nor a 32-bit Iovec.Len width is an
+		// issue (SetLen takes an int).
+		var v syscall.Iovec
+		*(*uintptr)(unsafe.Pointer(&v.Base)) = m.start
+		v.SetLen(int(l))
+		iov = append(iov, v)
 		total += l
 	}
 	if len(iov) == 0 {
 		return 0, "", nil
 	}
 	pidfd, _, e := syscall.Syscall(sysPidfdOpen, uintptr(pid), 0, 0)
-	if e == 0 {
-		defer syscall.Close(int(pidfd))
-		// process_madvise accepts at most IOV_MAX (1024) vectors per call
-		var done int64
-		var lastErr syscall.Errno
-		for i := 0; i < len(iov); i += 1024 {
-			j := i + 1024
-			if j > len(iov) {
-				j = len(iov)
-			}
-			n, _, e2 := syscall.Syscall6(sysProcessMadvise, pidfd, uintptr(unsafe.Pointer(&iov[i])), uintptr(j-i), madvWillNeed, 0, 0)
-			if e2 != 0 {
-				lastErr = e2
-				break
-			}
-			done += int64(n)
-		}
-		if lastErr == 0 {
-			return done, "process_madvise", nil
-		}
-		if lastErr != syscall.ENOSYS && lastErr != syscall.EINVAL {
-			return done, "process_madvise", lastErr
-		}
+	if e != 0 {
+		return 0, "", fmt.Errorf("pidfd_open: %w", e)
 	}
-	// fallback: sequential read of /proc/<pid>/mem faults the pages in
-	f, err := os.Open(fmt.Sprintf("/proc/%d/mem", pid))
-	if err != nil {
-		return 0, "", err
-	}
-	defer f.Close()
-	buf := make([]byte, 1<<20)
-	var read int64
-	for _, v := range iov {
-		off := int64(uintptr(unsafe.Pointer(v.Base))) //nolint:govet
-		for rem := int64(v.Len); rem > 0; {
-			n := int64(len(buf))
-			if rem < n {
-				n = rem
-			}
-			k, err := f.ReadAt(buf[:n], off)
-			read += int64(k)
-			if err != nil {
-				break // unreadable range (guard pages); move on
-			}
-			off += n
-			rem -= n
+	defer syscall.Close(int(pidfd))
+	var done int64
+	for i := 0; i < len(iov); i += iovMax {
+		if err := ctx.Err(); err != nil {
+			return done, "process_madvise", err
 		}
+		j := i + iovMax
+		if j > len(iov) {
+			j = len(iov)
+		}
+		n, _, e2 := syscall.Syscall6(sysProcessMadvise, pidfd, uintptr(unsafe.Pointer(&iov[i])), uintptr(j-i), madvWillNeed, 0, 0)
+		if e2 != 0 {
+			return done, "process_madvise", fmt.Errorf("process_madvise: %w (needs CAP_SYS_NICE and ptrace read over the cell's processes)", e2)
+		}
+		done += int64(n)
 	}
-	return read, "proc_mem", nil
+	return done, "process_madvise", nil
 }

@@ -70,11 +70,16 @@ runcmd:
   - systemctl daemon-reload && systemctl enable --now node_exporter
   # cAdvisor (pinned), loopback only
   - docker run -d --name cadvisor --restart=always -p 127.0.0.1:8081:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro --privileged --device=/dev/kmsg gcr.io/cadvisor/cadvisor:v0.60.6
-  # zram needs the kernel's extra modules on Hetzner's Ubuntu image (the
-  # zram module is not in the base modules package)
-  - apt-get install -y linux-modules-extra-$(uname -r)
+  # zram lives in linux-modules-extra, which the cloud image's linux-virtual
+  # never pulls. Install it for every installed kernel (package_upgrade may
+  # have staged a newer one than the booted kernel), and keep it following
+  # future kernel upgrades via the generic metapackage, so a reboot after a
+  # security update cannot silently leave the host without swap.
+  - for k in $(dpkg-query -W -f '${binary:Package}\n' 'linux-image-*-generic' | sed 's/linux-image-//'); do apt-get install -y linux-modules-extra-$k; done
+  - apt-get install -y linux-generic
   - modprobe zram
-  - systemctl enable --now zramswap || true
+  - systemctl enable --now zramswap
+  - swapon --show | grep -q zram || echo "WARNING: zram swap not active" >&2
   - sysctl --system
   # SSH hardening + firewall (SSH only; everything else loopback)
   - sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/; s/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config

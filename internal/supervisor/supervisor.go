@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -274,13 +273,19 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			// cap and the once-per-freeze reclaim still hold; retry on demand
 			return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated })
 		}
-		// paused by someone else, age unknown: adopt it as hibernated and
-		// treat it as already at the pause cap, so the next pass pulses it
-		// rather than trusting a clock we never saw start.
+		// paused by someone else, age unknown: adopt it as hibernated with
+		// its clock already expired, so the next pass pulses it (cap on) or
+		// reclaims it at once (cap off) rather than trusting a clock we
+		// never saw start.
+		back := s.opt.MaxPause
+		if back <= 0 || (s.opt.ReclaimAfter > 0 && s.opt.ReclaimAfter > back) {
+			back = s.opt.ReclaimAfter
+		}
 		return s.reg.Update(c.Name, func(x *registry.Cell) {
 			x.Phase = registry.PhaseHibernated
-			x.PausedAt = s.opt.Now().Add(-s.opt.MaxPause)
+			x.PausedAt = s.opt.Now().Add(-back)
 			x.ReclaimedAt = time.Time{}
+			x.Swapped = false
 		})
 	case runtime.StateExited, runtime.StateCreated:
 		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
@@ -349,11 +354,10 @@ func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
 // reclaimCell pushes a paused cell's memory to swap. Unsupported hosts are
 // logged once per cell and never retried until the next pause.
 func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
-	id, err := s.rt.R.Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+	id, err := s.rt.ID(ctx, c.Container)
 	if err != nil {
 		return err
 	}
-	id = strings.TrimSpace(id)
 	before, _ := s.opt.Reclaimer.Stats(id)
 	rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -362,29 +366,30 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	if err != nil {
 		if errors.Is(err, reclaim.ErrUnsupported) || errors.Is(err, reclaim.ErrNoCgroup) {
 			s.opt.Logger.Info("reclaim not possible on this host; leaving cell resident", "cell", c.Name, "reason", err)
-			return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
+			return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now(); x.Swapped = false })
 		}
 		return err
 	}
 	if s.wakeWanted(c.Name) && after.CurrentBytes >= before.CurrentBytes {
 		return nil // interrupted before anything moved; leave it re-armed
 	}
-	s.m.reclaimed(before.CurrentBytes - after.CurrentBytes)
+	moved := before.CurrentBytes - after.CurrentBytes
+	s.m.reclaimed(moved)
 	s.opt.Logger.Info("reclaimed", "cell", c.Name, "before_mib", before.CurrentBytes>>20, "after_mib", after.CurrentBytes>>20, "swap_mib", after.SwapBytes>>20)
-	return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
+	return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now(); x.Swapped = moved > 0 || after.SwapBytes > 0 })
 }
 
 // prefetch pages a reclaimed cell's memory back in bulk before it is
 // unpaused. Best effort: a failure just means the gateway faults its pages
 // in itself, as it would without prefetch.
 func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
-	id, err := s.rt.R.Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+	id, err := s.rt.ID(ctx, c.Container)
 	if err != nil {
 		return
 	}
 	pctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	st, err := s.opt.Reclaimer.Prefetch(pctx, strings.TrimSpace(id), 0)
+	st, err := s.opt.Reclaimer.Prefetch(pctx, id, 0)
 	if err != nil {
 		s.opt.Logger.Warn("prefetch", "cell", c.Name, "err", err, "mechanism", st.Mechanism)
 		return
@@ -411,6 +416,9 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 		s.opt.Logger.Info("pause cap: fell through to stop", "cell", c.Name, "frozen", frozen, "took", took)
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = time.Time{} })
 	}
+	if s.opt.PrefetchOnWake && reclaimed(c) {
+		s.prefetch(ctx, c) // a pulse is a thaw: pay page-in in bulk, not fault by fault
+	}
 	if _, err := s.rt.Unpause(ctx, c.Container); err != nil {
 		return err
 	}
@@ -431,13 +439,33 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	}
 	s.m.pulse()
 	s.opt.Logger.Info("pause cap: pulsed", "cell", c.Name, "frozen", frozen, "window", s.opt.PulseWindow, "repause", took)
-	return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = s.opt.Now(); x.ReclaimedAt = time.Time{} })
+	// A pulse brings back only what it touched; the rest is still in swap.
+	// Keep the reclaimed mark so the next wake prefetches and gets the
+	// longer timeout, and do not re-arm a full reclaim for the same freeze:
+	// ReclaimedAt stays >= PausedAt.
+	now := s.opt.Now()
+	return s.reg.Update(c.Name, func(x *registry.Cell) {
+		x.PausedAt = now
+		if x.Swapped {
+			x.ReclaimedAt = now
+		} else {
+			x.ReclaimedAt = time.Time{}
+		}
+	})
+}
+
+// reclaimed reports whether the cell's memory was actually pushed to swap
+// during the current pause. ReclaimedAt alone is not enough: it is also
+// stamped when reclaim is impossible so the loop stops retrying. Only a
+// reclaim that moved bytes marks the cell as swapped.
+func reclaimed(c registry.Cell) bool {
+	return c.Swapped && !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt)
 }
 
 // pauseWakeTimeout: a reclaimed cell pages in from swap and needs longer
 // than a merely frozen one.
 func (s *Supervisor) pauseWakeTimeout(c registry.Cell) time.Duration {
-	if !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt) {
+	if reclaimed(c) {
 		return s.opt.ReclaimWakeTimeout
 	}
 	return s.opt.WakeTimeout
@@ -614,7 +642,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	kind := "stop"
 	if state == runtime.StatePaused {
 		kind = "pause"
-		if s.pauseWakeTimeout(c) == s.opt.ReclaimWakeTimeout {
+		if reclaimed(c) {
 			kind = "reclaimed" // pages come back from the swap device: a different tier in any dashboard
 			if s.opt.PrefetchOnWake {
 				s.prefetch(ctx, c)
@@ -643,6 +671,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		x.LastActivity = s.opt.Now()
 		x.PausedAt = time.Time{}
 		x.ReclaimedAt = time.Time{}
+		x.Swapped = false
 		x.LastError = ""
 	})
 }
