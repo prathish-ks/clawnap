@@ -91,3 +91,18 @@ Findings:
 - **Batched boots removed the failure mode.** No OOM kill and no OpenClaw startup-lease failure across 50 boots, where run 1 had one of each at 45. The cost is a slower step (40 s for ten cells vs 26 s).
 - **Wake on zram for a reclaimed cell is 1.5–2.6 s and flat across the ladder** (p95 2.0–2.6 s at every step from 10 to 50): it does not degrade with cell count, because it is bounded by single-threaded zstd decompression of that one cell's ~500 MiB, not by host load. The one 122 ms sample was a cell woken before its reclaim landed. The lever to get under 1 s is a smaller swapped set per cell (lower the working set that leaves RAM) or parallel swap-in, not filtering.
 - Per-cell cost at 50 cells: 13.1 GB RAM + 8.2 GB zram for 50 cells ≈ 262 MB RAM and 164 MB compressed swap per cell, against ~750 MiB per stock cell resident.
+
+## Real Telegram push-wake through a public address (08:50–09:16 UTC)
+Setup, all free: `167-233-118-221.sslip.io` (public DNS that resolves any ip-with-dashes name to that IP, nothing to register) + Caddy with an automatic Let's Encrypt certificate (issued in seconds), exposing only `/hook/*` and `/healthz`; the daemon on loopback; a cell created with `fleetd cells create -ingress-url https://… -telegram-token-file …`, so the provisioner wrote the webhook URL and verify secret into the cell's config and OpenClaw registered the webhook with Telegram itself on start (confirmed by Telegram's getWebhookInfo). An unsigned POST to the public hook URL is refused 401 without a wake.
+
+Three real messages sent to the bot while the cell was paused and reclaimed (~600 MiB in zram):
+
+| Message | Wake | What Telegram saw at the ingress | Delivered on attempt | Cell replied |
+|---|---|---|---|---|
+| 1 (original build) | 2.32 s | 502, 502, then 200 | 3rd | yes (pairing notice for an unknown sender) |
+| 2 (wait-for-TCP-accept fix) | 2.11 s | 502, 502, then 200 | 3rd | no reply by design: OpenClaw sends the pairing notice once per unpaired sender |
+| 3 (request-probe fix) | 1.91 s | **500 after 2.1 s, then 200 at 51 ms** | 2nd | no (same reason) |
+
+What the failures are: on thaw OpenClaw restarts its Telegram channel (`starting provider` → `webhook local listener` → `webhook advertised`, ~1 s after /health answers). The container's port mapping accepts connections throughout, so a TCP-accept probe passed and the proxy got a reset (messages 1–2). The request probe waits for the listener to answer, which removed the resets (message 3), but the cell then answered the first real update with 500 while its channel was still finishing its restart, and Telegram's automatic retry delivered. Every message was delivered; the cost of the remaining gap is one platform retry (~2 s).
+
+Wake times on zram for this ~600 MiB reclaimed cell: 1.9–2.3 s, consistent with the density run.

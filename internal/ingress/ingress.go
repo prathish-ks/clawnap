@@ -7,8 +7,11 @@
 package ingress
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -34,6 +37,10 @@ type Hibernator interface {
 // hookReadyTimeout bounds the wait for a cell's webhook listener after a
 // wake; the platform's own delivery timeout is the real ceiling.
 const hookReadyTimeout = 20 * time.Second
+
+// hookRetryWindow bounds our own retries of a forward the cell answered
+// with a 5xx while finishing its post-thaw channel restart.
+const hookRetryWindow = 3 * time.Second
 
 // waitServing polls the cell's hook path with an empty unsigned POST until
 // the listener answers any HTTP status at all (a 4xx is fine: it proves the
@@ -213,8 +220,81 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 			}
 			pr.Out.Host = target.Host
 		},
+		// After a thaw OpenClaw's channel answers its first update with a
+		// 5xx "webhook ingress is not ready" for a few hundred ms while it
+		// finishes restarting (its listener is up before its channel is).
+		// Retry the forward ourselves within a short window instead of
+		// handing the retry to the platform, which costs ~2 s per attempt.
+		ModifyResponse: func(res *http.Response) error {
+			if res.StatusCode >= 500 && res.Request != nil && res.Request.Context().Value(retryKey{}) == nil {
+				return errNotReady
+			}
+			return nil
+		},
+		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
+			if err == errNotReady {
+				// caller (below) handles the retry by re-serving; signal it
+				w.Header().Set("X-Fleet-Retry", "1")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, "cell unavailable", http.StatusBadGateway)
+		},
 	}
-	rp.ServeHTTP(w, r)
+	// Serve with a retry window: the body is already buffered (verifiers
+	// need it) or small, so it can be replayed.
+	body, _ := bufferBody(r)
+	deadline := time.Now().Add(hookRetryWindow)
+	for attempt := 0; ; attempt++ {
+		rec := &retryRecorder{ResponseWriter: w, header: http.Header{}}
+		rr := r.Clone(r.Context())
+		rr.Body = io.NopCloser(bytes.NewReader(body))
+		rr.ContentLength = int64(len(body))
+		if time.Now().After(deadline) {
+			rr = rr.WithContext(context.WithValue(rr.Context(), retryKey{}, true)) // final attempt: pass the cell's answer through
+		}
+		rp.ServeHTTP(rec, rr)
+		if rec.header.Get("X-Fleet-Retry") == "" || time.Now().After(deadline) {
+			rec.flush()
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+}
+
+// retryKey marks the final attempt, whose response is passed through as-is.
+type retryKey struct{}
+
+var errNotReady = errors.New("cell not ready")
+
+// retryRecorder buffers one attempt's response so a retried attempt can
+// replace it; flush writes the last attempt to the real writer.
+type retryRecorder struct {
+	http.ResponseWriter
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (rr *retryRecorder) Header() http.Header         { return rr.header }
+func (rr *retryRecorder) WriteHeader(code int)        { rr.status = code }
+func (rr *retryRecorder) Write(b []byte) (int, error) { return rr.body.Write(b) }
+func (rr *retryRecorder) flush() {
+	for k, v := range rr.header {
+		if k == "X-Fleet-Retry" {
+			continue
+		}
+		rr.ResponseWriter.Header()[k] = v
+	}
+	if rr.status == 0 {
+		rr.status = http.StatusOK
+	}
+	rr.ResponseWriter.WriteHeader(rr.status)
+	_, _ = rr.ResponseWriter.Write(rr.body.Bytes())
 }
 
 func (s *Server) log() *slog.Logger {

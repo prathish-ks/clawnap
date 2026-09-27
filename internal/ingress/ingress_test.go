@@ -2,12 +2,14 @@ package ingress
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -146,4 +148,32 @@ type lateWaker struct {
 func (l *lateWaker) Wake(context.Context, string) (time.Duration, error) {
 	go func() { time.Sleep(l.after); l.start() }()
 	return time.Millisecond, nil
+}
+
+func TestHookRetriesCellNotReadyThenSucceeds(t *testing.T) {
+	// the cell answers 500 "not ready" to the first two forwards, then 204:
+	// the platform must see a single 204, not a 500 it has to retry
+	var calls int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		b, _ := io.ReadAll(r.Body)
+		if string(b) != `{"update_id":7}` {
+			t.Errorf("body not replayed on attempt %d: %q", n, b)
+		}
+		if n <= 2 {
+			http.Error(w, "Telegram webhook ingress is not ready.", 500)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+	defer backend.Close()
+	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	_ = reg.Put(registry.Cell{Name: "n", Container: "oc-n", Port: 1, HookPort: port, HookVerifier: "none"})
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: &fakeWaker{}}).Handler())
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/hook/n/telegram-webhook", "application/json", strings.NewReader(`{"update_id":7}`))
+	if err != nil || res.StatusCode != 204 || atomic.LoadInt32(&calls) != 3 {
+		t.Fatalf("want a single 204 after 3 forwards, got %v %v calls=%d", err, res, calls)
+	}
 }

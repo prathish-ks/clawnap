@@ -56,3 +56,6 @@ Supervisor design consequence:
   to have a Microsoft-internal host consumer. No public product named. Note only.
 - Cloud routine cannot fetch docs.openclaw.ai, dev.to, myclaw.ai, releasebot.io (egress blocked); prompt now
   points it at the docs source in the openclaw GitHub repo instead.
+
+## Observation for the #114145 thread (2026-09-27, real host)
+On thaw after a pause, OpenClaw 2026.9.6 logs `host timing gap detected … restarting channels`, `[admission] closed: suspend phase` → `reopened`, then restarts the Telegram channel. Its webhook listener is serving ~40 ms before the channel is ready, and the first real update in that window is answered `Telegram webhook ingress is not ready.` (a 5xx to the platform), 5 ms before `webhook advertised`. Telegram's retry delivers ~2 s later. A host that wakes on push therefore needs either a channel-ready signal (the restored-admission status seam in #127602 would be exactly this) or its own short retry; we do the latter. This is concrete evidence for the host-side split the thread proposes.
