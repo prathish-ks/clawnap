@@ -683,25 +683,19 @@ func TestWakeFailsFastWhenContainerExitsDuringStartup(t *testing.T) {
 	}
 }
 
-func TestThawSettleWaitsForRecoveryMarker(t *testing.T) {
+func TestThawSettleHoldsForWindowWhenDetectorFired(t *testing.T) {
 	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 	fr := &fakeRunner{state: map[string]runtime.State{"oc-s": runtime.StatePaused}, netio: map[string]string{}, logs: map[string]string{"oc-s": "[health] host timing gap detected: process was frozen ~90000ms; restarting channels when idle"}}
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
 	_ = reg.Put(registry.Cell{Name: "s", Container: "oc-s", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-2 * time.Minute)})
-	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ThawSettle: 2 * time.Second})
-	go func() { // recovery completes 300 ms after the thaw
-		time.Sleep(300 * time.Millisecond)
-		fr.mu.Lock()
-		fr.logs["oc-s"] += "\n[admission] reopened: suspend phase"
-		fr.mu.Unlock()
-	}()
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ThawSettle: 600 * time.Millisecond})
 	t0 := time.Now()
 	if _, err := s.Wake(context.Background(), "s"); err != nil {
 		t.Fatal(err)
 	}
 	el := time.Since(t0)
-	if el < 250*time.Millisecond || el > 1500*time.Millisecond {
-		t.Fatalf("wake should settle on the marker (~300 ms), took %v", el)
+	if el < 550*time.Millisecond || el > 1500*time.Millisecond {
+		t.Fatalf("wake should hold for the measured window (600 ms), took %v", el)
 	}
 }
 

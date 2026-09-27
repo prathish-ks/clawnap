@@ -474,52 +474,43 @@ func reclaimed(c registry.Cell) bool {
 	return c.Swapped && !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt)
 }
 
-// Markers the gateway writes during and after its post-thaw recovery.
-// Recovery is triggered by its own freeze detector ("host timing gap
-// detected") and completes when it has restarted channels or decided it
-// need not ("channel restart deferred" is a decision, but placement stays
-// closed until the work it deferred to finishes, so it does not count).
-var (
-	thawTriggered = "host timing gap detected"
-	thawDone      = []string{"admission] reopened", "channels restarted", "thaw channel restart complete", "webhook advertised to telegram"}
-)
+// thawTriggered is the line OpenClaw's freeze detector logs the instant it
+// fires after a thaw. What follows it is a recovery window during which the
+// session placement's "turn settlement" is closed and a first agent turn
+// aborts (the user then gets a "heartbeat failed" notice). Verified in the
+// shipped code (2026.9.6): the settlement is closed by an internal closure
+// and its reopening is not logged and not exposed on any endpoint, so there
+// is no observable completion event. What is certain is the trigger, and a
+// measured window: 22 ms to ~800 ms on this host, never past 3 s.
+const thawTriggered = "host timing gap detected"
 
-// settleThaw holds a pause-wake until the gateway's own log shows its
-// post-thaw recovery has completed, bounded by ThawSettle. If the log shows
-// no recovery was triggered (short freezes below the detector's threshold),
-// it returns at once. This is the only readiness evidence the gateway
-// offers; it is read from the cell, not assumed.
+// settleThaw holds a pause-wake for the gateway's post-thaw recovery
+// window. It reads the cell's own log for the trigger: if the detector did
+// not fire (a short freeze), there is no window and it returns at once; if
+// it did, it holds for ThawSettle, the measured bound, since the end of the
+// window is not observable in this build. A readiness signal from the
+// gateway would replace the bound; that is the upstream ask.
 func (s *Supervisor) settleThaw(ctx context.Context, c registry.Cell, thawAt time.Time) {
 	since := thawAt.Add(-2 * time.Second).Format(time.RFC3339)
-	deadline := time.After(s.opt.ThawSettle)
 	t0 := time.Now()
-	for {
+	for time.Since(t0) < 500*time.Millisecond { // give the detector time to fire
 		out, err := s.rt.LogsSince(ctx, c.Container, since)
-		if err == nil {
-			if !strings.Contains(out, thawTriggered) {
-				// give the detector a moment to fire on a long freeze; if it
-				// has not within 400 ms it will not, and there is nothing to wait for
-				if time.Since(t0) > 400*time.Millisecond {
-					return
-				}
-			} else {
-				for _, m := range thawDone {
-					if strings.Contains(out, m) {
-						s.opt.Logger.Info("thaw settled", "cell", c.Name, "marker", m, "after", time.Since(t0))
-						return
-					}
-				}
+		if err == nil && strings.Contains(out, thawTriggered) {
+			remaining := s.opt.ThawSettle - time.Since(t0)
+			s.opt.Logger.Info("thaw recovery window: holding first forward", "cell", c.Name, "hold", remaining)
+			select {
+			case <-ctx.Done():
+			case <-time.After(remaining):
 			}
+			return
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-deadline:
-			s.opt.Logger.Warn("thaw settle: no completion marker within bound; forwarding anyway", "cell", c.Name, "bound", s.opt.ThawSettle)
-			return
 		case <-time.After(60 * time.Millisecond):
 		}
 	}
+	// no trigger logged: a freeze below the detector's threshold, nothing to wait for
 }
 
 // pauseWakeTimeout: a reclaimed cell pages in from swap and needs longer
