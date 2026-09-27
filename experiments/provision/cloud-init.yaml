@@ -70,7 +70,10 @@ runcmd:
   - systemctl daemon-reload && systemctl enable --now node_exporter
   # cAdvisor (pinned), loopback only
   - docker run -d --name cadvisor --restart=always -p 127.0.0.1:8081:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro --privileged --device=/dev/kmsg gcr.io/cadvisor/cadvisor:v0.60.6
-  # zram + sysctl
+  # zram needs the kernel's extra modules on Hetzner's Ubuntu image (the
+  # zram module is not in the base modules package)
+  - apt-get install -y linux-modules-extra-$(uname -r)
+  - modprobe zram
   - systemctl enable --now zramswap || true
   - sysctl --system
   # SSH hardening + firewall (SSH only; everything else loopback)
