@@ -13,7 +13,7 @@ Stop if: upstream ships hibernation or multi-host fleet; a credible open-source 
 | Phase | Where | Goal | Gate to leave |
 |---|---|---|---|
 | 0a Local correctness | This Mac, 2 live cells + 3–5 hibernated | Every lifecycle path works and state survives | Zero state loss over 20 hibernate/wake cycles with a real Telegram bot; pause-tier wake < 1 s on /health; stop-tier readiness measured and documented; ingress wake works end to end; daemon survives its own restart |
-| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers: pause+reclaim with zram vs NVMe swap, wake latency per tier. **Baseline done: stock+zram ceiling = 35 cells.** | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
+| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers: pause+reclaim with zram vs NVMe swap, wake latency per tier. **Baseline: stock+zram 35 cells. Supervisor: 40 healthy at load 10.7, 45 with 3 boot failures; zram-size bound for both. Reclaimed wake on zram 150 ms–3 s, tracking swapped bytes at ~250 MiB/s.** | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
 | 0c Upstream engagement | GitHub | Validate the host-side split with OpenClaw | Comment posted on #114145 (and #119035 if cron wake is implemented) with numbers; any maintainer or Codex response recorded in docs/upstream-watch.md |
 | Commercial gate A | Interviews | Someone will pay | ≥2 of 10 providers: density top-3 cost and ≥$500/mo intent; 3 pilot offers sent |
 | 1 Single-host MVP + OSS release | Hetzner + laptop | Public Apache-2.0 release, first paid pilot | Gate B: release public, 1 pilot live |
@@ -39,6 +39,10 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
+- Wake must fail fast on an exited container instead of waiting the readiness timeout (seen: 120 s 502 on a dead cell).
+- Stagger cell boots (bounded concurrent starts) so a batch cannot exhaust memory and trip OpenClaw's startup-lease logic.
+- Repeat the density run with zram sized at 200% of RAM (and with NVMe swap behind it) to find where the supervisor's ceiling actually is when the swap device is not the wall.
+- Reduce the swapped set per cell or parallelise decompression to get large-swap wakes under 1 s on zram.
 - (done 2026-09-27, result: slower; anon-only is the default, files opt-in) Prefetch file-backed mappings.
 - Working-set-aware reclaim floor via page-idle tracking (Hetzner; needs a quiet host to measure).
 - Prefetch triggered by early signals (webhook first byte, predicted schedule) so page-in leaves the critical path.
@@ -65,6 +69,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-26: Daily thesis-watch routine created (trig_01BRPWHtqCuwJYP4MicWYTSq), run-log delivery.
 
 ## Changelog
+- 2026-09-27: supervisor density run complete (experiments/hetzner-measurements-2026-09-27.md): 40/40 healthy where stock had 37/40 with two dead; both bounded by the 15.2 GB zram; first zram wake numbers 150 ms–3 s. Two defects surfaced: a wake of an exited cell waits the full timeout (should fail fast), and the boot storm at 45 cells triggers OpenClaw's own startup-lease failures and one OOM kill (stagger cell boots).
 - 2026-09-27: second independent review (commits since 8ec5076): 10 findings fixed. Reclaimed-ness is now a registry fact (Swapped) set only when bytes moved, so unsupported hosts never mislabel wakes or run prefetch; pulses prefetch first and no longer re-arm reclaim; prefetch surfaces every error, checks ctx per batch, and drops the unreachable /proc/mem fallback; Iovec built portably (32-bit Linux builds, go vet clean on Linux); CLI wake/hibernate route through a running daemon; root data dir is /var/lib/fleetd with one-time migration; cloud-init installs zram modules for every kernel and keeps them via linux-generic; deploy.sh quotes the key path; baseline script rerunnable with numeric sample output; parseMaps has a fixture test.
 - 2026-09-27: supervisor density test launched on the host as a systemd unit (SSH-bound launches died twice; nohup under a non-interactive session is not enough). First attempt failed on the launcher's own mount check: the default cell state root under /root is a blocked path when the daemon runs as root; default moved to /srv/fleet/cells.
 - 2026-09-27: stock ceiling on the zram host measured: 35 cells healthy, 40 thrashes (zram full, load 35, 2 exits, no OOM). Compression ~3.7x. The supervisor is measured against 35, not the 18–20 bare-RAM projection.

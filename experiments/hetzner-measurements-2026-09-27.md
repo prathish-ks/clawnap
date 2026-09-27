@@ -38,3 +38,27 @@ Cells added in steps of five; each step waited for the new cells' /health, settl
 Compression stayed near 3.7x throughout (zstd on OpenClaw's idle heap), so zram sized at 100 % of RAM holds ~3.7 × 15 GB ≈ 56 GB of pages in 15 GB; the binding constraint at 40 cells was the zram device size, not compressibility. A larger zram (or NVMe swap behind it) would lift the stock ceiling further, at the cost of the fault-by-fault page-in the supervisor's prefetch exists to avoid.
 
 Provider takeaway: the honest comparison for the product is not "stock on bare RAM" (18–20 cells) but "stock + zram" (35 cells). The supervisor's claim is measured against 35.
+
+## Supervisor density test on the same host (04:07–04:55 UTC)
+Daemon as a systemd unit: `-interval 15s -reclaim-after 60s -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s`. Cells created through `fleetd cells create` (same image and hardened flags as the stock baseline), steps to 50, each step: boot all new cells → settle 150 s (idle 45 s → pause; +60 s → reclaim into zram) → five random hibernated cells woken one at a time through the ingress → health count. Stop rule: more than two exited cells.
+
+| Cells | Healthy (paused counts) | Exited | Host used | zram data → compressed | Load | Wake p50 | Wake p95 |
+|---|---|---|---|---|---|---|---|
+| 10 | 10/10 | 0 | 5.7 GB | 2.9 → 0.8 GB | 0.8 | 108 ms | 129 ms |
+| 20 | 20/20 | 0 | 8.5 GB | 9.6 → 2.5 GB | 0.5 | 142 ms | 2.18 s |
+| 30 | 30/30 | 0 | 10.8 GB | 14.9 → 3.9 GB | 0.3 | 2.10 s | 2.74 s |
+| 35 | 35/35 | 0 | 14.4 GB | 15.2 → 4.0 GB (full) | 0.2 | 2.12 s | 2.32 s |
+| 40 | 40/40 | 0 | 15.1 GB | 15.2 → 4.0 GB (full) | 10.7 | 1.23 s | 3.18 s |
+| 45 | 42/45 | 3 | 14.4 GB | 15.2 → 4.0 GB (full) | 0.01 | 1.27 s | 120 s (a dead cell, see below) |
+
+**Against stock on the same host:** stock held 34/35 at load 4.6 and collapsed at 40 (37/40, load 35, two dead); the supervisor held 40/40 at load 10.7 and reached 45 before its stop rule fired. Both hit the same wall, the 15.2 GB zram device being full from 35 cells on; the supervisor's edge under that wall is that it reclaims deliberately before pressure and pages back in bulk, so the host stays responsive (load 0.2–0.3 through 35 cells vs stock's 4.6) instead of thrashing.
+
+**Wake latency on zram, first real numbers.** Two regimes, both visible in the daemon log:
+- Cells with little in swap (0–360 MiB): prefetch 3–150 ms, wake 150–300 ms end to end.
+- Cells with 450–620 MiB in swap: prefetch 1.6–2.9 s, wake 2–3 s. Prefetch time tracks swapped bytes at ~250 MiB/s, i.e. single-threaded zstd decompression, regardless of the ~4.3 GiB advised. The lever here is a smaller swapped set per cell (or parallel decompression), not filtering the advise list.
+
+**The 45-cell failures, all at boot, none of them wakes:**
+- s45: SIGKILL (exit 137) during the boot storm; dmesg shows 5 OOM events. The step's boot took 997 s because 45 gateways started on a host whose zram was already full.
+- s43 and s41: OpenClaw's own startup failed with `StateDatabaseCoordinatorContentionError` / "startup migration lease was lost" — its per-install lease logic timing out under that load. s41 was later picked for the wake sample: the supervisor unpaused an already-dead gateway and waited the full 2-minute reclaimed-wake timeout before returning 502. That is the 120 s p95; it is a dead-cell detection gap (an exited container should fail a wake immediately), not a slow wake.
+
+**Ceiling verdict:** ~40 supervised cells vs ~35 stock on 16 GB with a 15.2 GB zram, both bounded by the zram size. To move the ceiling for either, size zram above RAM (compression held at 3.7x) or add NVMe swap behind it; the supervisor's advantage would then show as wake latency and host responsiveness under that larger regime.
