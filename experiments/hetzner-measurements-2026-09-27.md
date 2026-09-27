@@ -101,8 +101,9 @@ Three real messages sent to the bot while the cell was paused and reclaimed (~60
 |---|---|---|---|---|
 | 1 (original build) | 2.32 s | 502, 502, then 200 | 3rd | yes (pairing notice for an unknown sender) |
 | 2 (wait-for-TCP-accept fix) | 2.11 s | 502, 502, then 200 | 3rd | no reply by design: OpenClaw sends the pairing notice once per unpaired sender |
-| 3 (request-probe fix) | 1.91 s | **500 after 2.1 s, then 200 at 51 ms** | 2nd | no (same reason) |
+| 3 (request-probe fix) | 1.91 s | 500 after 2.1 s, then 200 at 51 ms | 2nd | no (same reason) |
+| 4 (ingress retries the cell's post-thaw 5xx) | 1.81 s | **one 200 in 2.2 s, no retry** | **1st** | no (same reason) |
 
-What the failures are: on thaw OpenClaw restarts its Telegram channel (`starting provider` → `webhook local listener` → `webhook advertised`, ~1 s after /health answers). The container's port mapping accepts connections throughout, so a TCP-accept probe passed and the proxy got a reset (messages 1–2). The request probe waits for the listener to answer, which removed the resets (message 3), but the cell then answered the first real update with 500 while its channel was still finishing its restart, and Telegram's automatic retry delivered. Every message was delivered; the cost of the remaining gap is one platform retry (~2 s).
+**Result: with the fourth build a real Telegram message wakes a reclaimed cell and is delivered on the platform's first push, 2.2 s end to end.** What the earlier failures were: on thaw OpenClaw restarts its Telegram channel (`starting provider` → `webhook local listener` → `webhook advertised`, ~1 s after /health answers). The container's port mapping accepts connections throughout, so a TCP-accept probe passed and the proxy got a reset (messages 1–2). The request probe waits for the listener to answer, which removed the resets (message 3), but the cell then answered the first real update with 500 while its channel was still finishing its restart, and Telegram's automatic retry delivered. Every message was delivered; the cost of the remaining gap is one platform retry (~2 s).
 
 Wake times on zram for this ~600 MiB reclaimed cell: 1.9–2.3 s, consistent with the density run.
