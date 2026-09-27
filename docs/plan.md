@@ -65,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-26: Daily thesis-watch routine created (trig_01BRPWHtqCuwJYP4MicWYTSq), run-log delivery.
 
 ## Changelog
+- 2026-09-27: first Hetzner baseline: 10 stock cells boot to healthy in 21–27 s in parallel, idle 719–815 MiB each (8.2 GB for 10); projected stock ceiling ~18–20 cells per 16 GB host. experiments/hetzner-measurements-2026-09-27.md
 - 2026-09-27: Hetzner host bootstrapped after two cloud-init fixes (criu absent from Ubuntu 24.04; zram needs linux-modules-extra); zram 15.2 GB zstd active; OpenClaw image pulled; supervisor deployed; baseline-cells.sh added for the week-1 baseline.
 - 2026-09-27: repository pushed to github.com/prathish-ks/fleet-supervisor (private), branch main, 30 commits; history verified free of tokens.
 - 2026-09-27: prefetch refined: anon-only prefetch on a 150 MiB-floor reclaim wakes in 0.72 s on the laptop disk (plain pause 0.17 s; no prefetch 26 s). File-backed prefetch made it slower (2.0 s) and is now opt-in. Recommended defaults: -reclaim-keep-mib 150 -prefetch-on-wake. Commits 7e29ee4 + this.
