@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -29,6 +30,33 @@ type Waker interface {
 // serves POST /hibernate/{cell} (token-protected) for operators and tests.
 type Hibernator interface {
 	Hibernate(ctx context.Context, cell string) error
+}
+
+// hookReadyTimeout bounds the wait for a cell's webhook listener after a
+// wake; the platform's own delivery timeout is the real ceiling.
+const hookReadyTimeout = 20 * time.Second
+
+// waitAccepting polls a loopback TCP port until it accepts a connection.
+// A TCP accept is a valid readiness signal here because the listener is
+// the cell's own process inside its container namespace, not a proxy.
+func waitAccepting(ctx context.Context, port int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	var last error
+	for time.Now().Before(deadline) {
+		conn, err := (&net.Dialer{Timeout: 500 * time.Millisecond}).DialContext(ctx, "tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		last = err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	return last
 }
 
 // Server routes /wake/{cell}, /hook/{cell}/... and /metrics.
@@ -152,6 +180,18 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 	hookPort := c.HookPort
 	if hookPort == 0 {
 		hookPort = c.Port
+	}
+	// The gateway's /health answering does not mean its webhook listener
+	// (a separate port inside OpenClaw) is accepting yet; measured ~1 s
+	// later after a wake. Forwarding early gets a connection reset and a
+	// 502 back to the platform, which then has to retry. Wait for the hook
+	// port to accept before proxying.
+	if hookPort != c.Port {
+		if err := waitAccepting(r.Context(), hookPort, hookReadyTimeout); err != nil {
+			s.log().Warn("hook listener not accepting after wake", "cell", name, "port", hookPort, "err", err)
+			http.Error(w, "cell unavailable", http.StatusBadGateway)
+			return
+		}
 	}
 	target := &url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(hookPort)}
 	prefix := "/hook/" + name

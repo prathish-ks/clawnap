@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -98,4 +99,38 @@ func TestHibernateEndpoint(t *testing.T) {
 	if res.StatusCode != 200 || len(fw.slept) != 1 || fw.slept[0] != "a" {
 		t.Fatalf("hibernate endpoint: %d %v", res.StatusCode, fw.slept)
 	}
+}
+
+func TestHookWaitsForListenerAfterWake(t *testing.T) {
+	// backend comes up 700 ms after the wake, like OpenClaw's webhook listener
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := ln.Addr().(*net.TCPAddr).Port
+	_ = ln.Close() // port known, nothing listening yet
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	_ = reg.Put(registry.Cell{Name: "l", Container: "oc-l", Port: 1, HookPort: port, HookVerifier: "none"})
+	var srvBackend *httptest.Server
+	fw := &lateWaker{after: 700 * time.Millisecond, start: func() {
+		l2, _ := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
+		srvBackend = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+		srvBackend.Listener = l2
+		srvBackend.Start()
+	}}
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/hook/l/telegram-webhook", "application/json", strings.NewReader(`{"update_id":1}`))
+	if err != nil || res.StatusCode != 204 {
+		t.Fatalf("hook must wait for the listener and then proxy: %v %v", err, res)
+	}
+	srvBackend.Close()
+}
+
+// lateWaker "wakes" instantly but the listener appears only after a delay.
+type lateWaker struct {
+	after time.Duration
+	start func()
+}
+
+func (l *lateWaker) Wake(context.Context, string) (time.Duration, error) {
+	go func() { time.Sleep(l.after); l.start() }()
+	return time.Millisecond, nil
 }
