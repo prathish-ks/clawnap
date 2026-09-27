@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -36,17 +35,25 @@ type Hibernator interface {
 // wake; the platform's own delivery timeout is the real ceiling.
 const hookReadyTimeout = 20 * time.Second
 
-// waitAccepting polls a loopback TCP port until it accepts a connection.
-// A TCP accept is a valid readiness signal here because the listener is
-// the cell's own process inside its container namespace, not a proxy.
-func waitAccepting(ctx context.Context, port int, timeout time.Duration) error {
+// waitServing polls the cell's hook path with an empty unsigned POST until
+// the listener answers any HTTP status at all (a 4xx is fine: it proves the
+// application is serving, and the platform's real request follows). A
+// connection reset, EOF or refusal means the listener is not up yet.
+func waitServing(ctx context.Context, port int, fullPath, cell string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	addr := "127.0.0.1:" + strconv.Itoa(port)
+	path := strings.TrimPrefix(fullPath, "/hook/"+cell)
+	if path == "" {
+		path = "/"
+	}
+	url := "http://127.0.0.1:" + strconv.Itoa(port) + path
+	client := &http.Client{Timeout: 700 * time.Millisecond}
 	var last error
 	for time.Now().Before(deadline) {
-		conn, err := (&net.Dialer{Timeout: 500 * time.Millisecond}).DialContext(ctx, "tcp", addr)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader("{}"))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := client.Do(req)
 		if err == nil {
-			_ = conn.Close()
+			_ = res.Body.Close()
 			return nil
 		}
 		last = err
@@ -182,13 +189,15 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		hookPort = c.Port
 	}
 	// The gateway's /health answering does not mean its webhook listener
-	// (a separate port inside OpenClaw) is accepting yet; measured ~1 s
-	// later after a wake. Forwarding early gets a connection reset and a
-	// 502 back to the platform, which then has to retry. Wait for the hook
-	// port to accept before proxying.
+	// is serving: on thaw OpenClaw restarts the channel, tearing the old
+	// listener down and bringing a new one up ~1 s later, and the container
+	// port mapping accepts connections throughout, so a TCP accept proves
+	// nothing (measured: accept passed, proxy got a reset). Probe with a
+	// request instead: an unsigned POST to the hook path is answered (401)
+	// only once the listener is really serving, and has no side effect.
 	if hookPort != c.Port {
-		if err := waitAccepting(r.Context(), hookPort, hookReadyTimeout); err != nil {
-			s.log().Warn("hook listener not accepting after wake", "cell", name, "port", hookPort, "err", err)
+		if err := waitServing(r.Context(), hookPort, r.URL.Path, name, hookReadyTimeout); err != nil {
+			s.log().Warn("hook listener not serving after wake", "cell", name, "port", hookPort, "err", err)
 			http.Error(w, "cell unavailable", http.StatusBadGateway)
 			return
 		}

@@ -102,14 +102,27 @@ func TestHibernateEndpoint(t *testing.T) {
 }
 
 func TestHookWaitsForListenerAfterWake(t *testing.T) {
-	// backend comes up 700 ms after the wake, like OpenClaw's webhook listener
+	// Like a thawing OpenClaw: the port ACCEPTS connections immediately (a
+	// raw listener that resets them) and only starts SERVING 700 ms after
+	// the wake. A TCP-accept probe would pass and the proxy would get a
+	// reset; the request probe must wait for the real server.
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	port := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close() // port known, nothing listening yet
+	go func() { // accept-and-reset until the real server takes over
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
 	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
 	_ = reg.Put(registry.Cell{Name: "l", Container: "oc-l", Port: 1, HookPort: port, HookVerifier: "none"})
 	var srvBackend *httptest.Server
 	fw := &lateWaker{after: 700 * time.Millisecond, start: func() {
+		_ = ln.Close()
+		time.Sleep(50 * time.Millisecond)
 		l2, _ := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
 		srvBackend = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
 		srvBackend.Listener = l2
