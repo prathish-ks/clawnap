@@ -39,6 +39,9 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
+- Prefetch file-backed mappings too (node binary, bundles), not only anon; measure B-with-files vs D.
+- Working-set-aware reclaim floor via page-idle tracking (Hetzner; needs a quiet host to measure).
+- Prefetch triggered by early signals (webhook first byte, predicted schedule) so page-in leaves the critical path.
 - Host checker: warn when swap capacity < sum of resident memory of hibernate-class cells; report zram/swap device and size.
 - (done 2026-09-26) Cell provisioning helper: `fleetd cells create` that writes a cell's openclaw.json (gateway.mode local, channel webhookUrl = https://<ingress>/hook/<cell>/<path>, webhookSecret) and the matching verify-secret file, so ingress and cell always agree.
 - Telegram wake without a public address: NOT a getUpdates keeper (it would hold the tenant's bot token and read message content before the cell; unacceptable to the community and races the one-poller-per-bot rule). Order of preference: (1) webhook via the ingress with per-cell secret-token verification, no credential held; (2) opt-in count-only keeper using getWebhookInfo pending_update_count to wake the cell, which then polls itself (leaks a count, holds the token); (3) always-on class. Design principle for the README: the host never holds a channel credential and never parses a message.
@@ -62,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-26: Daily thesis-watch routine created (trig_01BRPWHtqCuwJYP4MicWYTSq), run-log delivery.
 
 ## Changelog
+- 2026-09-27: wake-time levers measured on the reclaimed cell: bulk prefetch via process_madvise cut wake from 26 s to 3.2 s on the laptop disk (variant D); the resident floor alone did not help (memory.current is not the working set). Prefetch is on by flag; extend it to file-backed mappings next. Commit aff03e8 + this.
 - 2026-09-26: two-cell live run repeated with the reviewed build: coalesced wakes share the leader's outcome, a 15.3 s reclaimed-cell wake passes under the new timeout, CLI registry edits survive under the running daemon, 0 failures.
 - 2026-09-26: independent code review of the first 23 commits (8 finder angles, 3 verifier passes): 10 confirmed correctness findings reported and fixed, plus 9 further verified issues and 5 cleanups. Highlights: reconcile-driven wakes deadlocked the daemon (separate reconcile pool); registry was a per-process snapshot (file lock + reload-before-mutate + fsync); empty webhook secrets and unset verifiers now fail closed; coalesced wakes share the leader's real outcome and survive caller cancellation; reclaimed cells get a longer wake timeout; one-shot due times clear and recurring ones advance; stale Waking phases are adopted; failed wakes keep the pause clock; gateway token moved from env/argv into the cell config; provisioning refuses webhook mode without a channel token, types the idle flag, runs cells as 1000:1000 and chowns state dirs when root; runtime stdout is separated from stderr and env values are redacted in errors; one shared path/secret classifier for launcher and checker; Podman info fallbacks; serve refuses to run unauthenticated off loopback; regression tests for each. All re-verified live on real cells.
 - 2026-09-19: repo scaffolded (registry, runtime seam, idle, supervisor, ingress, spec, CLI, tests); live stop/start cycle against a stand-in container passed.

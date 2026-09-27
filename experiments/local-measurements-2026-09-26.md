@@ -153,3 +153,20 @@ Same setup as before (Linux fleetd inside the VM, `-reclaim-after 20s -interval 
 | `fleetd cells add ghost` while the daemon ran | survived two daemon ticks and was reconciled (container missing → failed); before the review it was erased |
 | Hibernate tg2, reclaim, wake | 189 → 66 MiB, wake ready 6.23 s |
 | Totals | 3 wakes, 3 hibernates, 3 reclaims, 0 failures |
+
+## Wake-time levers on the reclaimed cell (2026-09-27, 02:05–02:11 UTC, host load average 53)
+Same cell, four variants from a settled state (908 MiB resident). Reclaim driven directly via cgroup memory.reclaim; prefetch via `fleetd prefetch` (process_madvise MADV_WILLNEED over every anonymous mapping of the cell's 4 processes, ~2,000 mappings, 3.5 GiB advised, call returns in ~5 s).
+
+| Variant | Resident after reclaim | Resident after prefetch | Wake to /health 200 |
+|---|---|---|---|
+| A: full reclaim, plain unpause | 213 MiB (612 in swap) | – | 21.99 s |
+| B: full reclaim + prefetch | 22 MiB (672 in swap) | 591 MiB | 12.72 s (+ ~13 s prefetch wall, mostly `docker run` overhead) |
+| C: reclaim to a 150 MiB floor | 107 MiB (611 in swap) | – | 26.10 s |
+| D: 150 MiB floor + prefetch | 120 MiB (590 in swap) | 604 MiB | **3.19 s** |
+
+Findings:
+- **Prefetch works and is the lever.** `process_madvise` pulled ~570 MiB back from the swap file in ~5 s (sequential, ~115 MiB/s on this disk) before the unpause; the gateway then had almost nothing to fault in. D vs C: 26 s → 3.2 s on the same reclaimed state.
+- **The floor alone did not help (C ≈ A)**, because `memory.reclaim` evicts file-backed pages and cold anon first and the "floor" measured by memory.current is not the gateway's working set. Keeping N MiB resident is not the same as keeping the *right* N MiB. A working-set-aware floor would need page-idle tracking (`/sys/kernel/mm/page_idle`) — a Hetzner item, not worth building blind.
+- **B was slower than D** because after a full reclaim some of what the gateway needs was evicted from the page cache too, and prefetch only advises anon mappings; the file-backed pages (node binary, .mjs bundles) came back on demand. Prefetching file mappings as well is a one-line extension.
+- **Load matters:** this run was at load average 53 (Docker Desktop plus the daemon's own containers). Every wake logged a liveness-heartbeat delay of 5–20 s, and one earlier attempt at a 20-min-paused, twice-reclaimed cell self-exited (code 135) 90 s after unpause with no log line — the gateway's watchdog treats a long page-in stall like a freeze. Prefetch shrinks that stall, which is a second reason to do it, beyond latency.
+- Experiment note: the daemon's "adopt unknown-age pause as at-cap" rule (from the review) pulsed the cell instead of reclaiming it in the first attempt; `-max-pause -1` now disables the cap for experiments.
