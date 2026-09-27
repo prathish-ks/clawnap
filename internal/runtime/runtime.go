@@ -214,6 +214,13 @@ func ParseSize(s string) (int64, error) {
 	return int64(f * m), nil
 }
 
+// LogsSince returns the container's log output since the given RFC3339
+// timestamp (both streams). Used to read the gateway's own recovery
+// markers after a thaw, which it does not expose on any endpoint.
+func (c Client) LogsSince(ctx context.Context, name, since string) (string, error) {
+	return c.R.Run(ctx, "logs", "--since", since, name)
+}
+
 // ID returns the container's full id.
 func (c Client) ID(ctx context.Context, name string) (string, error) {
 	out, err := c.R.Run(ctx, "inspect", "-f", "{{.Id}}", name)

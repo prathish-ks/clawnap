@@ -25,6 +25,7 @@ import (
 var keepExited = map[*fakeRunner]bool{}
 
 type fakeRunner struct {
+	logs   map[string]string // container -> log text returned by "logs"
 	mu     sync.Mutex
 	state  map[string]runtime.State
 	netio  map[string]string
@@ -71,6 +72,8 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		return "", nil
 	case "inspect-mounts":
 		return "[]", nil
+	case "logs":
+		return f.logs[args[len(args)-1]], nil // f.mu already held by Run
 	case "unpause":
 		f.state[name] = runtime.StateRunning
 		return "", nil
@@ -677,5 +680,42 @@ func TestWakeFailsFastWhenContainerExitsDuringStartup(t *testing.T) {
 	}
 	if el := time.Since(t0); el > 5*time.Second {
 		t.Fatalf("fail-fast took %v; must not wait the 30 s timeout", el)
+	}
+}
+
+func TestThawSettleWaitsForRecoveryMarker(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-s": runtime.StatePaused}, netio: map[string]string{}, logs: map[string]string{"oc-s": "[health] host timing gap detected: process was frozen ~90000ms; restarting channels when idle"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "s", Container: "oc-s", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-2 * time.Minute)})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ThawSettle: 2 * time.Second})
+	go func() { // recovery completes 300 ms after the thaw
+		time.Sleep(300 * time.Millisecond)
+		fr.mu.Lock()
+		fr.logs["oc-s"] += "\n[admission] reopened: suspend phase"
+		fr.mu.Unlock()
+	}()
+	t0 := time.Now()
+	if _, err := s.Wake(context.Background(), "s"); err != nil {
+		t.Fatal(err)
+	}
+	el := time.Since(t0)
+	if el < 250*time.Millisecond || el > 1500*time.Millisecond {
+		t.Fatalf("wake should settle on the marker (~300 ms), took %v", el)
+	}
+}
+
+func TestThawSettleReturnsFastWhenNoRecoveryTriggered(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-q": runtime.StatePaused}, netio: map[string]string{}, logs: map[string]string{"oc-q": "[gateway] ordinary line"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "q", Container: "oc-q", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-10 * time.Second)})
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, ThawSettle: 3 * time.Second})
+	t0 := time.Now()
+	if _, err := s.Wake(context.Background(), "q"); err != nil {
+		t.Fatal(err)
+	}
+	if el := time.Since(t0); el > time.Second {
+		t.Fatalf("short freeze must not wait the full settle bound, took %v", el)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,14 @@ type Options struct {
 	// locally: ~790 → ~20 MiB resident; wake then pages in from the swap
 	// device (zram/NVMe on a fleet host, ~17 s on a laptop swap file).
 	ReclaimAfter time.Duration
+	// ThawSettle bounds how long a wake waits, after /health answers, for the
+	// gateway to finish its own post-thaw recovery. OpenClaw exposes no
+	// readiness signal for this (its /ready is a liveness alias), but it logs
+	// the recovery with millisecond timestamps, so the wait keys on the
+	// cell's own log rather than on a fixed delay: it ends as soon as the
+	// log shows recovery has run (or shows no recovery was triggered), and
+	// gives up after ThawSettle. Measured: 22 ms to ~800 ms.
+	ThawSettle time.Duration
 	// ReclaimWakeTimeout bounds readiness after unpausing a cell whose memory
 	// was reclaimed to swap (measured 9–17 s on a laptop swap file; faster
 	// on zram/NVMe). Larger than WakeTimeout, smaller than a full boot.
@@ -107,6 +116,9 @@ func (o *Options) defaults() {
 	}
 	if o.ReclaimWakeTimeout == 0 {
 		o.ReclaimWakeTimeout = 2 * time.Minute
+	}
+	if o.ThawSettle == 0 {
+		o.ThawSettle = 3 * time.Second
 	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
@@ -462,6 +474,54 @@ func reclaimed(c registry.Cell) bool {
 	return c.Swapped && !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt)
 }
 
+// Markers the gateway writes during and after its post-thaw recovery.
+// Recovery is triggered by its own freeze detector ("host timing gap
+// detected") and completes when it has restarted channels or decided it
+// need not ("channel restart deferred" is a decision, but placement stays
+// closed until the work it deferred to finishes, so it does not count).
+var (
+	thawTriggered = "host timing gap detected"
+	thawDone      = []string{"admission] reopened", "channels restarted", "thaw channel restart complete", "webhook advertised to telegram"}
+)
+
+// settleThaw holds a pause-wake until the gateway's own log shows its
+// post-thaw recovery has completed, bounded by ThawSettle. If the log shows
+// no recovery was triggered (short freezes below the detector's threshold),
+// it returns at once. This is the only readiness evidence the gateway
+// offers; it is read from the cell, not assumed.
+func (s *Supervisor) settleThaw(ctx context.Context, c registry.Cell, thawAt time.Time) {
+	since := thawAt.Add(-2 * time.Second).Format(time.RFC3339)
+	deadline := time.After(s.opt.ThawSettle)
+	t0 := time.Now()
+	for {
+		out, err := s.rt.LogsSince(ctx, c.Container, since)
+		if err == nil {
+			if !strings.Contains(out, thawTriggered) {
+				// give the detector a moment to fire on a long freeze; if it
+				// has not within 400 ms it will not, and there is nothing to wait for
+				if time.Since(t0) > 400*time.Millisecond {
+					return
+				}
+			} else {
+				for _, m := range thawDone {
+					if strings.Contains(out, m) {
+						s.opt.Logger.Info("thaw settled", "cell", c.Name, "marker", m, "after", time.Since(t0))
+						return
+					}
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline:
+			s.opt.Logger.Warn("thaw settle: no completion marker within bound; forwarding anyway", "cell", c.Name, "bound", s.opt.ThawSettle)
+			return
+		case <-time.After(60 * time.Millisecond):
+		}
+	}
+}
+
 // pauseWakeTimeout: a reclaimed cell pages in from swap and needs longer
 // than a merely frozen one.
 func (s *Supervisor) pauseWakeTimeout(c registry.Cell) time.Duration {
@@ -637,6 +697,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	}
 	_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseWaking })
 	t0 := s.opt.Now()
+	thawAt := time.Now().UTC() // wall clock, for the container log's --since
 	var startTook time.Duration
 	timeout := s.opt.StopWakeTimeout
 	kind := "stop"
@@ -662,6 +723,9 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		s.m.wakeFail()
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })
 		return WakeResult{StartTook: startTook}, err
+	}
+	if state == runtime.StatePaused {
+		s.settleThaw(ctx, c, thawAt)
 	}
 	res := WakeResult{StartTook: startTook, ReadyTook: s.opt.Now().Sub(t0)}
 	s.m.wake(kind, res.ReadyTook)
