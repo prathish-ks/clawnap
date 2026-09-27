@@ -107,3 +107,18 @@ Three real messages sent to the bot while the cell was paused and reclaimed (~60
 **Result: with the fourth build a real Telegram message wakes a reclaimed cell and is delivered on the platform's first push, 2.2 s end to end.** What the earlier failures were: on thaw OpenClaw restarts its Telegram channel (`starting provider` → `webhook local listener` → `webhook advertised`, ~1 s after /health answers). The container's port mapping accepts connections throughout, so a TCP-accept probe passed and the proxy got a reset (messages 1–2). The request probe waits for the listener to answer, which removed the resets (message 3), but the cell then answered the first real update with 500 while its channel was still finishing its restart, and Telegram's automatic retry delivered. Every message was delivered; the cost of the remaining gap is one platform retry (~2 s).
 
 Wake times on zram for this ~600 MiB reclaimed cell: 1.9–2.3 s, consistent with the density run.
+
+## First real agent turn after reclaim (10:14 UTC)
+Cell tgw: owner paired (Telegram sender approved via `pairing approve telegram <code>`), Anthropic key in the cell's own config (`models.providers.anthropic.apiKey`, 0600, never in env or argv), default model `anthropic/claude-haiku-4-5-20251001` (the build's default is an OpenAI model, which produced a 401 until changed). Cell paused and reclaimed, 622 MiB in zram. User sent "what is 17 times 23".
+
+| Event | Time from Telegram's push |
+|---|---|
+| Push arrives at Caddy; ingress verifies, prefetches (4,995 MiB advised, 622 MiB in swap), unpauses | 0 |
+| Gateway healthy; request forwarded, 200 to Telegram | 2.36 s |
+| Cell's first attempt at the turn aborts: `session placement turn settlement is closed`; it sends the user a "heartbeat failed, the main chat session remains available" notice | 3.3 s |
+| Cell retries, model answers, **"17 x 23 = 391" delivered** | **8.7 s** |
+
+Findings:
+- **A real agent turn completes after page-in from zram, end to end in 8.7 s**, of which 2.3 s is the wake and ~5 s is the model round-trip plus OpenClaw's own retry. The turn itself did not fault noticeably: the reclaimed pages the model client and session store needed were prefetched.
+- **Third post-thaw gap inside OpenClaw**, after the listener (fixed by the request probe) and the channel (fixed by the retry): its session placement is still "closed" for roughly a second after thaw, so the first turn aborts and a diagnostic notice reaches the user; the turn succeeds on OpenClaw's own retry. Nothing outside the cell can see this state either. For the upstream thread: the restored-admission "ready" signal in #127602 is exactly what would let a host hold the first message until placement has reopened.
+- Operating rule learned twice today: any command run inside a cell (pairing, config set) must first move the cell out of the hibernate tier, or the daemon pauses it mid-command and freezes the exec.
