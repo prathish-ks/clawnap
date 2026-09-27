@@ -170,3 +170,19 @@ Findings:
 - **B was slower than D** because after a full reclaim some of what the gateway needs was evicted from the page cache too, and prefetch only advises anon mappings; the file-backed pages (node binary, .mjs bundles) came back on demand. Prefetching file mappings as well is a one-line extension.
 - **Load matters:** this run was at load average 53 (Docker Desktop plus the daemon's own containers). Every wake logged a liveness-heartbeat delay of 5–20 s, and one earlier attempt at a 20-min-paused, twice-reclaimed cell self-exited (code 135) 90 s after unpause with no log line — the gateway's watchdog treats a long page-in stall like a freeze. Prefetch shrinks that stall, which is a second reason to do it, beyond latency.
 - Experiment note: the daemon's "adopt unknown-age pause as at-cap" rule (from the review) pulsed the cell instead of reclaiming it in the first attempt; `-max-pause -1` now disables the cap for experiments.
+
+## Prefetch: file-backed mappings vs anon-only, and the plain-pause floor (2026-09-27, ~02:30 UTC, load 22 falling to 13)
+Same cell, reclaim driven directly, prefetch via `fleetd prefetch` (process_madvise MADV_WILLNEED).
+
+| Variant | Resident after reclaim | Prefetch advised / took | Resident after prefetch | Wake to /health 200 |
+|---|---|---|---|---|
+| B2: full reclaim, prefetch anon+files | 21 MiB (654 in swap) | 3,849 MiB / 5.7 s | 588 MiB | 9.17 s |
+| D2: keep-150 reclaim, prefetch anon+files | 97 MiB (581 in swap) | 3,849 MiB / 4.8 s | 606 MiB | 2.01 s |
+| D1: keep-150 reclaim, prefetch anon only | 89 MiB (589 in swap) | 3,535 MiB / 2.2 s | 591 MiB | **0.72 s** |
+| P: plain pause, no reclaim | 609 MiB resident | – | – | 0.17 s |
+
+Findings:
+- **Anon-only prefetch on a keep-150 reclaim reaches 0.72 s on the laptop disk** — inside the sub-second target, against 26 s for the same reclaimed state with no prefetch (variant C earlier). The plain-pause floor here is 0.17 s, so prefetch closes most of the gap between "reclaimed" and "merely paused".
+- **Adding file-backed mappings made wake slower (D2 2.0 s vs D1 0.72 s; B2 9.2 s vs B 12.7 s earlier).** The file set is ~300 MiB of binary and bundles, most of which the gateway never touches on wake; advising it queues extra reads ahead of the pages that matter and roughly doubles prefetch time. Default flips to anon-only; `-files` stays available for a working-set-aware version later.
+- **The full reclaim (B2, 21 MiB resident) still costs ~9 s even with prefetch**, versus 2.0 s / 0.72 s for keep-150. So the floor does matter — not because memory.current is the working set, but because a full reclaim also evicts the page cache the gateway's file-backed code lives in, and that comes back at fault latency. Keep-150 leaves it. Recommended default: reclaim to a ~150 MiB floor plus anon-only prefetch on wake.
+- Variance note: host load fell from 53 in the previous run to 13–22 here, which accounts for part of the improvement across runs; the within-run comparisons (same load) are the reliable ones.

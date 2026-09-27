@@ -106,7 +106,7 @@ func run(args []string) error {
 	case "prefetch":
 		fs := flag.NewFlagSet("prefetch", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")
-		files := fs.Bool("files", true, "also prefetch file-backed mappings (binary, bundles)")
+		files := fs.Bool("files", false, "also prefetch file-backed mappings (binary, bundles); measured slower on a disk swap file, default off")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}

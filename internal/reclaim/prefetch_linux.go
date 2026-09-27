@@ -41,7 +41,7 @@ type mapping struct{ start, end uintptr }
 // Prefetch pages the cell's anonymous memory back in. maxBytes bounds the
 // amount advised (0 = everything mapped).
 func (r Reclaimer) Prefetch(ctx context.Context, containerID string, maxBytes int64) (PrefetchStats, error) {
-	return r.PrefetchMappings(ctx, containerID, maxBytes, true)
+	return r.PrefetchMappings(ctx, containerID, maxBytes, false) // anon only: measured 0.72 s vs 2.0 s with files
 }
 
 // PrefetchMappings is Prefetch with control over file-backed mappings.
