@@ -106,6 +106,7 @@ func run(args []string) error {
 	case "prefetch":
 		fs := flag.NewFlagSet("prefetch", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")
+		files := fs.Bool("files", true, "also prefetch file-backed mappings (binary, bundles)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -121,7 +122,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		st, err := (&reclaim.Reclaimer{}).Prefetch(ctx, strings.TrimSpace(id), 0)
+		st, err := (&reclaim.Reclaimer{}).PrefetchMappings(ctx, strings.TrimSpace(id), 0, *files)
 		fmt.Printf("mechanism=%s procs=%d mappings=%d advised_mib=%d swap_before_mib=%d swap_after_mib=%d took=%s\n", st.Mechanism, st.Processes, st.Mappings, st.Bytes>>20, st.SwapBefore>>20, st.SwapAfter>>20, st.Took)
 		return err
 	case "hibernate", "wake":

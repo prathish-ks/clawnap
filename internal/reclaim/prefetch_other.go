@@ -8,3 +8,8 @@ import "context"
 func (r Reclaimer) Prefetch(ctx context.Context, containerID string, maxBytes int64) (PrefetchStats, error) {
 	return PrefetchStats{}, ErrUnsupported
 }
+
+// PrefetchMappings is unsupported off Linux.
+func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, maxBytes int64, includeFiles bool) (PrefetchStats, error) {
+	return PrefetchStats{}, ErrUnsupported
+}

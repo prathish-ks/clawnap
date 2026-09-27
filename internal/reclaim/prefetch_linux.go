@@ -41,6 +41,11 @@ type mapping struct{ start, end uintptr }
 // Prefetch pages the cell's anonymous memory back in. maxBytes bounds the
 // amount advised (0 = everything mapped).
 func (r Reclaimer) Prefetch(ctx context.Context, containerID string, maxBytes int64) (PrefetchStats, error) {
+	return r.PrefetchMappings(ctx, containerID, maxBytes, true)
+}
+
+// PrefetchMappings is Prefetch with control over file-backed mappings.
+func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, maxBytes int64, includeFiles bool) (PrefetchStats, error) {
 	d, err := r.Dir(containerID)
 	if err != nil {
 		return PrefetchStats{}, err
@@ -54,7 +59,7 @@ func (r Reclaimer) Prefetch(ctx context.Context, containerID string, maxBytes in
 	}
 	var errs []error
 	for _, pid := range pids {
-		maps, err := anonMappings(pid)
+		maps, err := mappings(pid, includeFiles)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("pid %d: %w", pid, err))
 			continue
@@ -98,10 +103,15 @@ func cgroupPIDs(dir string) ([]int, error) {
 	return out, nil
 }
 
-// anonMappings lists private anonymous, writable mappings (heap, V8 arenas,
-// stacks): the pages that were swapped. File-backed mappings are skipped;
-// they come back from the page cache, not swap.
-func anonMappings(pid int) ([]mapping, error) {
+// anonMappings lists the mappings worth prefetching: private writable
+// anonymous ones (heap, V8 arenas, stacks: the pages that were swapped),
+// and, when includeFiles is set, readable file-backed ones too (the node
+// binary, bundles, shared libraries), which reclaim evicts from the page
+// cache and which the gateway otherwise faults back on demand. Special
+// kernel mappings are always skipped.
+func anonMappings(pid int) ([]mapping, error) { return mappings(pid, false) }
+
+func mappings(pid int, includeFiles bool) ([]mapping, error) {
 	f, err := os.Open(fmt.Sprintf("/proc/%d/maps", pid))
 	if err != nil {
 		return nil, err
@@ -116,14 +126,20 @@ func anonMappings(pid int) ([]mapping, error) {
 			continue
 		}
 		perms := fields[1]
-		if len(perms) < 4 || perms[0] != 'r' || perms[1] != 'w' || perms[3] != 'p' {
+		if len(perms) < 4 || perms[0] != 'r' {
 			continue
 		}
-		if len(fields) >= 6 {
-			path := fields[5]
-			if path != "[heap]" && !strings.HasPrefix(path, "[stack") && !strings.HasPrefix(path, "[anon") {
-				continue // file-backed
+		fileBacked := len(fields) >= 6 && strings.HasPrefix(fields[5], "/")
+		special := len(fields) >= 6 && strings.HasPrefix(fields[5], "[") && fields[5] != "[heap]" && !strings.HasPrefix(fields[5], "[stack") && !strings.HasPrefix(fields[5], "[anon")
+		if special {
+			continue // [vdso], [vvar], [vsyscall]
+		}
+		if fileBacked {
+			if !includeFiles {
+				continue
 			}
+		} else if perms[1] != 'w' || perms[3] != 'p' {
+			continue // anon but not private-writable: nothing swapped
 		}
 		a, b, ok := strings.Cut(fields[0], "-")
 		if !ok {
