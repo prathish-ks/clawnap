@@ -20,6 +20,10 @@ import (
 )
 
 // fakeRunner scripts a runtime per container.
+// keepExited makes "start" leave the container exited, simulating a gateway
+// that dies immediately after the runtime reports it started.
+var keepExited = map[*fakeRunner]bool{}
+
 type fakeRunner struct {
 	mu     sync.Mutex
 	state  map[string]runtime.State
@@ -58,7 +62,9 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		if f.failOn == "start" {
 			return "", errors.New("boom")
 		}
-		f.state[name] = runtime.StateRunning
+		if !keepExited[f] {
+			f.state[name] = runtime.StateRunning
+		}
 		return "", nil
 	case "pause":
 		f.state[name] = runtime.StatePaused
@@ -652,5 +658,24 @@ func TestUnsupportedReclaimDoesNotMarkCellReclaimed(t *testing.T) {
 	s.Metrics().Write(&b, s.Cells())
 	if strings.Contains(b.String(), `kind="reclaimed"`) {
 		t.Fatalf("never-reclaimed cell must not be counted as a reclaimed wake:\n%s", b.String())
+	}
+}
+
+func TestWakeFailsFastWhenContainerExitsDuringStartup(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	// start "succeeds" but the container is exited on every later inspect
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-d": runtime.StateExited}, netio: map[string]string{}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	_ = reg.Put(registry.Cell{Name: "d", Container: "oc-d", Port: 1, Phase: registry.PhaseHibernated, Tier: registry.TierStop})
+	neverReady := func(context.Context, int) error { return errors.New("connection refused") }
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: neverReady, StopWakeTimeout: 30 * time.Second})
+	keepExited[fr] = true
+	t0 := time.Now()
+	_, err := s.Wake(context.Background(), "d")
+	if err == nil || !strings.Contains(err.Error(), "exited during startup") {
+		t.Fatalf("expected fail-fast on an exited container, got %v", err)
+	}
+	if el := time.Since(t0); el > 5*time.Second {
+		t.Fatalf("fail-fast took %v; must not wait the 30 s timeout", el)
 	}
 }

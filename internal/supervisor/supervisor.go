@@ -658,7 +658,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })
 		return WakeResult{}, err
 	}
-	if err := s.waitReady(ctx, c.Port, timeout); err != nil {
+	if err := s.waitReadyFor(ctx, c.Container, c.Port, timeout); err != nil {
 		s.m.wakeFail()
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })
 		return WakeResult{StartTook: startTook}, err
@@ -677,14 +677,29 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 }
 
 func (s *Supervisor) waitReady(ctx context.Context, port int, timeout time.Duration) error {
+	return s.waitReadyFor(ctx, "", port, timeout)
+}
+
+// waitReadyFor polls the health probe until ready or timeout. When a
+// container name is given it also watches the runtime state every second
+// and fails fast if the container has exited: a gateway that died at boot
+// must not cost a caller the full readiness timeout.
+func (s *Supervisor) waitReadyFor(ctx context.Context, container string, port int, timeout time.Duration) error {
 	if port == 0 {
 		return nil // no readiness probe configured
 	}
 	deadline := time.After(timeout)
 	var last error
+	lastState := time.Time{}
 	for {
 		if last = s.opt.Probe(ctx, port); last == nil {
 			return nil
+		}
+		if container != "" && time.Since(lastState) >= time.Second {
+			lastState = time.Now()
+			if st, err := s.rt.Inspect(ctx, container); err == nil && (st == runtime.StateExited || st == runtime.StateMissing) {
+				return fmt.Errorf("wake failed: container %s is %s (exited during startup); last probe: %w", container, st, last)
+			}
 		}
 		select {
 		case <-ctx.Done():
