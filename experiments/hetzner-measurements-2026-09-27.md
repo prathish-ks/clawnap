@@ -62,3 +62,32 @@ Daemon as a systemd unit: `-interval 15s -reclaim-after 60s -reclaim-keep-mib 15
 - s43 and s41: OpenClaw's own startup failed with `StateDatabaseCoordinatorContentionError` / "startup migration lease was lost" — its per-install lease logic timing out under that load. s41 was later picked for the wake sample: the supervisor unpaused an already-dead gateway and waited the full 2-minute reclaimed-wake timeout before returning 502. That is the 120 s p95; it is a dead-cell detection gap (an exited container should fail a wake immediately), not a slow wake.
 
 **Ceiling verdict:** ~40 supervised cells vs ~35 stock on 16 GB with a 15.2 GB zram, both bounded by the zram size. To move the ceiling for either, size zram above RAM (compression held at 3.7x) or add NVMe swap behind it; the supervisor's advantage would then show as wake latency and host responsiveness under that larger regime.
+
+## Supervisor density run 2: reviewed binary, zram 200 % of RAM, batched boots (05:48–06:24 UTC)
+Same daemon settings as run 1; differences: the reviewed and fail-fast build, zram resized to 30.5 GB, cells booted five at a time with each batch healthy before the next.
+
+| Cells | Healthy | Exited | Host used | zram data → compressed | Load | Wake p50 | Wake p95 |
+|---|---|---|---|---|---|---|---|
+| 10 | 10/10 | 0 | 6.0 GB | 4.6 → 1.2 GB | 0.8 | 2.25 s | 2.48 s |
+| 20 | 20/20 | 0 | 9.0 GB | 10.7 → 2.8 GB | 0.5 | 1.72 s | 1.95 s |
+| 30 | 30/30 | 0 | 10.8 GB | 17.3 → 4.6 GB | 0.3 | 2.31 s | 2.60 s |
+| 35 | 35/35 | 0 | 12.5 GB | 19.5 → 5.2 GB | 7.0 | 2.09 s | 2.24 s |
+| 40 | 40/40 | 0 | 11.8 GB | 23.3 → 6.2 GB | 10.2 | 2.01 s | 2.49 s |
+| 45 | 45/45 | 0 | 11.8 GB | 27.6 → 7.4 GB | 9.3 | 2.07 s | 2.47 s |
+| 50 | 50/50 | 0 | 13.1 GB | 30.5 → 8.2 GB (full) | 5.1 | 2.29 s | 2.38 s |
+
+Totals: 85 hibernations, 84 reclaims moving 48 GiB out of RAM in aggregate, 35 wakes (34 of reclaimed cells), 0 failures, 0 exits. Boot steps took 15–41 s (batched) with no OOM and no OpenClaw startup-lease failure.
+
+**Three runs on one host, side by side**
+
+| Run | Swap device | Ceiling | State at 40 cells |
+|---|---|---|---|
+| Stock, no supervisor | zram 15.2 GB | ~35 | 37/40, load 35, 2 dead |
+| Supervisor run 1 | zram 15.2 GB | 40 (45 with 3 boot failures) | 40/40, load 10.7 |
+| Supervisor run 2 | zram 30.5 GB | **≥ 50, all healthy** | 40/40, load 10.2 |
+
+Findings:
+- **Supervised cells per 16 GB host: at least 50, versus 35 stock.** The ladder ended at its top step with zram exactly full (30.5 of 30.5 GB) and every cell healthy, so the true ceiling is above 50 and, once more, the swap device is the wall, not RAM (2.2 GB free) and not CPU (load 5). Compression stayed at 3.7x: 30.5 GB of pages in 8.2 GB.
+- **Batched boots removed the failure mode.** No OOM kill and no OpenClaw startup-lease failure across 50 boots, where run 1 had one of each at 45. The cost is a slower step (40 s for ten cells vs 26 s).
+- **Wake on zram for a reclaimed cell is 1.5–2.6 s and flat across the ladder** (p95 2.0–2.6 s at every step from 10 to 50): it does not degrade with cell count, because it is bounded by single-threaded zstd decompression of that one cell's ~500 MiB, not by host load. The one 122 ms sample was a cell woken before its reclaim landed. The lever to get under 1 s is a smaller swapped set per cell (lower the working set that leaves RAM) or parallel swap-in, not filtering.
+- Per-cell cost at 50 cells: 13.1 GB RAM + 8.2 GB zram for 50 cells ≈ 262 MB RAM and 164 MB compressed swap per cell, against ~750 MiB per stock cell resident.
