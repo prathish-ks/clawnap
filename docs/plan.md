@@ -13,7 +13,7 @@ Stop if: upstream ships hibernation or multi-host fleet; a credible open-source 
 | Phase | Where | Goal | Gate to leave |
 |---|---|---|---|
 | 0a Local correctness | This Mac, 2 live cells + 3–5 hibernated | Every lifecycle path works and state survives | Zero state loss over 20 hibernate/wake cycles with a real Telegram bot; pause-tier wake < 1 s on /health; stop-tier readiness measured and documented; ingress wake works end to end; daemon survives its own restart |
-| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers: pause+reclaim with zram vs NVMe swap, wake latency per tier | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
+| 0b Hetzner numbers | CX43 16 GB, up to 50 cells | Publishable density and wake numbers: pause+reclaim with zram vs NVMe swap, wake latency per tier. **Baseline done: stock+zram ceiling = 35 cells.** | ≥3x baseline cells/host; p95 wake within the tier's stated SLA (pause < 5 s); zero state loss; density-stack CSVs (trim, overcommit, zram, KSM, CRIU, pause, stop) |
 | 0c Upstream engagement | GitHub | Validate the host-side split with OpenClaw | Comment posted on #114145 (and #119035 if cron wake is implemented) with numbers; any maintainer or Codex response recorded in docs/upstream-watch.md |
 | Commercial gate A | Interviews | Someone will pay | ≥2 of 10 providers: density top-3 cost and ≥$500/mo intent; 3 pilot offers sent |
 | 1 Single-host MVP + OSS release | Hetzner + laptop | Public Apache-2.0 release, first paid pilot | Gate B: release public, 1 pilot live |
@@ -65,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-26: Daily thesis-watch routine created (trig_01BRPWHtqCuwJYP4MicWYTSq), run-log delivery.
 
 ## Changelog
+- 2026-09-27: stock ceiling on the zram host measured: 35 cells healthy, 40 thrashes (zram full, load 35, 2 exits, no OOM). Compression ~3.7x. The supervisor is measured against 35, not the 18–20 bare-RAM projection.
 - 2026-09-27: first Hetzner baseline: 10 stock cells boot to healthy in 21–27 s in parallel, idle 719–815 MiB each (8.2 GB for 10); projected stock ceiling ~18–20 cells per 16 GB host. experiments/hetzner-measurements-2026-09-27.md
 - 2026-09-27: Hetzner host bootstrapped after two cloud-init fixes (criu absent from Ubuntu 24.04; zram needs linux-modules-extra); zram 15.2 GB zstd active; OpenClaw image pulled; supervisor deployed; baseline-cells.sh added for the week-1 baseline.
 - 2026-09-27: repository pushed to github.com/prathish-ks/fleet-supervisor (private), branch main, 30 commits; history verified free of tokens.
