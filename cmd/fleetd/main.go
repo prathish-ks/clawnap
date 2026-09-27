@@ -49,6 +49,21 @@ func dataDir() string {
 	return filepath.Join(h, ".fleetd")
 }
 
+// cellsRoot is where `cells create` puts state by default. Cell state is a
+// bind mount into a tenant container, and the launcher refuses mounts under
+// /root, /etc and the other system trees, so a root-run daemon must not
+// default to its own home: /srv/fleet/cells is the conventional service
+// data location and passes the mount check.
+func cellsRoot() string {
+	if d := os.Getenv("FLEETD_CELLS"); d != "" {
+		return d
+	}
+	if os.Geteuid() == 0 {
+		return "/srv/fleet/cells"
+	}
+	return filepath.Join(dataDir(), "cells")
+}
+
 func newRunner() runtime.ExecRunner { return runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")} }
 
 func openRegistry() (*registry.Store, error) {
@@ -269,7 +284,7 @@ func cells(args []string) error {
 		fs := flag.NewFlagSet("create", flag.ContinueOnError)
 		name := fs.String("name", "", "cell name (plain identifier)")
 		image := fs.String("image", "ghcr.io/openclaw/openclaw:latest", "cell image")
-		root := fs.String("state-root", filepath.Join(dataDir(), "cells"), "directory holding <name>/{state,auth,secrets}")
+		root := fs.String("state-root", cellsRoot(), "directory holding <name>/{state,auth,secrets} (must not be under /root, /etc or other system trees)")
 		port := fs.Int("port", 0, "host loopback port for the gateway")
 		hookPort := fs.Int("hook-port", 0, "host loopback port for the webhook listener (needs -ingress-url)")
 		ingressURL := fs.String("ingress-url", "", "public base URL of the ingress; empty = polling mode")

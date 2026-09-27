@@ -65,6 +65,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - 2026-09-26: Daily thesis-watch routine created (trig_01BRPWHtqCuwJYP4MicWYTSq), run-log delivery.
 
 ## Changelog
+- 2026-09-27: supervisor density test launched on the host as a systemd unit (SSH-bound launches died twice; nohup under a non-interactive session is not enough). First attempt failed on the launcher's own mount check: the default cell state root under /root is a blocked path when the daemon runs as root; default moved to /srv/fleet/cells.
 - 2026-09-27: stock ceiling on the zram host measured: 35 cells healthy, 40 thrashes (zram full, load 35, 2 exits, no OOM). Compression ~3.7x. The supervisor is measured against 35, not the 18–20 bare-RAM projection.
 - 2026-09-27: first Hetzner baseline: 10 stock cells boot to healthy in 21–27 s in parallel, idle 719–815 MiB each (8.2 GB for 10); projected stock ceiling ~18–20 cells per 16 GB host. experiments/hetzner-measurements-2026-09-27.md
 - 2026-09-27: Hetzner host bootstrapped after two cloud-init fixes (criu absent from Ubuntu 24.04; zram needs linux-modules-extra); zram 15.2 GB zstd active; OpenClaw image pulled; supervisor deployed; baseline-cells.sh added for the week-1 baseline.
