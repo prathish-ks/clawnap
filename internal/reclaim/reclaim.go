@@ -86,6 +86,14 @@ func (r Reclaimer) Reclaim(ctx context.Context, containerID string, max int64) (
 // ReclaimUntil is Reclaim with a stop predicate checked between chunks, so a
 // pending wake interrupts a long reclaim within one chunk.
 func (r Reclaimer) ReclaimUntil(ctx context.Context, containerID string, max int64, stop func() bool) (Stats, error) {
+	return r.ReclaimKeeping(ctx, containerID, max, 0, stop)
+}
+
+// ReclaimKeeping is ReclaimUntil with a resident floor: reclaim stops once
+// memory.current is at or below `keep` bytes, so the gateway's working set
+// (measured ~150 MiB for OpenClaw) stays in RAM and wake stays near a
+// plain pause wake, at the cost of a smaller saving.
+func (r Reclaimer) ReclaimKeeping(ctx context.Context, containerID string, max, keep int64, stop func() bool) (Stats, error) {
 	if runtime.GOOS != "linux" && r.FS == "" {
 		return Stats{}, ErrUnsupported
 	}
@@ -107,7 +115,14 @@ func (r Reclaimer) ReclaimUntil(ctx context.Context, containerID string, max int
 		if err != nil {
 			return Stats{}, err
 		}
-		if before <= chunk/2 {
+		if before <= chunk/2 || before <= keep {
+			break
+		}
+		if keep > 0 && before-keep < chunk {
+			// last partial chunk down to the floor
+			if err := writeReclaim(ctx, p, before-keep); err != nil {
+				return Stats{}, err
+			}
 			break
 		}
 		if err := writeReclaim(ctx, p, chunk); err != nil {

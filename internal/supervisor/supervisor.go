@@ -49,7 +49,14 @@ type Options struct {
 	// was reclaimed to swap (measured 9–17 s on a laptop swap file; faster
 	// on zram/NVMe). Larger than WakeTimeout, smaller than a full boot.
 	ReclaimWakeTimeout time.Duration
-	Reclaimer          *reclaim.Reclaimer
+	// ReclaimKeep is the resident floor left in RAM when reclaiming (bytes).
+	// 0 reclaims everything reclaimable (max saving, slowest wake); a value
+	// near the gateway's working set keeps wakes near pause speed.
+	ReclaimKeep int64
+	// PrefetchOnWake pages a reclaimed cell's memory back in bulk before the
+	// unpause, using the swap device's bandwidth instead of its latency.
+	PrefetchOnWake bool
+	Reclaimer      *reclaim.Reclaimer
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -86,6 +93,9 @@ func (o *Options) defaults() {
 	}
 	if o.MaxPause == 0 {
 		o.MaxPause = 20 * time.Minute // under the 30 min lease constant; measure the real threshold on Linux
+	}
+	if o.MaxPause < 0 {
+		o.MaxPause = 0 // explicit "never cap" (experiments, or hosts that measured a longer tolerance)
 	}
 	if o.PulseWindow == 0 {
 		o.PulseWindow = 5 * time.Second
@@ -249,7 +259,7 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			_, err := s.wakeLocked(ctx, c.Name)
 			return err
 		}
-		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.MaxPause > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
 			return s.capPause(ctx, c)
 		}
 		if c.Phase == registry.PhaseHibernated && s.opt.ReclaimAfter > 0 && !c.PausedAt.IsZero() &&
@@ -348,7 +358,7 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	stop := func() bool { return s.wakeWanted(c.Name) }
-	after, err := s.opt.Reclaimer.ReclaimUntil(rctx, id, 8<<30, stop)
+	after, err := s.opt.Reclaimer.ReclaimKeeping(rctx, id, 8<<30, s.opt.ReclaimKeep, stop)
 	if err != nil {
 		if errors.Is(err, reclaim.ErrUnsupported) || errors.Is(err, reclaim.ErrNoCgroup) {
 			s.opt.Logger.Info("reclaim not possible on this host; leaving cell resident", "cell", c.Name, "reason", err)
@@ -362,6 +372,24 @@ func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
 	s.m.reclaimed(before.CurrentBytes - after.CurrentBytes)
 	s.opt.Logger.Info("reclaimed", "cell", c.Name, "before_mib", before.CurrentBytes>>20, "after_mib", after.CurrentBytes>>20, "swap_mib", after.SwapBytes>>20)
 	return s.reg.Update(c.Name, func(x *registry.Cell) { x.ReclaimedAt = s.opt.Now() })
+}
+
+// prefetch pages a reclaimed cell's memory back in bulk before it is
+// unpaused. Best effort: a failure just means the gateway faults its pages
+// in itself, as it would without prefetch.
+func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
+	id, err := s.rt.R.Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+	if err != nil {
+		return
+	}
+	pctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	st, err := s.opt.Reclaimer.Prefetch(pctx, strings.TrimSpace(id), 0)
+	if err != nil {
+		s.opt.Logger.Warn("prefetch", "cell", c.Name, "err", err, "mechanism", st.Mechanism)
+		return
+	}
+	s.opt.Logger.Info("prefetched", "cell", c.Name, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "swap_after_mib", st.SwapAfter>>20, "took", st.Took)
 }
 
 // capPause handles a cell frozen longer than MaxPause. "pulse": unpause,
@@ -588,6 +616,9 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		kind = "pause"
 		if s.pauseWakeTimeout(c) == s.opt.ReclaimWakeTimeout {
 			kind = "reclaimed" // pages come back from the swap device: a different tier in any dashboard
+			if s.opt.PrefetchOnWake {
+				s.prefetch(ctx, c)
+			}
 		}
 		timeout = s.pauseWakeTimeout(c)
 		startTook, err = s.rt.Unpause(ctx, c.Container)

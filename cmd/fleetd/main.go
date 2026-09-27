@@ -4,7 +4,7 @@
 //	fleetd cells create -name a -port 18801 [-hook-port 18901 -ingress-url https://fleet.example] [-telegram-token-file f]
 //	fleetd cells list | rm -name a
 //	fleetd reconcile [-loop] [-interval 30s]
-//	fleetd hibernate -name a | wake -name a
+//	fleetd hibernate -name a | wake -name a | prefetch -name a   (page a reclaimed cell back in, Linux)
 //	fleetd serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop; POST /wake/{cell}, /hibernate/{cell}, /hook/{cell}/..., GET /metrics)
 //	fleetd check [-label fleet.cell] [-json] [container...]   read-only host + cell security inspection
 package main
@@ -28,6 +28,7 @@ import (
 	"github.com/prathish-ks/fleet-supervisor/internal/hostcheck"
 	"github.com/prathish-ks/fleet-supervisor/internal/ingress"
 	"github.com/prathish-ks/fleet-supervisor/internal/provision"
+	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
 	"github.com/prathish-ks/fleet-supervisor/internal/registry"
 	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
 	"github.com/prathish-ks/fleet-supervisor/internal/supervisor"
@@ -67,10 +68,13 @@ func open(opt supervisor.Options) (*registry.Store, *supervisor.Supervisor, erro
 func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 	interval := fs.Duration("interval", 30*time.Second, "reconcile interval")
 	reclaimAfter := fs.Duration("reclaim-after", 0, "push a paused cell's memory to swap after it has been paused this long (Linux cgroup v2; 0 = off)")
-	maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this")
+	maxPause := fs.Duration("max-pause", 20*time.Minute, "pulse (or stop) a paused cell frozen longer than this; negative = never")
 	fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
+	reclaimKeep := fs.Int64("reclaim-keep-mib", 0, "resident floor kept in RAM when reclaiming (0 = reclaim everything; ~150 keeps OpenClaw's working set)")
+	prefetch := fs.Bool("prefetch-on-wake", false, "page a reclaimed cell's memory back in bulk before unpausing it")
 	return func() supervisor.Options {
-		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_}
+		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_,
+			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch}
 	}
 }
 
@@ -99,6 +103,27 @@ func run(args []string) error {
 			return nil
 		}
 		return sup.Run(ctx)
+	case "prefetch":
+		fs := flag.NewFlagSet("prefetch", flag.ContinueOnError)
+		name := fs.String("name", "", "cell name")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		reg, err := openRegistry()
+		if err != nil {
+			return err
+		}
+		c, err := reg.Get(*name)
+		if err != nil {
+			return err
+		}
+		id, err := newRunner().Run(ctx, "inspect", "-f", "{{.Id}}", c.Container)
+		if err != nil {
+			return err
+		}
+		st, err := (&reclaim.Reclaimer{}).Prefetch(ctx, strings.TrimSpace(id), 0)
+		fmt.Printf("mechanism=%s procs=%d mappings=%d advised_mib=%d swap_before_mib=%d swap_after_mib=%d took=%s\n", st.Mechanism, st.Processes, st.Mappings, st.Bytes>>20, st.SwapBefore>>20, st.SwapAfter>>20, st.Took)
+		return err
 	case "hibernate", "wake":
 		fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")
