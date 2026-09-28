@@ -187,3 +187,33 @@ Findings:
 - **What remains is disk bandwidth.** Ten cells are ~7 GB of pages; at ~550 MB/s that is ~13 s of pure page-in, shared four ways per wave (each cell's ~700 MiB takes ~5 s at a quarter of the device), plus the 3 s thaw settle and health wait per wave. The single-cell 1.5–2 s only holds when the disk is otherwise idle.
 - Levers now, in order: a faster swap device (a real local NVMe does 2–3 GB/s; this cloud volume tops out near 770 MB/s); a smaller swapped set per cell (a higher floor for cells likely to wake soon); zram and the swapfile used together so a burst draws on CPU and disk at once; and the settle window, which becomes a visible share of the wake once page-in is fast.
 - Method note: the run script waited on its own `vmstat` sampler and hung after the burst; the timings above are from the daemon journal and the vmstat file, PSI deltas for the burst were lost.
+
+## Burst-size curve at 50 cells, then the ceiling with the disk store: 75 and 100 cells (11:24–11:45 UTC)
+Wakes through the daemon API (`POST /wake/<cell>`), so each cell's time is "request → cell healthy, including the 3 s thaw settle"; cells v1..v10, all paused ≥15 min and fully reclaimed to the swapfile (~700 MiB each) before every burst; wake concurrency 4; every cell re-hibernated and re-reclaimed between bursts.
+
+| Cells on host | Simultaneous wakes | Fastest | p50 | Slowest | Failures |
+|---|---|---|---|---|---|
+| 50 | 1 | 4.65 s | 4.65 s | 4.65 s | 0 |
+| 50 | 2 | 3.5 s | 3.5 s | 5.7 s | 0 |
+| 50 | 4 | 5.3 s | 5.5 s | 8.2 s | 0 |
+| 50 | 8 | 4.5 s | 8.4 s | 14.6 s | 0 |
+| 50 | 10 | 7.6 s | 15.5 s | 21.2 s | 0 |
+| 75 | 10 | 9.9 s | 19.5 s | 26.3 s | 0 |
+| 100 | 10 | 9.6 s | 18.8 s | 24.7 s | 0 |
+
+Host at each step (all cells paused and reclaimed):
+
+| Cells | RAM used (incl. OS) | RAM free | In swap | Exited / OOM |
+|---|---|---|---|---|
+| 50 | 4.6 GB | 10.3 GB | 34 GB | 0 / 0 |
+| 75 | 5.4 GB | 9.4 GB | 52 GB | 0 / 0 |
+| 100 | **5.7 GB** | **9.1 GB** | **70 GB** (two 40 GB swapfiles) | **0 / 0** |
+
+Boots to 100 were batched (5 at a time); each batch transiently drove free RAM to ~250 MB and load to 24 while the new cells' pages were still resident, and the supervisor reclaimed them within two minutes. Cumulative: 65 reclaimed-cell wakes today, 0 failures.
+
+Findings:
+- **100 stock OpenClaw cells on one 16 GB host, all healthy, 9 GB of RAM still free.** That is 2.9x the stock+zram ceiling of 35 and ~5x stock without zram (18–20 projected). The per-cell RAM cost of a cold cell is ~50 MiB (5.7 GB minus ~1 GB of OS and daemon, over 100), well under the 100 MiB estimate; the cost moved to disk at ~700 MiB per cell. On this box the next limit is disk space (150 GB), not memory.
+- **Burst latency does not depend on how many cells are on the host.** Ten wakes at 50, 75 and 100 cells all took ~10 / ~19 / ~25 s per wave; the host had ~9 GB free at every step, so nothing was evicted (swap-out 17–553 MB per burst, noise). The curve that matters is burst size, not density.
+- **Burst size curve on this cloud volume:** one wake 4.7 s, two 5.7 s, four 8.2 s, eight 14.6 s, ten 21 s for the last cell. Roughly 2 s per additional cell, which is 700 MiB at the disk's ~550 MB/s shared across the wave, plus the settle per wave. PSI confirms the stall is I/O: `io full` 2.1 s during the burst of four, 4.2–5.8 s during bursts of eight and ten, against `memory full` of at most 1.5 s.
+- **The 3 s thaw settle is now the largest fixed share of a single wake** (4.65 s wall for one cell, of which ~1.6 s is page-in). A gateway-side ready signal, or a measured shorter bound, would cut single-wake latency by up to 60 %.
+- Method note: the `vmstat` sampler stopped reporting for the later bursts (si_peak=0 rows); PSI and the per-cell times are complete.
