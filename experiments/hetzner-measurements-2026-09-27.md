@@ -217,3 +217,20 @@ Findings:
 - **Burst size curve on this cloud volume:** one wake 4.7 s, two 5.7 s, four 8.2 s, eight 14.6 s, ten 21 s for the last cell. Roughly 2 s per additional cell, which is 700 MiB at the disk's ~550 MB/s shared across the wave, plus the settle per wave. PSI confirms the stall is I/O: `io full` 2.1 s during the burst of four, 4.2–5.8 s during bursts of eight and ten, against `memory full` of at most 1.5 s.
 - **The 3 s thaw settle is now the largest fixed share of a single wake** (4.65 s wall for one cell, of which ~1.6 s is page-in). A gateway-side ready signal, or a measured shorter bound, would cut single-wake latency by up to 60 %.
 - Method note: the `vmstat` sampler stopped reporting for the later bursts (si_peak=0 rows); PSI and the per-cell times are complete.
+
+## Compressed swap on disk: ZFS zvol (lz4) as the swap device — rejected (12:17–13:09 UTC)
+Idea (user): store the cold pages compressed on disk so the same disk bandwidth carries 2–4x more pages, and decompress on CPU, which has headroom. The kernel has no compressing swap path on 6.8 (zram writeback and zswap both write raw pages; a btrfs swapfile cannot be compressed; dm-vdo is 6.9+), so the test used an lz4-compressed ZFS volume (16 KiB blocks, ashift 12, metadata-only cache, ARC capped at 512 MiB, sync=always, loop device with direct I/O over a file on the root disk) as the highest-priority swap device.
+
+| Step | Result |
+|---|---|
+| Compression ratio on idle OpenClaw heaps, lz4 | **2.07–2.10x** (zram with zstd measured 3.7x) |
+| Single-cell wake, tgw, 3 cycles, pages on the zvol | 6.4 s (first, mixed devices), 2.4 s, 2.2 s — no better than the raw swapfile (1.5–2.0 s); page-in 340–650 ms but ~0.6–1.0 s of CPU stall per wake |
+| Migration by re-waking cells | does not move clean pages: a page read back from swap keeps its slot on the old device unless it is rewritten; only ~30 % of the set moved |
+| Migration by `swapoff` of the raw file (22 GB) with the zvol as target, 50 cells | pages moved at ~60 MB/s with free RAM at 180–340 MB and load 6→22; **host hung after ~2.8 min**, SSH dead, CPU pegged; hard reset |
+| Controlled refill after reset: zvol as the only swap, cells started 5 at a time, waiting for free RAM > 3 GB between batches | **host hung again at 15 cells with 1.8 GB on the zvol** during the daemon's own reclaim plus a boot batch (free 3 GB, load 28); hard reset. No kernel message survived either hang |
+
+Findings:
+- **Swap on a ZFS volume is not usable here**: two hard hangs in an hour, one under system-wide pressure (the documented risk) and one under ordinary supervisor reclaim with gigabytes free. ZFS needs memory to write, and the swap path is where memory is being taken away. Nothing in our process can make that safe for a provider's host.
+- The ratio a compressed store would get on real heaps is ~2x with lz4, less than zram's 3.7x with zstd; the potential bandwidth gain is therefore ~2x, not 4x, and single wakes would not improve because the decompression shows up as CPU stall in the same place the disk stall was.
+- The idea itself stays valid; the mechanism has to be a compressing block layer that does not allocate in the swap-out path: dm-vdo (kernel 6.9+, worth one test on an HWE kernel), or compression done by the supervisor itself in user space (a checkpoint-style dump of a paused cell's anonymous memory, restored before unpause), which is a larger build.
+- Operational lesson: the host had zram re-enabled by the reboot (the service was only stopped, not disabled) and the root disk filled to 100 % when the pool file was created next to two swapfiles; both fixed. Provisioning must own swap layout explicitly.
