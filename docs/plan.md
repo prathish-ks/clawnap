@@ -39,6 +39,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 | 12 | First git commit of the repo | done 2026-09-26 (09a3da1) | |
 
 ## Backlog (Phase 0b onward)
+- NEXT (2026-09-28, user direction): two-tier hibernation. Warm tier = pause + reclaim to zram (minutes, wake 1.5–2.6 s); cold tier = pages demoted to NVMe swap (zram writeback of idle pages, or lower-priority swapfile) so RAM and zram are both released and the host keeps ≈8 GB headroom at 50 cells. Prefetch unchanged. Measure first: single reclaimed wake from NVMe vs zram on fleet-exp-1; then the 10-wake burst at 50 cells with the cold set on disk; sample /proc/pressure/{memory,cpu} and vmstat during the burst to settle memory vs CPU. Check CONFIG_ZRAM_WRITEBACK / /sys/block/zram0/backing_dev on the host.
 - Burst-wake headroom policy: reserve ≈ wake-concurrency × per-cell working set of free RAM before admitting another cell to the host; multi-stream zram or NVMe swap for parallel page-in; re-run the 10-wake burst with 2 GB headroom (Phase 1)
 - Wake must fail fast on an exited container instead of waiting the readiness timeout (seen: 120 s 502 on a dead cell).
 - Stagger cell boots (bounded concurrent starts) so a batch cannot exhaust memory and trip OpenClaw's startup-lease logic.
