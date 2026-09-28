@@ -151,3 +151,39 @@ Findings:
 - **The wake queue works as designed** (3 at a time, no wake lost, the tenth answered 200), but the tenth message waited 52 s. At this density the honest SLA for a burst of ten is "under a minute for the last one", and "2 s" only for the first cell woken into free RAM.
 - **Levers, in order of expected effect:** keep RAM headroom of roughly `wake_concurrency × per-cell working set` (here 3 × 700 MiB ≈ 2 GB) rather than filling the host to the last 200 MB; raise wake concurrency only together with that headroom; multi-stream zram or NVMe swap for parallel page-in; and a lower per-cell swapped set (the reclaim floor of 150 MiB already keeps the gateway's hot pages resident, which is why the settle-and-first-turn path still worked). These are Phase 1 tuning items, not blockers.
 - The test also reconfirms the three post-thaw gaps at scale: every cell logged the detector, every first forward was held, and the one cell with a live channel answered on the first delivery.
+
+# 2026-09-28
+
+Correction to the 27 Sep volume test: the daemon's default wake concurrency is 4, not 3 (the waves were v1/v5/v9 plus tgw, whose thaw took 51 s). And the 49 volume cells' state directories were not removed on 27 Sep (the glob ran in an unprivileged shell); they were removed today before the rerun.
+
+## Disk tier: where the reclaimed pages live (10:43–10:56 UTC)
+Same host after a reboot (kernel 6.8.0-142, `linux-modules-extra` reinstalled for it because zram would not load). Root disk is the Hetzner cloud volume (`fio`, direct, QD32: 4 KiB random read 35k IOPS ≈ 137 MB/s; 32 KiB random read 24.7k IOPS ≈ 770 MB/s). Cell tgw, three hibernate → reclaim (150 MiB floor) → wake cycles per configuration, driven through the daemon API, prefetch on; `vmstat 1` and `/proc/pressure` sampled across each wake.
+
+| Where the ~600 MiB went | Wake to /health | Prefetch call | Page-in rate (si peak) | PSI during wake |
+|---|---|---|---|---|
+| NVMe swapfile only (`vm.page-cluster=3`) | **1.45 s, 1.81 s, 1.98 s** | 0.63–0.90 s | 500–640 MB/s | io full 114–477 ms, mem full ≤173 ms |
+| zram only (zstd, same as the density runs) | 2.47 s, 2.34 s, 2.32 s | 1.47–1.65 s | 290–310 MB/s | io full 166–227 ms, mem full ≤48 ms |
+| zram with writeback of idle pages to a disk-backed loop device | 8.37 s, 6.96 s, 6.58 s | 4.8–5.9 s | 86–110 MB/s | io full 1.5–1.9 s, cpu some ~280 ms |
+
+Findings:
+- **A plain NVMe swapfile wakes a reclaimed cell faster than zram on this host** (1.5–2.0 s vs 2.3–2.5 s) because swap-in from the disk runs at 500–640 MB/s with the kernel's 32 KiB read clustering, while zram is bounded by one zstd stream at ~300 MB/s. And it costs no RAM: zram held 30.5 GB of cell pages in 8.2 GB of memory; the swapfile holds them in none.
+- **zram writeback is not the cold tier.** The driver reads written-back pages one page at a time through the backing device with no clustering, so wakes were 3–4x slower than the plain swapfile. Dropped.
+- Decision: the hibernation store is a swapfile on the host's NVMe; zram is optional and off by default. Prefetch is unchanged (it asks the kernel for the pages and does not care where they are).
+
+## Burst repeat with the cold set on disk: 50 hibernated, 10 signed wakes at once (10:57–11:07 UTC)
+Same procedure as 27 Sep (tgw + v1..v49, batches of 5, Telegram disabled in the 49, 10 signed updates within 10 ms, wake concurrency 4) but with the swapfile instead of zram. Before the burst: 50 paused, **34.0 GB in swap, 10.3 GB free** (27 Sep: 195 MB free).
+
+| Wave (4 at a time) | Cells | Ready after the request | 27 Sep (zram, no headroom) |
+|---|---|---|---|
+| 1 | v3, v6, v7, v8 | 9.1 s | 24.5–24.7 s |
+| 2 | v2, v4, v9, tgw | 7.8–7.9 s (done at +17 s) | 7.2–7.5 s (done at +32 s) |
+| 3 | v1, v5 | 6.4–6.6 s (done at +24 s) | 7.1–7.2 s (done at +39 s) |
+| tgw (live channel) | | **200 in 19.6 s**, first delivery | 200 in 54.7 s |
+
+`vmstat` during the burst: swap-in 440–690 MB/s sustained in four bursts; **swap-out 0** (no cell was evicted to make room); CPU idle 30–55 %, I/O wait 26–57 %. Zero wake failures, zero exits, 50 cells still healthy afterwards.
+
+Findings:
+- **Headroom removed the memory contention entirely**: nothing was paged out during the burst, and the last of ten cells was ready in 24 s instead of 52 s, the first four in 9 s instead of 25 s.
+- **What remains is disk bandwidth.** Ten cells are ~7 GB of pages; at ~550 MB/s that is ~13 s of pure page-in, shared four ways per wave (each cell's ~700 MiB takes ~5 s at a quarter of the device), plus the 3 s thaw settle and health wait per wave. The single-cell 1.5–2 s only holds when the disk is otherwise idle.
+- Levers now, in order: a faster swap device (a real local NVMe does 2–3 GB/s; this cloud volume tops out near 770 MB/s); a smaller swapped set per cell (a higher floor for cells likely to wake soon); zram and the swapfile used together so a burst draws on CPU and disk at once; and the settle window, which becomes a visible share of the wake once page-in is fast.
+- Method note: the run script waited on its own `vmstat` sampler and hung after the burst; the timings above are from the daemon journal and the vmstat file, PSI deltas for the burst were lost.
