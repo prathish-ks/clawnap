@@ -1,0 +1,18 @@
+# fleetd as a boot service on an experiment host. Install: cp to /etc/systemd/system/, then
+#   systemctl daemon-reload && systemctl enable --now fleetd
+# Requires /var/lib/fleetd (registry + cells) and /usr/local/bin/fleetd. Swap is the host's
+# job: a swapfile in /etc/fstab (e.g. "/swap.img none swap sw,pri=100 0 0"), no zram.
+[Unit]
+Description=fleet-supervisor daemon (stock OpenClaw cells: hibernate, reclaim, wake on push)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Environment=FLEETD_DATA=/var/lib/fleetd
+EnvironmentFile=-/etc/fleetd.env
+ExecStart=/usr/local/bin/fleetd serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 30m -headroom-mib 3072 -reclaim-keep-mib 150 -prefetch-on-wake -wake-concurrency 2 -max-pause -1s
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

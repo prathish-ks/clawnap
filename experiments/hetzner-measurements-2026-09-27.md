@@ -234,3 +234,35 @@ Findings:
 - The ratio a compressed store would get on real heaps is ~2x with lz4, less than zram's 3.7x with zstd; the potential bandwidth gain is therefore ~2x, not 4x, and single wakes would not improve because the decompression shows up as CPU stall in the same place the disk stall was.
 - The idea itself stays valid; the mechanism has to be a compressing block layer that does not allocate in the swap-out path: dm-vdo (kernel 6.9+, worth one test on an HWE kernel), or compression done by the supervisor itself in user space (a checkpoint-style dump of a paused cell's anonymous memory, restored before unpause), which is a larger build.
 - Operational lesson: the host had zram re-enabled by the reboot (the service was only stopped, not disabled) and the root disk filled to 100 % when the pool file was created next to two swapfiles; both fixed. Provisioning must own swap layout explicitly.
+
+# 2026-09-29
+
+## Pipelined page-in and reclaim on pressure: ten-wake burst at 50 cells, before and after (11:47–12:05 UTC)
+Same host and cells as 28 Sep (50 hibernated on the 40 GB swapfile, ~650 MiB per cell in swap, 9.5 GB available), wakes through the daemon API, each time is request → healthy including the thaw settle. Three daemon builds in sequence, then the headroom policy.
+
+| Build | Concurrency rule | Fastest | p50 | Slowest | Wall for all ten |
+|---|---|---|---|---|---|
+| Before (28 Sep binary) | 4 slots held for the whole wake (page-in, unpause, health, settle) | 8.2 s | 16.1 s | 21.9 s | 22.0 s |
+| Slot released after the advise + unpause | 2 slots, page-in only issued | 11.3 s | 11.5 s | 12.0 s | 12.0 s |
+| **Slot held until the pages have landed** | 2 slots, released when the cgroup's resident bytes stop growing | **7.5 s** | **11.9 s** | **14.6 s** | 14.6 s |
+
+Per cell in the final build: advise 1.4–1.8 s, landing wait 0.5 s (85 % of the swapped set back before the growth stalls), unpause 0.05–0.1 s, health ~2 s under a burst (0.1 s solo), settle 3 s. Pairs started page-in 2.2 s apart; the last pair began at ~9 s and finished at 14.6 s.
+
+Findings:
+- **Releasing the slot at "reads issued" collapses the burst to the bandwidth floor but makes every cell wait for every other** (all ten at 11.3–12.0 s): `process_madvise` returns once the reads are queued, so all ten page-ins overlapped and shared the disk. Holding the slot until the pages have actually landed (watching `memory.current`, since `memory.swap.current` does not fall for pages that keep their swap slot) restores FIFO: the first pair at 7.5 s, then one pair every ~2.3 s. Last cell 21.9 → 14.6 s, first 8.2 → 7.5 s, median 16.1 → 11.9 s.
+- **What is left in a wake is now settle and health, not disk**: of a 7.5 s first-pair wake, 2.3 s is page-in, 3 s is the settle bound and ~2 s is the gateway answering /health while it faults its last ~15 % in. A shorter settle bound (measured window ≤ 0.8 s) is the next lever.
+
+### Reclaim on pressure (headroom policy)
+Daemon relaunched with `-reclaim-after 30m -headroom-mib 2048`: cells that pause stay resident while the host has ≥ 2 GB available. v1..v10 woken, left idle, paused by the supervisor; **none reclaimed** (available 4.0 GB), registry shows all ten resident.
+
+| Burst of ten, cells resident (paused, not reclaimed) | Fastest | p50 | Slowest |
+|---|---|---|---|
+| | **0.71 s** | **0.94 s** | **1.17 s** |
+
+No disk reads (`io full` 8 ms), no memory stall; the freeze detector does not fire on a pause this short, so the settle returns at once and the wake is unpause + health.
+
+Then relaunched with `-headroom-mib 12000` (above what the host can have): the loop logged `memory headroom below target … cells=10` on its next pass and reclaimed all ten resident cells (each 675–714 → 149 MiB, 608–636 MiB to swap), available 4.0 → 9.4 GB. Timed reclaim untouched.
+
+Findings:
+- **Recently active tenants wake in under a second, cold ones in 2–15 s, and the host chooses which is which by memory pressure, longest-paused first.** With 9 GB free at 50 cells (or at 100), roughly a dozen tenants can be kept warm at no cost to density; a provider sizes the headroom to their active share.
+- The policy needs no per-cell configuration and no change inside the cell: it is one flag plus the existing reclaim path.

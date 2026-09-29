@@ -470,12 +470,55 @@ func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	before, _ := s.opt.Reclaimer.Stats(id)
 	st, err := s.opt.Reclaimer.Prefetch(pctx, id, 0)
 	if err != nil {
 		s.opt.Logger.Warn("prefetch", "cell", c.Name, "err", err, "mechanism", st.Mechanism)
 		return
 	}
-	s.opt.Logger.Info("prefetched", "cell", c.Name, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "swap_after_mib", st.SwapAfter>>20, "took", st.Took)
+	landed, wait := s.waitPagedIn(pctx, id, before.CurrentBytes, st.SwapBefore)
+	s.opt.Logger.Info("prefetched", "cell", c.Name, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "landed_mib", landed>>20, "advise_took", st.Took, "pagein_took", wait)
+}
+
+// waitPagedIn blocks until the advised pages have actually arrived. The
+// advise returns once the reads are issued, not completed; holding the
+// concurrency slot until the cgroup's resident bytes stop growing is what
+// sequences page-ins on a bandwidth-bound swap device, so earlier cells
+// wake earlier instead of every cell in a burst finishing together.
+// Swap usage cannot be watched instead: a page read back keeps its swap
+// slot until it is rewritten. Returns bytes landed and the time waited.
+func (s *Supervisor) waitPagedIn(ctx context.Context, id string, residentBefore, swapped int64) (int64, time.Duration) {
+	t0 := time.Now()
+	if swapped <= 0 {
+		return 0, 0
+	}
+	target := residentBefore + swapped*9/10 // most of what was out is back
+	last, stall := int64(-1), 0
+	deadline := time.After(30 * time.Second)
+	for {
+		st, err := s.opt.Reclaimer.Stats(id)
+		if err != nil {
+			return 0, time.Since(t0)
+		}
+		if st.CurrentBytes >= target {
+			return st.CurrentBytes - residentBefore, time.Since(t0)
+		}
+		if last >= 0 && st.CurrentBytes-last < 4<<20 {
+			if stall++; stall >= 5 { // no progress for ~0.5 s: the device is done with us
+				return st.CurrentBytes - residentBefore, time.Since(t0)
+			}
+		} else {
+			stall = 0
+		}
+		last = st.CurrentBytes
+		select {
+		case <-ctx.Done():
+			return st.CurrentBytes - residentBefore, time.Since(t0)
+		case <-deadline:
+			return st.CurrentBytes - residentBefore, time.Since(t0)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // capPause handles a cell frozen longer than MaxPause. "pulse": unpause,
