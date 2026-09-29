@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ type Options struct {
 	StopGrace       time.Duration // graceful stop timeout
 	WakeTimeout     time.Duration // max wait for readiness after an unpause (pause tier)
 	StopWakeTimeout time.Duration // max wait for readiness after a start (stop tier: full gateway boot)
-	MaxConcurrent   int           // simultaneous wakes/restarts
+	MaxConcurrent   int           // simultaneous page-ins/starts; readiness waits and the thaw settle run outside this bound
 	NoiseBytes      int64         // per-sample traffic ignored as background
 	MaxRestarts     int           // always-on self-heal budget per cell
 	PreWake         time.Duration // wake a hibernated cell this long before NextDueAt
@@ -64,7 +65,17 @@ type Options struct {
 	// PrefetchOnWake pages a reclaimed cell's memory back in bulk before the
 	// unpause, using the swap device's bandwidth instead of its latency.
 	PrefetchOnWake bool
-	Reclaimer      *reclaim.Reclaimer
+	// Headroom is the MemAvailable the host should keep (bytes). When the
+	// host is below it, the longest-paused resident cells are reclaimed
+	// first, before their ReclaimAfter clock; cells stay resident (wake in
+	// ~0.2 s) while memory is plentiful. Measured on a 16 GB host: a burst
+	// of wakes into a host with no headroom paid page-in plus eviction
+	// (25 s for the first wave); with headroom, page-in only. 0 disables.
+	Headroom int64
+	// MemAvailable reports the host's available memory in bytes; false when
+	// the host cannot say (non-Linux). Default reads /proc/meminfo.
+	MemAvailable func() (int64, bool)
+	Reclaimer    *reclaim.Reclaimer
 	// Probe reports whether the cell's gateway is ready to serve. The
 	// default issues GET http://127.0.0.1:<port>/health and requires 200.
 	// A bare TCP connect is deliberately not used: Docker Desktop's port
@@ -88,7 +99,10 @@ func (o *Options) defaults() {
 		o.StopWakeTimeout = 3 * time.Minute // OpenClaw gateway measured 50–90 s to ready after start
 	}
 	if o.MaxConcurrent == 0 {
-		o.MaxConcurrent = 4
+		o.MaxConcurrent = 2 // page-in is bandwidth bound: two in flight saturate a cloud volume, and sequencing gives earlier cells earlier wakes
+	}
+	if o.MemAvailable == nil {
+		o.MemAvailable = memAvailable
 	}
 	if o.NoiseBytes == 0 {
 		o.NoiseBytes = 2048
@@ -156,6 +170,7 @@ type Supervisor struct {
 	rt       runtime.Client
 	sem      chan struct{}
 	mu       sync.Mutex
+	victims  map[string]bool        // cells chosen for reclaim under memory pressure, set per reconcile pass
 	inflt    map[string]*wakeShare  // per-cell in-flight wake, so concurrent wakes coalesce and share the outcome
 	cell     map[string]*sync.Mutex // per-cell lock: wake, hibernate, reclaim, pulse never interleave on one cell
 	wakeWant map[string]bool        // a wake is waiting for this cell's lock; reclaim yields between chunks
@@ -222,8 +237,12 @@ func (s *Supervisor) Run(ctx context.Context) error {
 // never stalls the others. A cell already being acted on (e.g. a wake in
 // flight from the ingress) is skipped this pass rather than waited for.
 func (s *Supervisor) ReconcileOnce(ctx context.Context) {
+	cells := s.reg.List()
+	s.mu.Lock()
+	s.victims = s.pressureVictims(ctx, cells)
+	s.mu.Unlock()
 	var wg sync.WaitGroup
-	for _, c := range s.reg.List() {
+	for _, c := range cells {
 		c := c
 		wg.Add(1)
 		go func() {
@@ -273,9 +292,11 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.MaxPause > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
 			return s.capPause(ctx, c)
 		}
-		if c.Phase == registry.PhaseHibernated && s.opt.ReclaimAfter > 0 && !c.PausedAt.IsZero() &&
-			c.ReclaimedAt.Before(c.PausedAt) && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter {
-			return s.reclaimCell(ctx, c)
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && c.ReclaimedAt.Before(c.PausedAt) {
+			timed := s.opt.ReclaimAfter > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter
+			if timed || s.isVictim(c.Name) {
+				return s.reclaimCell(ctx, c)
+			}
 		}
 		if c.Phase == registry.PhaseHibernated {
 			return nil // expected
@@ -361,6 +382,54 @@ func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
 		return
 	}
 	s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
+}
+
+// pressureVictims picks the paused, still-resident cells to reclaim when the
+// host is below its memory headroom: longest paused first, enough of them
+// (by their cgroup's resident bytes) to cover the deficit. Nil when the
+// headroom is off, unknown, or met.
+func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell) map[string]bool {
+	if s.opt.Headroom <= 0 || s.opt.Reclaimer == nil {
+		return nil
+	}
+	avail, ok := s.opt.MemAvailable()
+	if !ok || avail >= s.opt.Headroom {
+		return nil
+	}
+	deficit := s.opt.Headroom - avail
+	var cand []registry.Cell
+	for _, c := range cells {
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && c.ReclaimedAt.Before(c.PausedAt) {
+			cand = append(cand, c)
+		}
+	}
+	if len(cand) == 0 {
+		return nil
+	}
+	sort.Slice(cand, func(i, j int) bool { return cand[i].PausedAt.Before(cand[j].PausedAt) })
+	victims := map[string]bool{}
+	var covered int64
+	for _, c := range cand {
+		size := int64(512 << 20) // when the cgroup cannot be read, assume a typical idle gateway
+		if id, err := s.rt.ID(ctx, c.Container); err == nil {
+			if st, err := s.opt.Reclaimer.Stats(id); err == nil && st.CurrentBytes > 0 {
+				size = st.CurrentBytes
+			}
+		}
+		victims[c.Name] = true
+		covered += size
+		if covered >= deficit {
+			break
+		}
+	}
+	s.opt.Logger.Info("memory headroom below target: reclaiming longest-paused cells", "available_mib", avail>>20, "target_mib", s.opt.Headroom>>20, "cells", len(victims))
+	return victims
+}
+
+func (s *Supervisor) isVictim(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.victims[name]
 }
 
 // reclaimCell pushes a paused cell's memory to swap. Unsupported hosts are
@@ -680,12 +749,17 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		return WakeResult{}, fmt.Errorf("cell %s: container %s missing", name, c.Container)
 	}
 
-	select { // bounded concurrency
+	// The concurrency slot covers only the step that commits host resources
+	// (page-in and unpause/start). Readiness polling and the thaw settle run
+	// outside it, so the next cell's page-in overlaps this cell's settle
+	// instead of leaving the swap device idle (measured: ~3 s idle per wave).
+	select {
 	case s.sem <- struct{}{}:
-		defer func() { <-s.sem }()
 	case <-ctx.Done():
 		return WakeResult{}, ctx.Err()
 	}
+	release := sync.OnceFunc(func() { <-s.sem })
+	defer release()
 	_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseWaking })
 	t0 := s.opt.Now()
 	thawAt := time.Now().UTC() // wall clock, for the container log's --since
@@ -705,6 +779,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	} else {
 		startTook, err = s.rt.Start(ctx, c.Container)
 	}
+	release()
 	if err != nil {
 		s.m.wakeFail()
 		_ = s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = err.Error() })

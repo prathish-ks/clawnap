@@ -122,9 +122,11 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 	fallthrough_ := fs.String("pause-fallthrough", "pulse", "pulse|stop: what to do at -max-pause")
 	reclaimKeep := fs.Int64("reclaim-keep-mib", 0, "resident floor kept in RAM when reclaiming (0 = reclaim everything; ~150 keeps OpenClaw's working set)")
 	prefetch := fs.Bool("prefetch-on-wake", false, "page a reclaimed cell's memory back in bulk before unpausing it")
+	wakeConc := fs.Int("wake-concurrency", 2, "simultaneous page-ins/starts; readiness waits and the thaw settle run outside this bound")
+	headroom := fs.Int64("headroom-mib", 0, "keep at least this much MemAvailable by reclaiming the longest-paused resident cells first (0 = timed reclaim only)")
 	return func() supervisor.Options {
 		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_,
-			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch}
+			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch, MaxConcurrent: *wakeConc, Headroom: *headroom << 20}
 	}
 }
 
