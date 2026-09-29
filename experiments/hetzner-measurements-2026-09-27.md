@@ -281,3 +281,20 @@ Findings:
 - **15 of 15 real turns completed cleanly with the hold cut to as little as 0.5 s.** The measured settlement window (22–800 ms, 28 Sep) is the upper end of what the gateway needs; in practice the channel restart plus the ingress's own request probe already absorb most of it.
 - **Default changed to 1 s** (from 3 s): five clean turns and 20 % margin over the longest window ever observed. Saves 2 s on every cold wake and 2 s per wave in a burst; a cold wake through the public ingress is now ~3–4 s from the platform's push to the 200, including page-in from the swapfile.
 - The bound is a flag (`-thaw-settle`); a provider on a slower host can raise it. The right fix remains a gateway-side ready signal (#114145 / #127602), which would replace the bound with a fact.
+
+## 100 cells with the final build: cold and warm bursts, and the headroom rule (13:09–13:51 UTC)
+Cells v50..v99 recreated (two 40 GB swapfiles), booted 5 at a time paced on available memory, under the boot-service daemon (pipelined page-in ×2, settle 1 s, timed reclaim 30 m, headroom 3 GB). One cell (v72) exited at first boot with OpenClaw's doctor refusing a state migration ("store unavailable" for the maintenance lease): the test script restarts each new container seconds after creation, which interrupted its first-boot migration; a plain `docker start` brought it healthy in 18 s. A supervisor artefact of the test, not of the host.
+
+At 100 cells, all paused: used 12.0 GB, available 3.6 GB, 64.7 GB in swap (~720 MiB per cold cell), 10 cells resident under the headroom policy, 0 exited, 0 OOM.
+
+| Burst of ten at 100 cells | Headroom target | Available before | Fastest | p50 | Slowest | PSI memory full / io full |
+|---|---|---|---|---|---|---|
+| Cold (all ten reclaimed) | 3 GB | 3.6 GB | 19.9 s | 23.1 s | 25.6 s | 7.7 s / 12.8 s |
+| Warm (all ten resident) | 3 GB | 3.8 GB | 0.72 s | 0.99 s | 1.39 s | 0 / 0 |
+| Cold, 7 of 10 reclaimed | **8 GB** | 8.3 GB | **4.1 s** | **7.7 s** | **10.5 s** | 1.4 s / 2.3 s |
+| For reference, 28 Sep, timed reclaim only, 9 GB free | – | 9.1 GB | 9.6 s | 18.8 s | 24.7 s | – |
+
+Findings:
+- **The headroom target must cover the burst, not just the page-in.** With 3 GB the ten woken cells (7 GB) had nowhere to land, the kernel evicted resident cells while the daemon's own pressure reclaim ran, and the burst was worse than with no warm tier at all (7.7 s of memory stall). With 8 GB the same burst ran at page-in speed: last cell 10.5 s against 24.7 s yesterday and 25.6 s an hour earlier. Rule for the unit file: **headroom ≈ expected simultaneous wakes × 0.75 GB**; 8 GB on a 16 GB host.
+- **The warm tier is what is left after that headroom.** At 100 cells on 16 GB (5 GB of cold floors + 1 GB OS + 8 GB headroom) that is a couple of cells; at 50 cells it is about ten. Warm wakes are 0.7–1.4 s regardless of density.
+- Final shape on this host, 100 cells: warm wake ~1 s, single cold wake ~3–4 s through the ingress, ten cold wakes at once 4–10.5 s, zero failures across 100 cells and every burst today.
