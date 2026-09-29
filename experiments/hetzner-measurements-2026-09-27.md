@@ -298,3 +298,26 @@ Findings:
 - **The headroom target must cover the burst, not just the page-in.** With 3 GB the ten woken cells (7 GB) had nowhere to land, the kernel evicted resident cells while the daemon's own pressure reclaim ran, and the burst was worse than with no warm tier at all (7.7 s of memory stall). With 8 GB the same burst ran at page-in speed: last cell 10.5 s against 24.7 s yesterday and 25.6 s an hour earlier. Rule for the unit file: **headroom ≈ expected simultaneous wakes × 0.75 GB**; 8 GB on a 16 GB host.
 - **The warm tier is what is left after that headroom.** At 100 cells on 16 GB (5 GB of cold floors + 1 GB OS + 8 GB headroom) that is a couple of cells; at 50 cells it is about ten. Warm wakes are 0.7–1.4 s regardless of density.
 - Final shape on this host, 100 cells: warm wake ~1 s, single cold wake ~3–4 s through the ingress, ten cold wakes at once 4–10.5 s, zero failures across 100 cells and every burst today.
+
+# 2026-09-30
+
+## zswap as a compressed tier in front of the swapfile — no warm tier, marginal burst gain (14:46–14:59 UTC)
+Idea: the kernel's own compressed cache with LRU writeback to the swapfile and a pressure-driven shrinker (6.8), so recently reclaimed cells would sit compressed in RAM with the right aging and no ZFS. Runtime switch only: `zpool=zsmalloc`, `max_pool_percent=20`, `shrinker_enabled=Y`, compressor lz4 then zstd. Single-cell cycles on tgw under timed reclaim (so every cycle really reclaims), then the ten-wake burst at 100 cells under the shipped policy (headroom 8 GB, settle 1 s, page-in ×2).
+
+| Configuration | Reclaimed per cycle | Wake to /health (3 cycles) | Bytes that reached the zswap pool |
+|---|---|---|---|
+| zswap off (disk baseline, same day) | 658–677 MiB | 2.46 s, 2.50 s, 2.55 s | – |
+| zswap lz4 | 658–667 MiB | 2.40 s, 2.61 s, 2.43 s | pool 23 MB after three cycles |
+| zswap zstd | 663–680 MiB | 2.52 s, 2.45 s, 2.52 s | pool 52 MB after three more |
+
+| Ten-wake burst at 100 cells, headroom 8 GB | Cold cells | Fastest | p50 | Slowest | Pool before / after | PSI mem full / io full |
+|---|---|---|---|---|---|---|
+| zswap lz4 | 9 of 10 | 3.0 s | 5.4 s | 9.8 s | 319 MB / 202 MB zswapped (lz4 ratio 1.6x) | 48 ms / 2.2 s |
+| 29 Sep, disk only | 7 of 10 | 4.1 s | 7.7 s | 10.5 s | – | 1.4 s / 2.3 s |
+
+Findings:
+- **The compressed tier never received the cells' pages.** A page read back from swap keeps its slot on the swapfile; when the cell is reclaimed again the kernel drops the clean page without writing it. Only pages the cell dirtied while awake are written, and an idle cell dirties ~30–60 MB between wake and re-pause. So after a cell's first reclaim, ~90 % of it lives on disk permanently and zswap (or any front tier) sees the remaining ~10 %. Single-cell wakes were identical to disk in all three configurations.
+- **The burst improved modestly (p50 7.7 → 5.4 s, last 10.5 → 9.8 s) with about a tenth of each cell served from RAM**, but the two runs also differed in how many of the ten were cold (7 vs 9), so the attributable gain is small. No stall, no failures, pool shrank under the burst as designed.
+- This is the same mechanism that made the 28 Sep "migration by re-waking" fail and it bounds every compressed-front-tier design on a host with persistent swap: the only way a cell's whole working set sits compressed in RAM is zram as the *only* swap device, which brings back the RAM cost and the 35-cell ceiling.
+- Decision: zswap off by default. Harmless when on (no CPU or stall penalty measured, 1.6x on the dirty set), so a provider may enable it, but it is not a warm tier. The warm tier remains "resident under headroom" and the cold tier the swapfile.
+- Side effect worth knowing: because clean pages keep their slots, hibernating a cell that was woken and stayed idle writes almost nothing to disk; swap usage grows to one full copy per cell (~700 MiB) and then stays flat.
