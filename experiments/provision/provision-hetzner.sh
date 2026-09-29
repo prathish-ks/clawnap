@@ -10,7 +10,8 @@ PUB=$(cat ~/.ssh/id_ed25519.pub)
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 hcloud ssh-key describe fleet-key >/dev/null 2>&1 || hcloud ssh-key create --name fleet-key --public-key "$PUB"
-sed "s|__SSH_PUBKEY__|$PUB|" "$HERE/cloud-init.yaml" > /tmp/fleet-cloud-init.yaml
+SWAP_GB=${SWAP_GB:-80}         # ~0.8 GB per hibernated cell; 80 GB holds ~100 cells
+sed "s|__SSH_PUBKEY__|$PUB|; s|__SWAP_GB__|$SWAP_GB|" "$HERE/cloud-init.yaml" > /tmp/fleet-cloud-init.yaml
 
 if hcloud server describe "$NAME" >/dev/null 2>&1; then
   echo "server $NAME already exists"
