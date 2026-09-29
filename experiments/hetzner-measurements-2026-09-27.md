@@ -266,3 +266,18 @@ Then relaunched with `-headroom-mib 12000` (above what the host can have): the l
 Findings:
 - **Recently active tenants wake in under a second, cold ones in 2–15 s, and the host chooses which is which by memory pressure, longest-paused first.** With 9 GB free at 50 cells (or at 100), roughly a dozen tenants can be kept warm at no cost to density; a provider sizes the headroom to their active share.
 - The policy needs no per-cell configuration and no change inside the cell: it is one flag plus the existing reclaim path.
+
+## Thaw settle bound: how short can the hold be? (12:26–12:54 UTC)
+Cell tgw (real Telegram channel, paired owner, Anthropic key), 15 cycles: wake → hibernate → 75 s (reclaim at 20 s; the freeze is long enough for OpenClaw's freeze detector) → one signed Telegram update from the paired owner through the public ingress ("reply with the single word OK") → 25 s → read the cell's own log. Pass = the detector fired, the first turn was **not** aborted (`settlement is closed` absent), no "heartbeat failed" / "embedded agent failed" notice, exactly one outbound send (the answer). Five wakes per bound.
+
+| Settle bound | Hold applied | Detector fired | First turn aborted | Notice | Answers sent | Push → 200 at the ingress |
+|---|---|---|---|---|---|---|
+| 3 s (previous default) | ~2.9 s | 2/2 | 0 | 0 | 2/2 | ~11 s to the answer (28 Sep) |
+| 1.5 s | 1.45–1.47 s | 5/5 | 0 | 0 | 5/5 | 3.9–4.9 s |
+| 1 s | 0.95–0.97 s | 5/5 | 0 | 0 | 5/5 | 3.0–4.2 s |
+| 0.5 s | 0.44–0.46 s | 5/5 | 0 | 0 | 5/5 | 3.1–3.6 s |
+
+Findings:
+- **15 of 15 real turns completed cleanly with the hold cut to as little as 0.5 s.** The measured settlement window (22–800 ms, 28 Sep) is the upper end of what the gateway needs; in practice the channel restart plus the ingress's own request probe already absorb most of it.
+- **Default changed to 1 s** (from 3 s): five clean turns and 20 % margin over the longest window ever observed. Saves 2 s on every cold wake and 2 s per wave in a burst; a cold wake through the public ingress is now ~3–4 s from the platform's push to the 200, including page-in from the swapfile.
+- The bound is a flag (`-thaw-settle`); a provider on a slower host can raise it. The right fix remains a gateway-side ready signal (#114145 / #127602), which would replace the bound with a fact.

@@ -52,7 +52,8 @@ type Options struct {
 	// the recovery with millisecond timestamps, so the wait keys on the
 	// cell's own log rather than on a fixed delay: it ends as soon as the
 	// log shows recovery has run (or shows no recovery was triggered), and
-	// gives up after ThawSettle. Measured: 22 ms to ~800 ms.
+	// gives up after ThawSettle. Measured: 22 ms to ~800 ms; a 1 s bound
+	// produced no aborted first turn in 15 real wakes.
 	ThawSettle time.Duration
 	// ReclaimWakeTimeout bounds readiness after unpausing a cell whose memory
 	// was reclaimed to swap (measured 9–17 s on a laptop swap file; faster
@@ -132,7 +133,7 @@ func (o *Options) defaults() {
 		o.ReclaimWakeTimeout = 2 * time.Minute
 	}
 	if o.ThawSettle == 0 {
-		o.ThawSettle = 3 * time.Second
+		o.ThawSettle = time.Second // 2026-09-29: 15/15 real turns clean at 1.5 s, 1 s and 0.5 s bounds; 1 s keeps margin over the measured 0.8 s window
 	}
 	if o.Probe == nil {
 		o.Probe = HTTPHealthProbe
