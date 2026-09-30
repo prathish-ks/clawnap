@@ -488,3 +488,23 @@ Findings:
 tgw: warm stage 998 → 299 MiB, hot set 258 MiB in 4 processes; cold floor 149 MiB with 802 MiB in swap. One signed owner message through the public ingress: prefetch `scope=hot` advised 258 MiB (146 landed), wake to healthy 4.7 s (detector fired, 1 s settle), Telegram saw one 200 in 5.0 s, the cell logged no settlement abort and no heartbeat notice, and sent exactly one outbound message, the answer. Resident after the turn 787 MiB: what the turn needed came back from swap on demand. Confirms a hot-set wake is a fully operational cell, not a partially loaded one.
 
 Note on the two cold bursts of the acceptance run (2.8/5.2/6.8 s with five warm cells vs 4.2/6.7/7.5 s with none): warm cells play no part in cold wakes; the 0-warm bursts ran minutes after a mass reclaim of twenty cells while swap-out was still draining to the disk. Treat 3–7.5 s as the range.
+
+## Post-thaw maintenance, the CPU wall, and the fix: minimum awake time (12:46–15:00 UTC)
+After the day's reboot every cold burst of ten came in at 8–25 s for the last cell (nine runs), against the 6.8 s of the design-1 acceptance, with CPU saturated (idle 0 %, gateways at 1.3–3.6 cores each) and 1.5 GB swapped out during the burst. Page-cache warming of the image (950 MB) changed nothing and was evicted again by the daemon's own reclaim. A single isolated cold wake told the story: hot set landed in 0.6 s, then the gateway ran `database integrity verification`, `memory-core dreaming promotion`, `slow SQLite reclamation`, cron catch-up, faulted 94 MiB more from disk and grew to 822 MiB within 20 s. Its log at the next thaw said `host thaw channel restart deferred: gateway still has active work`, with admission reopening 30 s after the thaw instead of at once.
+
+Cause: the 45 s network-idle timer paused cells in the middle of that post-thaw housekeeping (~0.2 core for 30–60 s, then ~5 % steady, some of it I/O-bound), so every later thaw resumed the interrupted work before serving. Test: ten cells given a 6-minute idle timer, woken, left to finish, paused, taken cold, burst: **1.8 / 3.8 / 6.5 s**, admission reopened immediately, no deferral.
+
+Fixes shipped (`3fc093f`, `c8f36c6`): idle detection also counts CPU (a cell above 10 % of a core is not idle, `-idle-cpu-pct`), and a minimum awake time after any wake (`-min-awake`, default 3 m). Also `-max-recovering` (default 4) bounds cells between unpause and ready, and pressure reclaim now yields while wakes are in flight (`a0d116f`), after a burst that overlapped a pressure reclaim ran 10–15 s per wake.
+
+| Build | Cold burst of ten (v21..v30, hot-set prefetch) | min / p50 / max | PSI mem / cpu / io | Warm survivors under the 4 GB rule (this boot: ~4.2 GB available) |
+|---|---|---|---|---|
+| CPU gate only, round 1 (debt from earlier pauses) | | 8.0 / 14.1 / 21.8 s | 0.5 / 5.0 / 9.8 s | 5, woke in 1.3–2.5 s |
+| CPU gate only, round 2 | | 3.7 / 8.5 / 13.7 s | 0.4 / 2.3 / 3.3 s | 4, 1.1–1.2 s |
+| + minimum awake 3 m, round 1 | | 2.9 / 6.3 / 9.7 s | 0.01 / 1.7 / 1.9 s | 4, 1.1–1.2 s |
+| **+ minimum awake 3 m, round 2 (steady state)** | | **2.8 / 5.4 / 8.3 s** | 0.2 / 1.8 / 1.7 s | 4, 1.2–1.3 s |
+
+Findings:
+- **The steady-state cold burst of ten on this host is 2.8 / 5.4 / 8.3 s**, with the memory stall at zero and the CPU and I/O stalls under 2 s: what remains is the gateways' own recovery running four at a time on 8 shared vCPUs.
+- **Never pause a gateway inside its post-thaw minute.** This is the operating rule the whole day's slow bursts came down to, and it costs only RAM: a woken cell stays resident for three minutes instead of 45 s. It also matches reality: a tenant who just woke their assistant is likely to send another message.
+- Four warm survivors on this boot because available memory sat at 4.2 GB against the 4 GB target; the resident count follows the host's state as designed. A clean boot gives 6–9 GB and eight to ten.
+- The resident-count question ("can we have ten warm?") therefore has a measured answer: yes on a clean 16 GB host with the 4 GB target, self-adjusting downward when the host is tighter, and a burst of ten cold wakes still lands under 10 s either way.
