@@ -392,3 +392,22 @@ Findings:
 - **The lazy cold wake is not viable**: without prefetch the ten cells took 21.7–23.4 s each, faulting their pages one at a time through OpenClaw's recovery, reproducing the 27 Sep result. Prefetch stays, and with it the ~700 MiB per cold wake.
 - **Budget on a 16 GB host at 100 cells** (clean host, ~9 GB after OS and cold floors): either ~7 resident cells at 300 MiB plus 7 GB for a burst of ten cold cells, or ~20 resident cells and cold bursts that take 20+ s. Both tiers fit together only with more RAM (a 32 GB host holds 20 resident and the burst headroom) or a smaller burst target (a burst of four needs 3 GB).
 - Method notes: the daemon pauses a fresh cell 45 s after boot, so any script waiting on /health after that point must also accept "paused"; and 20 first boots at once (14 GB) thrash a 16 GB host, so recreation must be paced like the density ladder. The recreated v1..v20 still run with the KSM wrapper and its capabilities; recreate them normally before any security check.
+
+## Same table at 10 resident cells, 100 cells, bursts of ten, on a rebooted host (04:51–05:05 UTC)
+Rerun of the previous section at the intended scope (10 resident, not 20), after a reboot so the headroom numbers are clean: all cold = 8.76 GB available (6.85 GB used), matching the 29 Sep baseline. Cells 1..20 first put back on the normal hardened launch. Daemon: timed reclaim 30 m, prefetch on, headroom target 2 GB while the resident tier existed (8 GB for state A).
+
+| State | Resident cells | Resident RAM | Available before the burst | Burst of ten | min / p50 / max | Available after |
+|---|---|---|---|---|---|---|
+| A: all cold, clean host | 0 | 0 | **8.76 GB** | – | – | – |
+| B: 10 resident, capped 350 MiB | 10 | 2.99 GB (299 MiB each) | 6.09 GB | warm (the 10, still capped) | 1.8 / 3.3 / 3.9 s | 5.7 GB |
+| B | 10 | 2.95 GB | 6.13 GB | cold (v21..v30, disk, prefetch) | 15.1 / 20.3 / 22.8 s | 1.8 GB; the daemon then reclaimed 9 of the 10 resident cells to restore its 2 GB target |
+| C: the 10 recreated with the KSM wrapper, capped, KSM scanning (plus 4 leftover resident cells from B's cold burst) | 10 (+4) | ~3 GB (+2.2 GB) | 4.13 GB | warm (the 10, capped, KSM) | 1.2 / 1.5 / 1.8 s | 3.9 GB |
+| C | 10 (+4) | | 4.13 GB | cold (v31..v40, disk, prefetch) | 7.5 / 18.9 / 20.8 s | 1.7 GB |
+
+KSM at 10 cells: pages sharing 48–124 MB, profit 5–80 MB, i.e. 5–12 MiB per cell. Zero wake failures. PSI during the cold bursts: cpu some 6.8–8.6 s, io full 6.1–8.9 s, memory full 0.3–1.0 s.
+
+Findings, at the 10-resident scope:
+- **Ten resident cells at 300 MiB cost 3 GB and leave 6.1 GB available on a clean host.** Their warm burst is 1.2–1.9 s when the cap is not fighting the wake (C) and 1.8–3.9 s when it is (B): the cap must be lifted at wake.
+- **6.1 GB is still not enough for a cold burst of ten**: 15–23 s, against 4–10.5 s with 8.3 GB (29 Sep). The burst's ~7 GB of page-in plus the kernel's own needs puts the real requirement at the 8 GB rule, so on 16 GB with 100 cells the resident tier at 10 cells and a cold burst of ten do not coexist at page-in speed; at 7 or fewer resident cells they do.
+- KSM: 5–12 MiB per cell, same conclusion as at 20. Dropped.
+- Two operational facts from the run: a freshly booted cell is paused by the daemon after 45 s, so scripts must accept "paused" as booted; and a cell recreated within 125 s of its previous instance being killed refuses to start ("another Gateway owner lease is still active") until the lease expires — the supervisor's cold tier never does this, but provisioning tools must wait out the lease on recreate.
