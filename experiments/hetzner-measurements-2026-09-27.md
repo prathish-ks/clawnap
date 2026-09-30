@@ -483,3 +483,8 @@ Findings:
 - **Headroom per cold wake drops from ~0.75 GB to ~0.3 GB**: the sizing rule becomes RAM ≈ 1 GB + 50 MiB × cold + 300 MiB × warm + 0.3 GB × burst. On 16 GB at 100 cells that is ten warm cells *and* a burst of ten at page-in speed.
 - The hot set is invalidated by a restart (pids change) and the wake falls back to a full prefetch; a cell that was never warmed (old registry) also gets the full prefetch. Both paths exercised today.
 - Variance note: available memory at all-cold on this host has ranged 3.9–8.7 GB across boots this week; the differences come from what stays charged after restarts (page cache, page tables, swap cache). The hot-set results above were taken at the low end, so they are conservative.
+
+### Design 1, real turn on the live-channel cell (12:02 UTC)
+tgw: warm stage 998 → 299 MiB, hot set 258 MiB in 4 processes; cold floor 149 MiB with 802 MiB in swap. One signed owner message through the public ingress: prefetch `scope=hot` advised 258 MiB (146 landed), wake to healthy 4.7 s (detector fired, 1 s settle), Telegram saw one 200 in 5.0 s, the cell logged no settlement abort and no heartbeat notice, and sent exactly one outbound message, the answer. Resident after the turn 787 MiB: what the turn needed came back from swap on demand. Confirms a hot-set wake is a fully operational cell, not a partially loaded one.
+
+Note on the two cold bursts of the acceptance run (2.8/5.2/6.8 s with five warm cells vs 4.2/6.7/7.5 s with none): warm cells play no part in cold wakes; the 0-warm bursts ran minutes after a mass reclaim of twenty cells while swap-out was still draining to the disk. Treat 3–7.5 s as the range.
