@@ -429,3 +429,19 @@ Findings:
 - The cold burst behaved as the headroom rule predicts: 4.8 GB available → 6.6–16.5 s (page-in plus eviction), against 4–10.5 s with 8 GB.
 - KSM contributes 5–10 MiB per cell here as in every run, and at these scan settings it costs a core. Dropped for good; the wrapper stays in the repo as a record.
 - Scenario verdict for a provider: 10 resident cells at 300 MiB are affordable on 16 GB with 100 cells (3 GB), but only with the cap lifted at wake and without KSM; the cold burst of ten then runs at 15–23 s unless the resident count drops to ~7 or the host has 8 GB of headroom.
+
+## Scenario: 5 resident cells capped at 350 MiB, 100 cells, cold bursts of ten, rebooted host (07:53–08:02 UTC)
+No KSM. Cap lifted at wake for the warm burst (the policy under build), re-applied after. Daemon: timed reclaim 30 m, prefetch on, headroom target 6 GB so the five stay resident. Clean baseline: 8.70 GB available, 6.9 GB used, 68 GB in swap (~680 MiB per cold cell).
+
+| State | Resident | Resident RAM | Available before | Burst | Outcome | min / p50 / max | PSI (mem full / cpu some / io full) | Available after |
+|---|---|---|---|---|---|---|---|---|
+| All cold | 0 | 0 | 8.70 GB | – | – | – | – | – |
+| 5 resident, capped | 5 | 1.62 GB (324 MiB each) | 7.16 GB | warm: the five, cap lifted at wake | 5 of 5 | 1.4 / 2.0 / 2.5 s | 0.4 / 1.1 / 0.5 s | 6.6 GB |
+| 5 resident | 5 | 1.45 GB (289 MiB each) | 7.36 GB | cold: ten from the swapfile | 10 of 10 | 8.5 / 16.2 / 19.1 s | **0** / 7.8 / 7.1 s | 1.1 GB (daemon then reclaimed 4 of the 5 to restore its target) |
+| 1 resident | 1 | 0.66 GB | 6.29 GB | cold: ten more from the swapfile | 10 of 10 | 16.2 / 19.0 / 21.0 s | 0.1 / 8.1 / 8.9 s | 1.0 GB |
+
+Findings:
+- **Five resident cells cost 1.6 GB and leave 7.2 GB; their warm wakes are 1.4–2.5 s, five of five, with the cap lifted at wake.**
+- **A burst of ten fully cold cells at 7.4 GB available is disk-bound, not memory-bound**: zero memory stall, 7 s of I/O stall, 8.5 s for the first pair and 19 s for the last. That is ~7 GB read at the volume's ~550 MB/s in sequenced pairs. The 29 Sep figure of 4–10.5 s was a burst with three of the ten already resident; this is the honest all-cold number on this cloud volume, and it matches the day-one sequenced result (7.5 / 11.9 / 14.6 s at 50 cells with ~650 MiB per cell).
+- So the trade the user named is settled: at 5 % resident the host keeps burst headroom, and the remaining burst latency is bandwidth. Cutting it further means a faster disk (a dedicated NVMe host would read the same 7 GB in ~3 s), fewer bytes per cold wake, or a smaller burst.
+- Method: the boot script also needed the "paused counts as booted" fix; recorded.
