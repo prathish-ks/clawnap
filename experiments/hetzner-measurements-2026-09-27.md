@@ -460,3 +460,26 @@ Findings:
 - **dm-vdo survives the fill but fails on the two things that matter**: its read path is slower than the raw swapfile (single cold wake 4.6–5.4 s against 2.3–2.9 s, ~250 MB/s despite reading half the bytes), and it hung under the first cold burst of ten, the same signature as ZFS: a compressing layer in the swap path with memory under pressure.
 - **Closed: no compressing layer under swap on this host class.** Two implementations, four hangs, and the one that survived the fill reads slower than the disk it was meant to accelerate. The way to read fewer bytes on a cold wake, if it ever exists, is inside the supervisor (knowing which pages to bring back), not under the swapfile.
 - **Kernel 7.0 note** (HWE, briefly installed for dm-vdo, removed afterwards): the same 100 cold cells left 6.2 GB available instead of 8.7 on 6.8, with the sum of container memory at 11.9 GB and page tables at 2.0 GB, and the disk-only cold bursts were correspondingly worse. The reclaim floor behaves differently on 7.0 (more anonymous memory left resident per cell). Not investigated further; the host is back on 6.8 and the sizing numbers stand for 6.8. Kernel upgrades need a re-measure of the floors before a provider adopts them.
+
+## Design 1: warm floor + hot-set prefetch, acceptance at 100 cells (11:29–11:50 UTC)
+Build `94ecff4`: a paused cell is first reclaimed to a 300 MiB warm floor, the pages the kernel kept are recorded from `/proc/<pid>/pagemap` as the cell's hot set (one JSON file per cell), and only later (timed, or memory pressure, longest-paused first) is it taken to the 150 MiB cold floor. A cold wake then prefetches the hot set only. No `memory.high`, no cap to lift: the warm tier is the warm floor itself. Host on 6.8 after the day's reboots with only 3.9–6.4 GB available at all-cold (used 9.2–11.7 GB; the two clean mornings had 8.7 GB, see the kernel/boot variance note), which makes this a harder test than the morning's.
+
+Warm stage on real cells: 630–727 MiB → 298–299 MiB, hot set 267–273 MiB across the cell's 6 processes, recorded in < 1 s.
+
+| State | Warm cells | Available before | Burst | Outcome | min / p50 / max | Bytes advised per cell | PSI mem full / cpu / io |
+|---|---|---|---|---|---|---|---|
+| 5 warm at the 300 MiB floor, target 3 GB | 5 | 3.17 GB | warm: the five, no prefetch | 5 of 5 | **0.66 / 0.73 / 1.34 s** | 0 | 10 ms / 1.0 s / 36 ms |
+| same, second run | 5 | 3.30 GB | warm: the five | 5 of 5 | 0.64 / 1.16 / 2.27 s | 0 | 9 ms / 0.5 s / 0.1 s |
+| 5 warm | 5 | 3.17 GB | cold: v21..v30 from the swapfile, hot-set prefetch | 10 of 10 | **2.76 / 5.16 / 6.79 s** | ~270 MiB (was ~700) | 0.8 / 1.6 / 1.9 s |
+| earlier the same hour, target 6 GB (warm cells taken cold by pressure) | 0 | 3.88 GB | cold: v21..v30, hot-set prefetch | 10 of 10 | 4.19 / 6.65 / 7.53 s | ~270 MiB | 1.3 / 2.5 / 1.5 s |
+| same | 0 | 3.85 GB | cold: v31..v40, hot-set prefetch | 10 of 10 | 5.93 / 6.63 / 7.25 s | ~270 MiB | 0.9 / 2.8 / 1.5 s |
+| For reference, this morning: full prefetch, 7.4 GB available | 5 | 7.36 GB | cold: ten | 10 of 10 | 8.5 / 16.2 / 19.1 s | ~680 MiB | 0 / 7.8 / 7.1 s |
+
+Per cold wake in the daemon log: advise 0.14–0.41 s (was 1.0–1.4 s), landed 128–150 MiB of the ~270 advised (the rest was still resident or shared), pagein wait 0.5 s, ready 2.3–5.7 s under the burst.
+
+Findings:
+- **Cold burst of ten: 19 s → 6.8 s for the last cell, 16 → 5.2 s median, on half the headroom.** Reading the hot set instead of the whole cell cut bytes per wake by ~60 % and, with it, the disk term that no storage layer could touch. Zero failures.
+- **The warm tier costs nothing extra and wakes in under a second**: five cells at 299 MiB each woke in 0.66–1.34 s with no prefetch and no cap, which also retires the `memory.high` idea and its lift-at-wake requirement.
+- **Headroom per cold wake drops from ~0.75 GB to ~0.3 GB**: the sizing rule becomes RAM ≈ 1 GB + 50 MiB × cold + 300 MiB × warm + 0.3 GB × burst. On 16 GB at 100 cells that is ten warm cells *and* a burst of ten at page-in speed.
+- The hot set is invalidated by a restart (pids change) and the wake falls back to a full prefetch; a cell that was never warmed (old registry) also gets the full prefetch. Both paths exercised today.
+- Variance note: available memory at all-cold on this host has ranged 3.9–8.7 GB across boots this week; the differences come from what stays charged after restarts (page cache, page tables, swap cache). The hot-set results above were taken at the low end, so they are conservative.
