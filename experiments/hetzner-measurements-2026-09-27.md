@@ -411,3 +411,21 @@ Findings, at the 10-resident scope:
 - **6.1 GB is still not enough for a cold burst of ten**: 15–23 s, against 4–10.5 s with 8.3 GB (29 Sep). The burst's ~7 GB of page-in plus the kernel's own needs puts the real requirement at the 8 GB rule, so on 16 GB with 100 cells the resident tier at 10 cells and a cold burst of ten do not coexist at page-in speed; at 7 or fewer resident cells they do.
 - KSM: 5–12 MiB per cell, same conclusion as at 20. Dropped.
 - Two operational facts from the run: a freshly booted cell is paused by the daemon after 45 s, so scripts must accept "paused" as booted; and a cell recreated within 125 s of its previous instance being killed refuses to start ("another Gateway owner lease is still active") until the lease expires — the supervisor's cold tier never does this, but provisioning tools must wait out the lease on recreate.
+
+## Single scenario, published: 10 resident cells capped at 350 MiB with KSM, 100 cells, bursts of ten (06:03–06:17 UTC)
+Requested as one scenario. Host had been rebooted 90 min earlier; baseline available 6.75 GB (some page cache and two resident leftovers from the previous run). v1..v10 recreated with the KSM opt-in wrapper after a 135 s lease wait, paced five at a time, capped at 350 MiB as each batch came up; KSM at 20k pages per pass with no sleep (114 full scans by the first state); daemon: timed reclaim 30 m, prefetch on, headroom target 2 GB so the ten stayed resident.
+
+| State | Resident cells | Resident RAM | Available | Burst of ten | Outcome | min / p50 / max |
+|---|---|---|---|---|---|---|
+| Baseline, all cold | 2 leftovers | 0.27 GB | 6.75 GB | – | – | – |
+| Scenario: 10 resident, capped 350 MiB, KSM on | 10 (+2) | ~3.0 GB | 5.89 GB | warm, the ten, still capped | **4 woke in 1.4–1.9 s; 6 failed** (health reset/EOF for the full 15 s wake timeout) | 1.4 / 15.1 / 15.6 s |
+| After the warm burst | 6 | 1.97 GB (328 MiB each) | 4.81 GB | cold, v21..v30 from disk | 10 of 10 | 6.6 / 15.5 / 16.5 s |
+| After the cold burst | 10 (the woken cold cells, 625 MiB each) | 6.25 GB | 2.28 GB | – | – | – |
+
+KSM over the scenario: pages shared 11–21 MB, pages sharing 72–105 MB, profit 49–71 MB, i.e. 5–10 MiB per cell; ksmd used 8 min 50 s of CPU during the 14-minute run at the aggressive scan settings, and CPU stall during the warm burst was 12.0 s.
+
+Findings:
+- **The scenario as specified fails its own warm burst**: six of the ten capped cells could not answer /health within the 15 s pause-tier timeout (connection reset, then EOF) and were marked failed; the four that made it woke in 1.4–1.9 s. The same ten cells woke 10/10 in 1.2–1.8 s an hour earlier with a lightly loaded scanner (3 full scans) and in 1.8–3.9 s the day before without KSM. The difference here was CPU: a scanner pinned at full speed plus ten gateways throttled by `memory.high` while re-faulting their recovery working set. A wake must lift the cap first; a resident tier that keeps the cap through the wake is not safe under load.
+- The cold burst behaved as the headroom rule predicts: 4.8 GB available → 6.6–16.5 s (page-in plus eviction), against 4–10.5 s with 8 GB.
+- KSM contributes 5–10 MiB per cell here as in every run, and at these scan settings it costs a core. Dropped for good; the wrapper stays in the repo as a record.
+- Scenario verdict for a provider: 10 resident cells at 300 MiB are affordable on 16 GB with 100 cells (3 GB), but only with the cap lifted at wake and without KSM; the cold burst of ten then runs at 15–23 s unless the resident count drops to ~7 or the host has 8 GB of headroom.
