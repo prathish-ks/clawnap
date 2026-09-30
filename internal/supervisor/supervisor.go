@@ -32,10 +32,14 @@ type Options struct {
 	StopGrace       time.Duration // graceful stop timeout
 	WakeTimeout     time.Duration // max wait for readiness after an unpause (pause tier)
 	StopWakeTimeout time.Duration // max wait for readiness after a start (stop tier: full gateway boot)
-	MaxConcurrent   int           // simultaneous page-ins/starts; readiness waits and the thaw settle run outside this bound
-	NoiseBytes      int64         // per-sample traffic ignored as background
-	MaxRestarts     int           // always-on self-heal budget per cell
-	PreWake         time.Duration // wake a hibernated cell this long before NextDueAt
+	MaxConcurrent   int           // simultaneous page-ins/starts (the disk-bound step)
+	// MaxRecovering bounds cells between unpause and ready: a thawed gateway's
+	// recovery is CPU-bound (channel restart, tool catalogue), and ten of them at
+	// once on 8 vCPUs took every wake to ~18 s where four at a time take 3–5 s.
+	MaxRecovering int
+	NoiseBytes    int64         // per-sample traffic ignored as background
+	MaxRestarts   int           // always-on self-heal budget per cell
+	PreWake       time.Duration // wake a hibernated cell this long before NextDueAt
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -112,6 +116,9 @@ func (o *Options) defaults() {
 	if o.StopWakeTimeout == 0 {
 		o.StopWakeTimeout = 3 * time.Minute // OpenClaw gateway measured 50–90 s to ready after start
 	}
+	if o.MaxRecovering == 0 {
+		o.MaxRecovering = 4
+	}
 	if o.MaxConcurrent == 0 {
 		o.MaxConcurrent = 2 // page-in is bandwidth bound: two in flight saturate a cloud volume, and sequencing gives earlier cells earlier wakes
 	}
@@ -183,6 +190,7 @@ type Supervisor struct {
 	reg      *registry.Store
 	rt       runtime.Client
 	sem      chan struct{}
+	recov    chan struct{} // cells between unpause and ready+settle
 	mu       sync.Mutex
 	victims  map[string]bool        // cells chosen for reclaim under memory pressure, set per reconcile pass
 	inflt    map[string]*wakeShare  // per-cell in-flight wake, so concurrent wakes coalesce and share the outcome
@@ -227,7 +235,7 @@ func (s *Supervisor) Cells() []registry.Cell { return s.reg.List() }
 // New builds a Supervisor.
 func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 	opt.defaults()
-	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent),
+	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent), recov: make(chan struct{}, opt.MaxRecovering),
 		recon: make(chan struct{}, opt.MaxConcurrent*4),
 		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
 }
@@ -945,6 +953,17 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 			}
 		}
 		timeout = s.pauseWakeTimeout(c)
+	}
+	// Recovery slot: taken before the process runs, held until it is ready and
+	// settled, so a burst does not start more post-thaw recoveries than the
+	// CPU can serve; the page-in slot above is released right after.
+	select {
+	case s.recov <- struct{}{}:
+	case <-ctx.Done():
+		return WakeResult{}, ctx.Err()
+	}
+	defer func() { <-s.recov }()
+	if state == runtime.StatePaused {
 		startTook, err = s.rt.Unpause(ctx, c.Container)
 	} else {
 		startTook, err = s.rt.Start(ctx, c.Container)
