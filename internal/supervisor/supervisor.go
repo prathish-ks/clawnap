@@ -43,7 +43,13 @@ type Options struct {
 	// after a thaw OpenClaw runs cron catch-up and maintenance at ~20 % of a
 	// core for 30–60 s, then ~5 % steady; pausing inside that minute made the
 	// next thaw resume the interrupted work first (wakes 3–4x slower). 0 = off.
-	IdleCPUPct  float64
+	IdleCPUPct float64
+	// MinAwake: never hibernate a cell within this long of its last wake.
+	// OpenClaw runs cron catch-up, database verification and memory
+	// maintenance after a thaw, some of it I/O-bound and invisible to the CPU
+	// gate; a cell paused inside that window resumes it on the next thaw and
+	// wakes 3–4x slower. Measured clean after ~3 minutes awake. 0 = off.
+	MinAwake    time.Duration
 	MaxRestarts int           // always-on self-heal budget per cell
 	PreWake     time.Duration // wake a hibernated cell this long before NextDueAt
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
@@ -136,6 +142,12 @@ func (o *Options) defaults() {
 	}
 	if o.IdleCPUPct == 0 {
 		o.IdleCPUPct = 10
+	}
+	if o.MinAwake == 0 {
+		o.MinAwake = 3 * time.Minute
+	}
+	if o.MinAwake < 0 {
+		o.MinAwake = 0
 	}
 	if o.IdleCPUPct < 0 {
 		o.IdleCPUPct = 0
@@ -405,6 +417,9 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 		return err
 	}
 	if d.ShouldSleep && c.Class == registry.ClassHibernate && !s.jobInsideIdleWindow(c) {
+		if s.opt.MinAwake > 0 && !c.WokeAt.IsZero() && s.opt.Now().Sub(c.WokeAt) < s.opt.MinAwake {
+			return nil // let the gateway finish its post-thaw work first
+		}
 		return s.hibernateLocked(ctx, c.Name)
 	}
 	return nil
@@ -1004,6 +1019,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	return res, s.reg.Update(name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseActive
 		x.LastActivity = s.opt.Now()
+		x.WokeAt = s.opt.Now()
 		x.PausedAt = time.Time{}
 		x.ReclaimedAt = time.Time{}
 		x.WarmAt = time.Time{}

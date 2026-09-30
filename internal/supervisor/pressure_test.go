@@ -172,3 +172,26 @@ func TestCPUBusyCellIsNotIdle(t *testing.T) {
 		t.Fatalf("expected pause once quiet and idle: %v", fr.calls)
 	}
 }
+
+// A freshly woken cell is not hibernated again inside MinAwake, even if idle.
+func TestMinAwakeAfterWake(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-m": runtime.StatePaused}, netio: map[string]string{"oc-m": "1kB / 1kB"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now }, Probe: func(context.Context, int) error { return nil }, WakeTimeout: time.Second, MinAwake: 3 * time.Minute})
+	_ = reg.Put(registry.Cell{Name: "m", Container: "oc-m", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Minute), IdleAfter: 30 * time.Second})
+	if _, err := s.Wake(context.Background(), "m"); err != nil {
+		t.Fatal(err)
+	}
+	s.ReconcileOnce(context.Background()) // baseline sample
+	now = now.Add(2 * time.Minute)        // idle for 2 min, but only 2 min awake
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-m") {
+		t.Fatal("paused inside MinAwake")
+	}
+	now = now.Add(2 * time.Minute) // 4 min awake
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-m") {
+		t.Fatalf("expected pause after MinAwake: %v", fr.calls)
+	}
+}
