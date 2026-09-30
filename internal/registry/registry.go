@@ -73,6 +73,7 @@ type Cell struct {
 	Phase        Phase         `json:"phase"`
 	PausedAt     time.Time     `json:"paused_at,omitempty"`    // when the current pause began (pause tier)
 	ReclaimedAt  time.Time     `json:"reclaimed_at,omitempty"` // when the paused cell's memory was last reclaimed to swap
+	WarmAt       time.Time     `json:"warm_at,omitempty"`      // when the paused cell was last trimmed to the warm floor (hot set recorded)
 	Swapped      bool          `json:"swapped,omitempty"`      // the last reclaim actually moved pages to swap (false when reclaim was unsupported)
 	LastActivity time.Time     `json:"last_activity"`
 	RxBytes      int64         `json:"rx_bytes"`

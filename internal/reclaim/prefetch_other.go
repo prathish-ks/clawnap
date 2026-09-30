@@ -13,3 +13,11 @@ func (r Reclaimer) Prefetch(ctx context.Context, containerID string, maxBytes in
 func (r Reclaimer) PrefetchMappings(ctx context.Context, containerID string, maxBytes int64, includeFiles bool) (PrefetchStats, error) {
 	return PrefetchStats{}, ErrUnsupported
 }
+
+// HotSet is unsupported off Linux.
+func (r Reclaimer) HotSet(containerID string) (HotSet, error) { return HotSet{}, ErrUnsupported }
+
+// PrefetchHot is unsupported off Linux.
+func (r Reclaimer) PrefetchHot(ctx context.Context, containerID string, hs HotSet) (PrefetchStats, error) {
+	return PrefetchStats{}, ErrUnsupported
+}

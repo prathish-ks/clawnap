@@ -6,10 +6,13 @@ package supervisor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,6 +66,16 @@ type Options struct {
 	// 0 reclaims everything reclaimable (max saving, slowest wake); a value
 	// near the gateway's working set keeps wakes near pause speed.
 	ReclaimKeep int64
+	// WarmKeep, when > 0, adds a first reclaim stage: a paused cell is trimmed
+	// to this floor at once (the idle gateway's working set, ~300 MiB
+	// measured), the pages still resident are recorded as its hot set, and
+	// only later (ReclaimAfter, or memory pressure) is it taken down to
+	// ReclaimKeep. A cold wake then prefetches the hot set alone instead of
+	// everything that was swapped: fewer bytes from the disk per wake.
+	WarmKeep int64
+	// HotSetDir is where hot sets are kept (one JSON file per cell). Empty
+	// disables recording and every cold wake prefetches everything.
+	HotSetDir string
 	// PrefetchOnWake pages a reclaimed cell's memory back in bulk before the
 	// unpause, using the swap device's bandwidth instead of its latency.
 	PrefetchOnWake bool
@@ -294,9 +307,12 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			return s.capPause(ctx, c)
 		}
 		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && c.ReclaimedAt.Before(c.PausedAt) {
+			if s.opt.WarmKeep > 0 && c.WarmAt.Before(c.PausedAt) {
+				return s.warmCell(ctx, c) // stage one: trim to the warm floor now, record the hot set
+			}
 			timed := s.opt.ReclaimAfter > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter
 			if timed || s.isVictim(c.Name) {
-				return s.reclaimCell(ctx, c)
+				return s.reclaimCell(ctx, c) // stage two: down to the cold floor
 			}
 		}
 		if c.Phase == registry.PhaseHibernated {
@@ -433,6 +449,83 @@ func (s *Supervisor) isVictim(name string) bool {
 	return s.victims[name]
 }
 
+// warmCell trims a paused cell to the warm floor and records which pages the
+// kernel kept: the cell's hot set. Cheap when the cell has been reclaimed
+// before (its cold pages are clean copies of what is already in swap).
+func (s *Supervisor) warmCell(ctx context.Context, c registry.Cell) error {
+	id, err := s.rt.ID(ctx, c.Container)
+	if err != nil {
+		return err
+	}
+	before, _ := s.opt.Reclaimer.Stats(id)
+	rctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	stop := func() bool { return s.wakeWanted(c.Name) }
+	after, err := s.opt.Reclaimer.ReclaimKeeping(rctx, id, 8<<30, s.opt.WarmKeep, stop)
+	if err != nil {
+		if errors.Is(err, reclaim.ErrUnsupported) || errors.Is(err, reclaim.ErrNoCgroup) {
+			return s.reg.Update(c.Name, func(x *registry.Cell) { x.WarmAt = s.opt.Now() })
+		}
+		return err
+	}
+	if s.wakeWanted(c.Name) {
+		return nil // a wake is waiting: leave the clock alone, it will run again after the next pause
+	}
+	hot := "none"
+	if s.opt.HotSetDir != "" {
+		if hs, err := s.opt.Reclaimer.HotSet(id); err == nil {
+			if err := s.saveHotSet(c.Name, hs); err == nil {
+				hot = fmt.Sprintf("%d MiB in %d procs", hs.Bytes>>20, len(hs.PIDs))
+			} else {
+				s.opt.Logger.Warn("hot set not saved", "cell", c.Name, "err", err)
+			}
+		} else if !errors.Is(err, reclaim.ErrUnsupported) {
+			s.opt.Logger.Warn("hot set", "cell", c.Name, "err", err)
+		}
+	}
+	moved := before.CurrentBytes - after.CurrentBytes
+	s.m.reclaimed(moved)
+	s.opt.Logger.Info("warmed", "cell", c.Name, "before_mib", before.CurrentBytes>>20, "after_mib", after.CurrentBytes>>20, "swap_mib", after.SwapBytes>>20, "hot_set", hot)
+	return s.reg.Update(c.Name, func(x *registry.Cell) {
+		x.WarmAt = s.opt.Now()
+		x.Swapped = x.Swapped || moved > 0 || after.SwapBytes > 0
+	})
+}
+
+func (s *Supervisor) hotSetPath(name string) string {
+	return filepath.Join(s.opt.HotSetDir, name+".json")
+}
+
+func (s *Supervisor) saveHotSet(name string, hs reclaim.HotSet) error {
+	if err := os.MkdirAll(s.opt.HotSetDir, 0o700); err != nil {
+		return err
+	}
+	b, err := json.Marshal(hs)
+	if err != nil {
+		return err
+	}
+	tmp := s.hotSetPath(name) + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.hotSetPath(name))
+}
+
+func (s *Supervisor) loadHotSet(name string) (reclaim.HotSet, bool) {
+	if s.opt.HotSetDir == "" {
+		return reclaim.HotSet{}, false
+	}
+	b, err := os.ReadFile(s.hotSetPath(name))
+	if err != nil {
+		return reclaim.HotSet{}, false
+	}
+	var hs reclaim.HotSet
+	if json.Unmarshal(b, &hs) != nil || len(hs.PIDs) == 0 {
+		return reclaim.HotSet{}, false
+	}
+	return hs, true
+}
+
 // reclaimCell pushes a paused cell's memory to swap. Unsupported hosts are
 // logged once per cell and never retried until the next pause.
 func (s *Supervisor) reclaimCell(ctx context.Context, c registry.Cell) error {
@@ -472,13 +565,29 @@ func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
 	pctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	before, _ := s.opt.Reclaimer.Stats(id)
-	st, err := s.opt.Reclaimer.Prefetch(pctx, id, 0)
+	scope := "all"
+	var st reclaim.PrefetchStats
+	if hs, ok := s.loadHotSet(c.Name); ok && c.ReclaimedAt.After(c.WarmAt) {
+		st, err = s.opt.Reclaimer.PrefetchHot(pctx, id, hs)
+		scope = "hot"
+		if errors.Is(err, reclaim.ErrStaleHotSet) {
+			_ = os.Remove(s.hotSetPath(c.Name))
+			st, err = s.opt.Reclaimer.Prefetch(pctx, id, 0)
+			scope = "all (hot set stale)"
+		}
+	} else {
+		st, err = s.opt.Reclaimer.Prefetch(pctx, id, 0)
+	}
 	if err != nil {
-		s.opt.Logger.Warn("prefetch", "cell", c.Name, "err", err, "mechanism", st.Mechanism)
+		s.opt.Logger.Warn("prefetch", "cell", c.Name, "scope", scope, "err", err, "mechanism", st.Mechanism)
 		return
 	}
-	landed, wait := s.waitPagedIn(pctx, id, before.CurrentBytes, st.SwapBefore)
-	s.opt.Logger.Info("prefetched", "cell", c.Name, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "landed_mib", landed>>20, "advise_took", st.Took, "pagein_took", wait)
+	expect := st.SwapBefore
+	if scope == "hot" && st.Bytes < expect {
+		expect = st.Bytes // only the hot set is coming back; do not wait for the rest
+	}
+	landed, wait := s.waitPagedIn(pctx, id, before.CurrentBytes, expect)
+	s.opt.Logger.Info("prefetched", "cell", c.Name, "scope", scope, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "landed_mib", landed>>20, "advise_took", st.Took, "pagein_took", wait)
 }
 
 // waitPagedIn blocks until the advised pages have actually arrived. The
@@ -814,7 +923,9 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		kind = "pause"
 		if reclaimed(c) {
 			kind = "reclaimed" // pages come back from the swap device: a different tier in any dashboard
-			if s.opt.PrefetchOnWake {
+			if !c.WarmAt.IsZero() && !c.ReclaimedAt.After(c.WarmAt) {
+				kind = "warm" // trimmed to the warm floor only: its hot set is resident, nothing to prefetch
+			} else if s.opt.PrefetchOnWake {
 				s.prefetch(ctx, c)
 			}
 		}
@@ -845,6 +956,7 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 		x.LastActivity = s.opt.Now()
 		x.PausedAt = time.Time{}
 		x.ReclaimedAt = time.Time{}
+		x.WarmAt = time.Time{}
 		x.Swapped = false
 		x.LastError = ""
 	})

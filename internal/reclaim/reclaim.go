@@ -38,6 +38,10 @@ var ErrUnsupported = errors.New("memory reclaim unsupported on this host")
 // ErrUnsupported, rather than retrying every tick.
 var ErrNoCgroup = errors.New("container cgroup not found")
 
+// ErrStaleHotSet means the recorded hot set names a process that no longer
+// exists in the cell (the cell was restarted since); prefetch everything.
+var ErrStaleHotSet = errors.New("hot set is stale: process gone")
+
 // Dir locates the cgroup directory for a container id under the common
 // layouts: cgroupfs driver (docker/<id>), systemd driver
 // (system.slice/docker-<id>.scope), and podman's slice variants.
