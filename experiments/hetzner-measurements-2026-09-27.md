@@ -321,3 +321,32 @@ Findings:
 - This is the same mechanism that made the 28 Sep "migration by re-waking" fail and it bounds every compressed-front-tier design on a host with persistent swap: the only way a cell's whole working set sits compressed in RAM is zram as the *only* swap device, which brings back the RAM cost and the 35-cell ceiling.
 - Decision: zswap off by default. Harmless when on (no CPU or stall penalty measured, 1.6x on the dirty set), so a provider may enable it, but it is not a warm tier. The warm tier remains "resident under headroom" and the cold tier the swapfile.
 - Side effect worth knowing: because clean pages keep their slots, hibernating a cell that was woken and stayed idle writes almost nothing to disk; swap usage grows to one full copy per cell (~700 MiB) and then stays flat.
+
+## Compressed tier, best case: fresh cells fully inside a zswap zstd pool (01:35–02:13 UTC)
+Setup: 100 cells hibernated on the swapfiles after a power-on (swapfiles and daemon came up from fstab and the boot unit; cells restarted in paced batches). zswap zstd, zsmalloc, pool up to 30 % of RAM, shrinker on. tgw and v1..v10 restarted so none of their pages had a disk slot; their first reclaim therefore went into the pool: **7.0 GB of pages in 1.97 GB of RAM, zstd ratio 3.6x**, 147–154 MiB of pool per cell. Daemon on the shipped policy (headroom 8 GB, settle 1 s, page-in ×2).
+
+| Measurement | From the pool (zstd) | Disk only, same build | Resident (warm) |
+|---|---|---|---|
+| Single wake, tgw (~950 MiB set), 3 cycles | 3.37 s, 3.23 s, 3.68 s | 2.46–2.55 s (29 Sep, ~660 MiB set) | – |
+| Burst of ten, first | 4.4 / 9.8 / 18.3 s (min / p50 / max) | 4.1 / 7.7 / 10.5 s | 0.7 / 1.0 / 1.4 s |
+| Burst of ten, second (cells re-cycled once) | 3.6 / 8.3 / 14.5 s | – | – |
+| PSI during the first burst | cpu some 6.7 s, memory full 2.5 s, io full 0.2 s | memory full 1.4 s, io full 2.3 s | none |
+
+Findings:
+- **Even in its best case the compressed tier is slower than the disk here.** Decompression is one zstd stream per cell at ~500 MB/s, the same order as the disk, and a burst adds CPU contention (6.7 s of CPU stall) plus zswap writeback: the pool is RAM the woken cells need, so the shrinker wrote 1.7 GB of pool to disk during the burst while the wakes were paging in. The stall moved from the disk to the CPU and the burst got worse (18 s vs 10.5 s).
+- **The tier does hold cells densely** (3.6x: about five cells per GB, and the cells stayed in the pool across a wake cycle because zswap keeps the entry for a clean page), but at 100 cells on 16 GB that RAM is the burst's headroom. On a host with spare RAM and a slow disk the same numbers make it attractive; on this class it is a loss.
+- Closes the compressed-tier line for cloud hosts with NVMe-class disks: zram (RAM cost, wrong aging), zram writeback (7 s wakes), ZFS (hangs), zswap on existing cells (only the dirty 10 %), zswap on fresh cells (slower than disk, competes with headroom).
+
+## Trimmed warm cells: drop a resident cell's cold pages, keep the hot set (02:17–02:19 UTC)
+Question: can a resident cell keep only its hot pages in RAM? Five cells woken, paused by the API, left resident (headroom target lowered to 3 GB for the test so the daemon would not reclaim them), then `memory.reclaim 300M` written to each cgroup, then all five woken at once.
+
+| State | Resident per cell | Woken five at once | Health after |
+|---|---|---|---|
+| Fully resident (warm) | 661–684 MiB | 0.7–1.4 s (29 Sep) | 200 |
+| **Trimmed** (300 MiB dropped in 1.0 s for all five) | **363–386 MiB** | **1.16–1.29 s** | 200; resident 374–396 MiB 20 s after the wake |
+| Cold (floor 150 MiB, ~700 MiB in swap) | 149 MiB | 3–4 s alone, 4–10.5 s in a burst | 200 |
+
+Findings:
+- **A trimmed warm cell costs ~380 MiB of RAM and wakes in 1.2 s, and needs no compression.** The dropped pages were clean and already on the swapfile (their swap slots survive a wake), so the trim wrote nothing, took a second for five cells, and the woken cell simply faults back the few pages it touches; 20 s after the wake it was running at ~390 MiB, healthy.
+- This is a third tier between warm (700 MiB, ~1 s) and cold (150 MiB, 3–4 s): **1.8x more warm cells per GB for a 0.3 s slower wake.** It is the existing reclaim path with a higher floor (`-reclaim-keep-mib` ~400 for the warm set, 150 for the cold set) rather than a new mechanism, and it answers the "idle pages of a resident cell" question: they can be dropped for free once the cell has been reclaimed once; compressing them buys nothing.
+- To build: a warm floor policy in the daemon (reclaim resident-paused cells to the warm floor immediately, to the cold floor only under headroom pressure), one flag, and a rerun of the warm burst.
