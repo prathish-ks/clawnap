@@ -368,3 +368,27 @@ Findings:
 - **Compression is not needed for idle-alive cells either.** The disk-only variant reached the same resident size with the same silence; the only visible cost was ~58 ms worst health latency during the first eviction wave. zswap would matter only for a cell that wakes up its cold heap often (an active conversation), where a decompression beats a disk read.
 - What this changes: an "idle-alive" tier at ~300 MiB per cell (2.3x more alive tenants per GB than today's 700 MiB), and the warm/trimmed floors can sit at ~300 MiB rather than 400. The knob is a soft limit that must be lifted when a cell becomes active (a growing heap throttled at `memory.high` would slow a live turn), so it belongs in the supervisor: low `memory.high` while the cell is idle-alive or paused, `max` from the first inbound message until idle again.
 - Not measured yet: an active conversation on a limited cell (turn latency with the heap re-faulting), and the RAM saving at scale (the 100-cell budget becomes ~30 alive + ~70 cold on 16 GB with an 8 GB burst headroom, versus ~3 alive today).
+
+## Resident tier at a 350 MiB cap, KSM dedup, and the lazy cold wake (03:22–04:24 UTC)
+100 cells on the host throughout. For every state: resident cells, headroom, burst. Daemon on timed reclaim 30 m; headroom target lowered to 2 GB while resident tiers were being built so the daemon would not reclaim them; prefetch on except in D. "Resident" = paused cells whose pages are in RAM (capped at 350 MiB via `memory.high`).
+
+Caveat on absolute headroom: the host had not been rebooted since the zswap and alive experiments, and carried ~2 GB of leftovers (zswap pool entries, swap cache, page tables of cells that had been alive), so "all cold" showed 4.3 GB available against 9.1 GB on a clean host the day before. Differences between states are valid; absolute headroom is ~4 GB low.
+
+| State | Resident cells | Resident RAM | Available | Burst of ten | Min / p50 / max |
+|---|---|---|---|---|---|
+| A: all cold | 0 | 0 | 4.3 GB (dirty baseline) | – | – |
+| B: 20 resident, capped 350 MiB | 20 | 6.0 GB (302 MiB each) | 4.2 GB | warm (10 of the 20) | 1.4 / 4.0 / 5.3 s |
+| B | 20 | | 4.2 GB | cold, disk, prefetch | 13.1 / 25.8 / 27.4 s; available fell to 0.8 GB, daemon then reclaimed 12 of the 20 |
+| C: same 20 recreated with the KSM opt-in wrapper, capped, KSM scanning | 20 | ~6.0 GB, KSM saved 0.22–0.35 GB | 4.6–4.8 GB | warm (10 of the 20) | 1.3 / 1.6 / 1.9 s |
+| C | 20 | | 4.8 GB | cold, disk, prefetch | 9.8 / 19.7 / 21.6 s; available fell to 0.8 GB |
+| D: lazy cold wake, no prefetch, cap 400 MiB on the ten | 8 (leftovers) | 6.0 GB | 2.5 GB | cold, disk, faults only | 21.7 / 22.7 / 23.4 s |
+
+KSM detail: 20 idle gateways, 3+ full scans in 50 s at 20k pages per pass: pages shared 52–58 MB, pages sharing 217–353 MB, general profit 133–266 MB. About 11–18 MiB saved per cell, ~5 % of a capped cell. The identical parts of a gateway (binary, libraries) are file-backed and already shared through the page cache; the anonymous heap is private per process and does not merge. Zero failures, zero exits in every burst; KSM cost ~1 s of CPU stall per burst.
+
+Findings:
+- **The 300 MiB resident tier works as a tier**: 20 paused cells kept at ~300 MiB each (6 GB) and woken ten at a time in 1.3–1.9 s (C), with the caveat that the first warm burst (B) showed 4–5 s for some cells because the 350 MiB cap throttled them while they re-faulted; the cap has to be lifted at wake, which is the supervisor's job.
+- **KSM is not a lever for OpenClaw cells**: ~5 % of a capped cell, at the price of running the container entrypoint as root with three capabilities so the gateway can opt in. Dropped.
+- **A cold burst of ten needs ~7 GB of headroom, and no tier trick changes that**: with 4.2–4.8 GB available the burst took 20–27 s in both B and C (page-in plus eviction, memory stall 2.9–4.7 s), against 4–10.5 s with 8 GB. The resident tier and the cold-burst headroom compete for the same RAM.
+- **The lazy cold wake is not viable**: without prefetch the ten cells took 21.7–23.4 s each, faulting their pages one at a time through OpenClaw's recovery, reproducing the 27 Sep result. Prefetch stays, and with it the ~700 MiB per cold wake.
+- **Budget on a 16 GB host at 100 cells** (clean host, ~9 GB after OS and cold floors): either ~7 resident cells at 300 MiB plus 7 GB for a burst of ten cold cells, or ~20 resident cells and cold bursts that take 20+ s. Both tiers fit together only with more RAM (a 32 GB host holds 20 resident and the burst headroom) or a smaller burst target (a burst of four needs 3 GB).
+- Method notes: the daemon pauses a fresh cell 45 s after boot, so any script waiting on /health after that point must also accept "paused"; and 20 first boots at once (14 GB) thrash a 16 GB host, so recreation must be paced like the density ladder. The recreated v1..v20 still run with the KSM wrapper and its capabilities; recreate them normally before any security check.
