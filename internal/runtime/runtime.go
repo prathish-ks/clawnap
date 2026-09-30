@@ -143,11 +143,13 @@ type NetIO struct{ RxBytes, TxBytes int64 }
 type Stats struct {
 	Net      NetIO
 	MemBytes int64
+	CPUPct   float64 // docker's CPU %: 100 = one core busy over the sampling window
 }
 
 type statsJSON struct {
 	NetIO    string `json:"NetIO"`
 	MemUsage string `json:"MemUsage"`
+	CPUPerc  string `json:"CPUPerc"`
 }
 
 // Stats samples a running container's network counters and memory.
@@ -165,7 +167,8 @@ func (c Client) Stats(ctx context.Context, name string) (Stats, error) {
 		return Stats{}, err
 	}
 	mem, _ := parseMemUsage(sj.MemUsage)
-	return Stats{Net: NetIO{RxBytes: rx, TxBytes: tx}, MemBytes: mem}, nil
+	cpu, _ := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(sj.CPUPerc), "%"), 64)
+	return Stats{Net: NetIO{RxBytes: rx, TxBytes: tx}, MemBytes: mem, CPUPct: cpu}, nil
 }
 
 // ParseNetIO parses docker's "1.2kB / 3.4MB" form into bytes.

@@ -29,6 +29,7 @@ type fakeRunner struct {
 	mu     sync.Mutex
 	state  map[string]runtime.State
 	netio  map[string]string
+	cpu    map[string]string // container -> docker CPUPerc string
 	calls  []string
 	failOn string
 }
@@ -52,7 +53,7 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		}
 		return string(st) + "\n", nil
 	case "stats":
-		return `{"NetIO":"` + f.netio[name] + `","MemUsage":"300MiB / 4GiB"}`, nil
+		return `{"NetIO":"` + f.netio[name] + `","MemUsage":"300MiB / 4GiB","CPUPerc":"` + f.cpu[name] + `"}`, nil
 	case "stop":
 		if f.failOn == "stop" {
 			return "", errors.New("boom")

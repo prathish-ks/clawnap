@@ -149,3 +149,26 @@ func TestPressureReclaimYieldsToWakes(t *testing.T) {
 		t.Fatal("pressure reclaim should run once the wake has finished")
 	}
 }
+
+// A cell that is busy on CPU is not idle, even with no traffic.
+func TestCPUBusyCellIsNotIdle(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-c": runtime.StateRunning}, netio: map[string]string{"oc-c": "1kB / 1kB"}, cpu: map[string]string{"oc-c": "35.5%"}}
+	s, reg := newSup(t, fr, &now)
+	_ = reg.Put(registry.Cell{Name: "c", Container: "oc-c", Port: 1, IdleAfter: time.Minute})
+	s.ReconcileOnce(context.Background())
+	now = now.Add(5 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-c") {
+		t.Fatal("must not pause a CPU-busy cell")
+	}
+	fr.mu.Lock()
+	fr.cpu["oc-c"] = "0.8%"
+	fr.mu.Unlock()
+	s.ReconcileOnce(context.Background()) // quiet now: the idle clock starts here
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-c") {
+		t.Fatalf("expected pause once quiet and idle: %v", fr.calls)
+	}
+}

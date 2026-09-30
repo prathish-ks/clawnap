@@ -37,9 +37,15 @@ type Options struct {
 	// recovery is CPU-bound (channel restart, tool catalogue), and ten of them at
 	// once on 8 vCPUs took every wake to ~18 s where four at a time take 3–5 s.
 	MaxRecovering int
-	NoiseBytes    int64         // per-sample traffic ignored as background
-	MaxRestarts   int           // always-on self-heal budget per cell
-	PreWake       time.Duration // wake a hibernated cell this long before NextDueAt
+	NoiseBytes    int64 // per-sample traffic ignored as background
+	// IdleCPUPct: a running cell whose CPU use over the sample is above this
+	// (percent of one core) counts as active even with no traffic. Measured:
+	// after a thaw OpenClaw runs cron catch-up and maintenance at ~20 % of a
+	// core for 30–60 s, then ~5 % steady; pausing inside that minute made the
+	// next thaw resume the interrupted work first (wakes 3–4x slower). 0 = off.
+	IdleCPUPct  float64
+	MaxRestarts int           // always-on self-heal budget per cell
+	PreWake     time.Duration // wake a hibernated cell this long before NextDueAt
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -127,6 +133,12 @@ func (o *Options) defaults() {
 	}
 	if o.NoiseBytes == 0 {
 		o.NoiseBytes = 2048
+	}
+	if o.IdleCPUPct == 0 {
+		o.IdleCPUPct = 10
+	}
+	if o.IdleCPUPct < 0 {
+		o.IdleCPUPct = 0
 	}
 	if o.MaxRestarts == 0 {
 		o.MaxRestarts = 5
@@ -380,6 +392,10 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 	cur := idle.Sample{At: s.opt.Now(), RxBytes: st.Net.RxBytes, TxBytes: st.Net.TxBytes}
 	prev := idle.Sample{RxBytes: c.RxBytes, TxBytes: c.TxBytes} // last persisted counters
 	d := idle.Evaluate(prev, cur, c.LastActivity, c.IdleAfter, s.opt.NoiseBytes)
+	if s.opt.IdleCPUPct > 0 && st.CPUPct > s.opt.IdleCPUPct {
+		d.LastActivity = cur.At // busy on CPU (post-thaw maintenance, cron): not idle yet
+		d.ShouldSleep = false
+	}
 	if err := s.reg.Update(c.Name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseActive
 		x.LastActivity = d.LastActivity
