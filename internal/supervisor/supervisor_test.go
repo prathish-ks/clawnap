@@ -573,7 +573,7 @@ func TestOneShotDueTimeIsClearedAfterWake(t *testing.T) {
 	_ = reg.Update("o", func(x *registry.Cell) { x.NextDueAt = now.Add(-time.Hour) })
 	fr.state["oc-o"] = runtime.StateRunning
 	s.ReconcileOnce(context.Background())
-	now = now.Add(2 * time.Minute)
+	now = now.Add(4 * time.Minute) // past MinAwake (3 m) and the idle policy
 	s.ReconcileOnce(context.Background())
 	if !fr.has("pause oc-o") {
 		t.Fatalf("stale due time must not keep the cell awake: %v", fr.calls)
