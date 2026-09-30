@@ -350,3 +350,21 @@ Findings:
 - **A trimmed warm cell costs ~380 MiB of RAM and wakes in 1.2 s, and needs no compression.** The dropped pages were clean and already on the swapfile (their swap slots survive a wake), so the trim wrote nothing, took a second for five cells, and the woken cell simply faults back the few pages it touches; 20 s after the wake it was running at ~390 MiB, healthy.
 - This is a third tier between warm (700 MiB, ~1 s) and cold (150 MiB, 3–4 s): **1.8x more warm cells per GB for a 0.3 s slower wake.** It is the existing reclaim path with a higher floor (`-reclaim-keep-mib` ~400 for the warm set, 150 for the cold set) rather than a new mechanism, and it answers the "idle pages of a resident cell" question: they can be dropped for free once the cell has been reclaimed once; compressing them buys nothing.
 - To build: a warm floor policy in the daemon (reclaim resident-paused cells to the warm floor immediately, to the cold floor only under headroom pressure), one flag, and a rerun of the warm burst.
+
+## Alive cells under memory.high: the idle gateway's real working set (02:39–02:56 UTC)
+Ten running (unpaused, daemon stopped for the test) cells per variant, `memory.high` set on their cgroups while alive, 210 s per step; the cells' own logs scanned for `liveness`, `event_loop`, `memory pressure` and `heartbeat delayed`; /health latency sampled 50 times per step; PSI and load recorded.
+
+| Variant | Step | Resident per alive cell | Cell diagnostics | /health avg / worst | Host |
+|---|---|---|---|---|---|
+| zswap zstd, v1..v10 (had been trimmed/reclaimed before) | no limit | 270 MiB (already lazy after the earlier trim) | none | 2 / 5 ms | load 0.8 |
+| | high 450 MiB | 276–282 MiB | none | 1 / 9 ms | cpu some 2.4 s over 90 s |
+| | high 350 MiB | 268–277 MiB | none | 1–4 / 22 ms | – |
+| disk only, v11..v20 (fully resident at start) | no limit | 681 MiB | none | 2 / 7 ms | – |
+| | high 450 MiB | 429 → 393 MiB | none | 6 / 58 ms during eviction, then 2 / 4 | memory some 7.7 s over the first 90 s |
+| | high 350 MiB | 287 → 295 MiB | none | 1 / 3–4 ms | load 1.3 |
+
+Findings:
+- **An idle alive OpenClaw gateway runs quietly at ~280–300 MiB, not 700.** Under `memory.high` 350 MiB the disk-only cells settled at 287–295 MiB with zero liveness, event-loop or memory-pressure diagnostics in their own logs and sub-10 ms health latency; the cells that had been trimmed earlier were already at ~270 MiB without any limit. The other ~400 MiB is cold heap the idle gateway never touches.
+- **Compression is not needed for idle-alive cells either.** The disk-only variant reached the same resident size with the same silence; the only visible cost was ~58 ms worst health latency during the first eviction wave. zswap would matter only for a cell that wakes up its cold heap often (an active conversation), where a decompression beats a disk read.
+- What this changes: an "idle-alive" tier at ~300 MiB per cell (2.3x more alive tenants per GB than today's 700 MiB), and the warm/trimmed floors can sit at ~300 MiB rather than 400. The knob is a soft limit that must be lifted when a cell becomes active (a growing heap throttled at `memory.high` would slow a live turn), so it belongs in the supervisor: low `memory.high` while the cell is idle-alive or paused, `max` from the first inbound message until idle again.
+- Not measured yet: an active conversation on a limited cell (turn latency with the heap re-faulting), and the RAM saving at scale (the 100-cell budget becomes ~30 alive + ~70 cold on 16 GB with an 8 GB burst headroom, versus ~3 alive today).
