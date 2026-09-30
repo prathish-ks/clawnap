@@ -106,3 +106,46 @@ func TestWakeSlotReleasedBeforeReadinessWait(t *testing.T) {
 		t.Fatalf("a: %v", err)
 	}
 }
+
+// Pressure reclaim must not run while a wake is in flight.
+func TestPressureReclaimYieldsToWakes(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-r1": runtime.StatePaused, "oc-a": runtime.StatePaused}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	cg := t.TempDir()
+	d1 := fakeCgroup(t, cg, "oc-r1")
+	release := make(chan struct{})
+	probe := func(ctx context.Context, port int) error {
+		if port != 9 {
+			return nil
+		}
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{
+		Now: func() time.Time { return now }, Probe: probe, WakeTimeout: 10 * time.Second,
+		ReclaimAfter: 10 * time.Minute, MaxPause: 24 * time.Hour, Headroom: 1 << 30,
+		MemAvailable: func() (int64, bool) { return 100 << 20, true }, Reclaimer: &reclaim.Reclaimer{FS: cg}})
+	_ = reg.Put(registry.Cell{Name: "r1", Container: "oc-r1", Port: 1, Phase: registry.PhaseHibernated, PausedAt: now.Add(-3 * time.Minute), IdleAfter: time.Minute})
+	_ = reg.Put(registry.Cell{Name: "a", Container: "oc-a", Port: 9, Phase: registry.PhaseHibernated, PausedAt: now.Add(-time.Minute), IdleAfter: time.Minute})
+	done := make(chan struct{})
+	go func() { _, _ = s.Wake(context.Background(), "a"); close(done) }()
+	deadline := time.Now().Add(3 * time.Second)
+	for !fr.has("unpause oc-a") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.ReconcileOnce(context.Background()) // a wake is waiting for readiness: no pressure reclaim
+	if reclaimWritten(t, d1) {
+		t.Fatal("pressure reclaim ran while a wake was in flight")
+	}
+	close(release)
+	<-done
+	s.ReconcileOnce(context.Background()) // quiet pass: the target is restored
+	if !reclaimWritten(t, d1) {
+		t.Fatal("pressure reclaim should run once the wake has finished")
+	}
+}

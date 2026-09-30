@@ -252,8 +252,17 @@ func (s *Supervisor) Run(ctx context.Context) error {
 // flight from the ingress) is skipped this pass rather than waited for.
 func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 	cells := s.reg.List()
+	// Pressure reclaim yields to wakes in flight: evicting warm cells while a
+	// burst is paging in only adds CPU and I/O to the burst (measured: wakes
+	// that overlapped a pressure reclaim took 10–15 s instead of 3–4 s), and
+	// the kernel's own reclaim already keeps the wakes fed. The target is
+	// restored on the first quiet pass after the burst.
+	var victims map[string]bool
+	if !s.anyWakeInFlight() {
+		victims = s.pressureVictims(ctx, cells)
+	}
 	s.mu.Lock()
-	s.victims = s.pressureVictims(ctx, cells)
+	s.victims = victims
 	s.mu.Unlock()
 	var wg sync.WaitGroup
 	for _, c := range cells {
@@ -441,6 +450,12 @@ func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell)
 	}
 	s.opt.Logger.Info("memory headroom below target: reclaiming longest-paused cells", "available_mib", avail>>20, "target_mib", s.opt.Headroom>>20, "cells", len(victims))
 	return victims
+}
+
+func (s *Supervisor) anyWakeInFlight() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.inflt) > 0
 }
 
 func (s *Supervisor) isVictim(name string) bool {
