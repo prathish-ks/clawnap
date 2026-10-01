@@ -86,7 +86,7 @@ runcmd:
   # swap). __SWAP_GB__ is substituted by provision-hetzner.sh (default 80).
   - fallocate -l __SWAP_GB__G /swap.img && chmod 600 /swap.img && mkswap /swap.img
   - echo "/swap.img none swap sw,pri=100 0 0" >> /etc/fstab && swapon -a
-  - swapon --show | grep -q swap.img || echo "WARNING: swapfile not active" >&2
+  - 'swapon --show | grep -q swap.img || echo "WARNING - swapfile not active" >&2'
   - systemctl daemon-reload && systemctl enable clawnap
   - sysctl --system
   # SSH hardening + firewall (SSH only; everything else loopback)
