@@ -306,7 +306,7 @@ func (w wakeAdapter) Hibernate(ctx context.Context, cell string) error {
 func cells(args []string) error {
 	ctx := context.Background()
 	if len(args) == 0 {
-		return fmt.Errorf("usage: fleetd cells <add|create|list|rm>")
+		return fmt.Errorf("usage: clawnap cells <add|create|list|rm>")
 	}
 	reg, err := openRegistry()
 	if err != nil {
