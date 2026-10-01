@@ -157,8 +157,8 @@ func parseMaps(r io.Reader, includeFiles bool) ([]mapping, error) {
 			continue // [vdso], [vvar], [vsyscall]
 		}
 		if fileBacked {
-			if !includeFiles {
-				continue
+			if !includeFiles || perms[3] != 'p' {
+				continue // shared file mappings (/dev/shm, memfd) are not page-cache reads worth advising
 			}
 		} else if perms[1] != 'w' || perms[3] != 'p' {
 			continue // anon but not private-writable: nothing swapped
