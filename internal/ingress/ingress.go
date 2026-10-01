@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/registry"
 )
 
 // Waker is what the ingress needs from the supervisor.

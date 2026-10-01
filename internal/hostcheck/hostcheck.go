@@ -22,8 +22,8 @@ import (
 	"runtime"
 	"strings"
 
-	rt "github.com/prathish-ks/fleet-supervisor/internal/runtime"
-	"github.com/prathish-ks/fleet-supervisor/internal/spec"
+	rt "github.com/prathish-ks/clawnap/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/spec"
 )
 
 // Level mirrors Isthmus doctor levels: pass, warn, fail. Checks that cannot

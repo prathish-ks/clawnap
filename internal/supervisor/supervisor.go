@@ -19,11 +19,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/idle"
-	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
-	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
-	"github.com/prathish-ks/fleet-supervisor/internal/walcheck"
+	"github.com/prathish-ks/clawnap/internal/idle"
+	"github.com/prathish-ks/clawnap/internal/reclaim"
+	"github.com/prathish-ks/clawnap/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/walcheck"
 )
 
 // Options tune the loop.

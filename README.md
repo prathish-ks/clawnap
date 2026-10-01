@@ -1,4 +1,4 @@
-# fleet-supervisor
+# clawnap
 
 A small Go host-side supervisor for fleets of OpenClaw cells (and later
 NanoClaw/Isthmus hosts): hibernate idle cells, wake them on inbound message
@@ -19,7 +19,7 @@ cell specs. Stock OpenClaw images run unchanged.
 | `internal/ingress` | HTTP front door: `POST /wake/{cell}` and `/hook/{cell}/...` wake-then-proxy |
 | `internal/spec` | Guest-neutral container spec and refusal rules (non-root, pids limit, memory ceiling, no Docker socket or dangerous mounts, no secrets in env) |
 | `internal/supervisor/metrics.go` | Prometheus text exposition at `/metrics`: cells by phase and tier, wakes and failures, hibernates, pulses, wake-to-ready histogram |
-| `internal/hostcheck` | `fleetd check`: read-only host and cell security inspection (runtime class, metadata-egress block, privileged/root/caps/limits, socket and dangerous mounts, secrets in env, public ports). Ported from Isthmus. |
+| `internal/hostcheck` | `clawnap check`: read-only host and cell security inspection (runtime class, metadata-egress block, privileged/root/caps/limits, socket and dangerous mounts, secrets in env, public ports). Ported from Isthmus. |
 | `internal/walcheck` | Host-side SQLite WAL truncation after a stop-tier hibernate |
 | `cmd/fleetd` | CLI and daemon |
 
@@ -27,10 +27,10 @@ cell specs. Stock OpenClaw images run unchanged.
 
 ```bash
 go build ./cmd/fleetd
-./fleetd cells add -name a -container openclaw-a -port 18801 -idle 5m
-./fleetd reconcile            # one pass
-./fleetd check                # inspect every container labelled fleet.cell
-./fleetd serve -listen 127.0.0.1:8080 -token dev
+./clawnap cells add -name a -container openclaw-a -port 18801 -idle 5m
+./clawnap reconcile            # one pass
+./clawnap check                # inspect every container labelled fleet.cell
+./clawnap serve -listen 127.0.0.1:8080 -token dev
 curl -X POST -H 'Authorization: Bearer dev' http://127.0.0.1:8080/wake/a
 ```
 

@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
-	"github.com/prathish-ks/fleet-supervisor/internal/spec"
+	"github.com/prathish-ks/clawnap/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/spec"
 )
 
 // Spec describes the cell to create.

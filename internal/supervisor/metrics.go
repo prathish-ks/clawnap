@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/registry"
 )
 
 // Metrics is a dependency-free Prometheus text exposition of what a fleet
@@ -71,33 +71,33 @@ func (m *Metrics) Write(w io.Writer, cells []registry.Cell) {
 			tiers[string(c.Tier)]++
 		}
 	}
-	fmt.Fprintln(w, "# HELP fleetd_cells Cells by supervisor phase.\n# TYPE fleetd_cells gauge")
+	fmt.Fprintln(w, "# HELP clawnap_cells Cells by supervisor phase.\n# TYPE clawnap_cells gauge")
 	for _, p := range sortedKeys(phases) {
-		fmt.Fprintf(w, "fleetd_cells{phase=%q} %d\n", p, phases[p])
+		fmt.Fprintf(w, "clawnap_cells{phase=%q} %d\n", p, phases[p])
 	}
-	fmt.Fprintln(w, "# HELP fleetd_hibernated_cells Hibernated cells by tier.\n# TYPE fleetd_hibernated_cells gauge")
+	fmt.Fprintln(w, "# HELP clawnap_hibernated_cells Hibernated cells by tier.\n# TYPE clawnap_hibernated_cells gauge")
 	for _, t := range sortedKeys(tiers) {
-		fmt.Fprintf(w, "fleetd_hibernated_cells{tier=%q} %d\n", t, tiers[t])
+		fmt.Fprintf(w, "clawnap_hibernated_cells{tier=%q} %d\n", t, tiers[t])
 	}
-	fmt.Fprintln(w, "# HELP fleetd_wakes_total Successful wakes by kind.\n# TYPE fleetd_wakes_total counter")
+	fmt.Fprintln(w, "# HELP clawnap_wakes_total Successful wakes by kind.\n# TYPE clawnap_wakes_total counter")
 	for _, k := range sortedKeys(m.wakes) {
-		fmt.Fprintf(w, "fleetd_wakes_total{kind=%q} %d\n", k, m.wakes[k])
+		fmt.Fprintf(w, "clawnap_wakes_total{kind=%q} %d\n", k, m.wakes[k])
 	}
-	fmt.Fprintf(w, "# HELP fleetd_wake_failures_total Wakes that did not reach readiness.\n# TYPE fleetd_wake_failures_total counter\nfleetd_wake_failures_total %d\n", m.wakeFails)
-	fmt.Fprintln(w, "# HELP fleetd_hibernates_total Hibernations by tier.\n# TYPE fleetd_hibernates_total counter")
+	fmt.Fprintf(w, "# HELP clawnap_wake_failures_total Wakes that did not reach readiness.\n# TYPE clawnap_wake_failures_total counter\nclawnap_wake_failures_total %d\n", m.wakeFails)
+	fmt.Fprintln(w, "# HELP clawnap_hibernates_total Hibernations by tier.\n# TYPE clawnap_hibernates_total counter")
 	for _, t := range sortedKeys(m.hibernates) {
-		fmt.Fprintf(w, "fleetd_hibernates_total{tier=%q} %d\n", t, m.hibernates[t])
+		fmt.Fprintf(w, "clawnap_hibernates_total{tier=%q} %d\n", t, m.hibernates[t])
 	}
-	fmt.Fprintf(w, "# HELP fleetd_pulses_total Pause-cap pulses.\n# TYPE fleetd_pulses_total counter\nfleetd_pulses_total %d\n", m.pulses)
-	fmt.Fprintf(w, "# HELP fleetd_pause_fallthrough_total Pause-cap fallthroughs to the stop tier.\n# TYPE fleetd_pause_fallthrough_total counter\nfleetd_pause_fallthrough_total %d\n", m.fellThru)
-	fmt.Fprintf(w, "# HELP fleetd_self_heals_total Always-on cells restarted after exit.\n# TYPE fleetd_self_heals_total counter\nfleetd_self_heals_total %d\n", m.selfHeals)
-	fmt.Fprintf(w, "# HELP fleetd_reclaims_total Paused cells whose memory was reclaimed to swap.\n# TYPE fleetd_reclaims_total counter\nfleetd_reclaims_total %d\n", m.reclaims)
-	fmt.Fprintf(w, "# HELP fleetd_reclaimed_bytes_total Bytes moved out of RAM by reclaims.\n# TYPE fleetd_reclaimed_bytes_total counter\nfleetd_reclaimed_bytes_total %d\n", m.reclaimedB)
-	fmt.Fprintln(w, "# HELP fleetd_wake_ready_seconds Time from wake to readiness.\n# TYPE fleetd_wake_ready_seconds histogram")
+	fmt.Fprintf(w, "# HELP clawnap_pulses_total Pause-cap pulses.\n# TYPE clawnap_pulses_total counter\nclawnap_pulses_total %d\n", m.pulses)
+	fmt.Fprintf(w, "# HELP clawnap_pause_fallthrough_total Pause-cap fallthroughs to the stop tier.\n# TYPE clawnap_pause_fallthrough_total counter\nclawnap_pause_fallthrough_total %d\n", m.fellThru)
+	fmt.Fprintf(w, "# HELP clawnap_self_heals_total Always-on cells restarted after exit.\n# TYPE clawnap_self_heals_total counter\nclawnap_self_heals_total %d\n", m.selfHeals)
+	fmt.Fprintf(w, "# HELP clawnap_reclaims_total Paused cells whose memory was reclaimed to swap.\n# TYPE clawnap_reclaims_total counter\nclawnap_reclaims_total %d\n", m.reclaims)
+	fmt.Fprintf(w, "# HELP clawnap_reclaimed_bytes_total Bytes moved out of RAM by reclaims.\n# TYPE clawnap_reclaimed_bytes_total counter\nclawnap_reclaimed_bytes_total %d\n", m.reclaimedB)
+	fmt.Fprintln(w, "# HELP clawnap_wake_ready_seconds Time from wake to readiness.\n# TYPE clawnap_wake_ready_seconds histogram")
 	for i, b := range m.readyBuckets {
-		fmt.Fprintf(w, "fleetd_wake_ready_seconds_bucket{le=\"%g\"} %d\n", b, m.readyCounts[i])
+		fmt.Fprintf(w, "clawnap_wake_ready_seconds_bucket{le=\"%g\"} %d\n", b, m.readyCounts[i])
 	}
-	fmt.Fprintf(w, "fleetd_wake_ready_seconds_bucket{le=\"+Inf\"} %d\nfleetd_wake_ready_seconds_sum %g\nfleetd_wake_ready_seconds_count %d\n", m.readyN, m.readySum, m.readyN)
+	fmt.Fprintf(w, "clawnap_wake_ready_seconds_bucket{le=\"+Inf\"} %d\nclawnap_wake_ready_seconds_sum %g\nclawnap_wake_ready_seconds_count %d\n", m.readyN, m.readySum, m.readyN)
 }
 
 func sortedKeys(m map[string]int) []string {

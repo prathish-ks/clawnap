@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/registry"
 )
 
 func setup(t *testing.T, verifier string) (*httptest.Server, *fakeWaker, *httptest.Server) {

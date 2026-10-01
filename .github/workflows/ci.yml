@@ -34,13 +34,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: build fleetd (linux/${{ matrix.goarch }})
+      - name: build clawnap (linux/${{ matrix.goarch }})
         env:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
-        run: go build -trimpath -ldflags="-s -w" -o fleetd-linux-${{ matrix.goarch }} ./cmd/fleetd
+        run: go build -trimpath -ldflags="-s -w" -o clawnap-linux-${{ matrix.goarch }} ./cmd/clawnap
       - uses: actions/upload-artifact@v4
         with:
-          name: fleetd-linux-${{ matrix.goarch }}
-          path: fleetd-linux-${{ matrix.goarch }}
+          name: clawnap-linux-${{ matrix.goarch }}
+          path: clawnap-linux-${{ matrix.goarch }}

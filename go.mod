@@ -1,4 +1,4 @@
-module github.com/prathish-ks/fleet-supervisor
+module github.com/prathish-ks/clawnap
 
 go 1.25.0
 

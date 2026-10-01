@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/registry"
 )
 
 type fakeRT struct{ args []string }

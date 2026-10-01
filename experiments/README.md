@@ -15,7 +15,7 @@ Provision: `provision/provision-hetzner.sh`; deploy: `provision/deploy.sh ops@IP
 3. Repeat at 25 and 50 cells. Record the cell count at which the host swaps or OOM-kills.
 4. Cold start: `docker stop $(docker ps -q --filter label=fleet.cell)` then start all; time to all ports ready.
 5. WAL growth: send 200 messages per cell via the bot API; `du -sh` each state dir before/after.
-6. Register the cells with the supervisor (`fleetd cells add ...` per cell), run `fleetd serve`, point each bot's webhook at `/hook/<cell>/...`, and repeat steps 2–4 with hibernation on.
+6. Register the cells with the supervisor (`clawnap cells add ...` per cell), run `clawnap serve`, point each bot's webhook at `/hook/<cell>/...`, and repeat steps 2–4 with hibernation on.
 7. Wake latency: `./wake-latency.sh <cell> 100` — 100 wake cycles, prints p50/p95 of ready time.
 8. Density stack (week 2): repeat step 6 with (a) memory overcommit only, (b) + zram, (c) + KSM, (d) + hibernation. Each is one CSV.
 

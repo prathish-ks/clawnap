@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
-	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/reclaim"
+	"github.com/prathish-ks/clawnap/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/runtime"
 )
 
 // fakeRunner scripts a runtime per container.
@@ -343,7 +343,7 @@ func TestMetricsExposition(t *testing.T) {
 	var b strings.Builder
 	s.Metrics().Write(&b, s.Cells())
 	out := b.String()
-	for _, want := range []string{`fleetd_wakes_total{kind="stop"} 1`, `fleetd_cells{phase="active"} 1`, `fleetd_wake_ready_seconds_count 1`, `fleetd_wake_failures_total 0`} {
+	for _, want := range []string{`clawnap_wakes_total{kind="stop"} 1`, `clawnap_cells{phase="active"} 1`, `clawnap_wake_ready_seconds_count 1`, `clawnap_wake_failures_total 0`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -636,7 +636,7 @@ func TestReclaimedCellGetsLongerWakeTimeout(t *testing.T) {
 	}
 	var b strings.Builder
 	s.Metrics().Write(&b, s.Cells())
-	if !strings.Contains(b.String(), `fleetd_wakes_total{kind="reclaimed"} 1`) {
+	if !strings.Contains(b.String(), `clawnap_wakes_total{kind="reclaimed"} 1`) {
 		t.Fatalf("reclaimed wakes must be labelled separately:\n%s", b.String())
 	}
 }

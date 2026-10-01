@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
-	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/reclaim"
+	"github.com/prathish-ks/clawnap/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/runtime"
 )
 
 // With WarmKeep set, a paused cell is trimmed to the warm floor at once

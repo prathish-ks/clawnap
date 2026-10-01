@@ -1,12 +1,12 @@
-// Command fleetd is the fleet supervisor CLI and daemon.
+// Command clawnap is the fleet supervisor CLI and daemon.
 //
-//	fleetd cells add -name a -container openclaw-a -port 18801 [-class hibernate|always-on] [-tier pause|stop] [-idle 10m]
-//	fleetd cells create -name a -port 18801 [-hook-port 18901 -ingress-url https://fleet.example] [-telegram-token-file f]
-//	fleetd cells list | rm -name a
-//	fleetd reconcile [-loop] [-interval 30s]
-//	fleetd hibernate -name a | wake -name a | prefetch -name a   (page a reclaimed cell back in, Linux)
-//	fleetd serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop; POST /wake/{cell}, /hibernate/{cell}, /hook/{cell}/..., GET /metrics)
-//	fleetd check [-label fleet.cell] [-json] [container...]   read-only host + cell security inspection
+//	clawnap cells add -name a -container openclaw-a -port 18801 [-class hibernate|always-on] [-tier pause|stop] [-idle 10m]
+//	clawnap cells create -name a -port 18801 [-hook-port 18901 -ingress-url https://fleet.example] [-telegram-token-file f]
+//	clawnap cells list | rm -name a
+//	clawnap reconcile [-loop] [-interval 30s]
+//	clawnap hibernate -name a | wake -name a | prefetch -name a   (page a reclaimed cell back in, Linux)
+//	clawnap serve -listen 127.0.0.1:8080 [-token X]     (ingress + reconcile loop; POST /wake/{cell}, /hibernate/{cell}, /hook/{cell}/..., GET /metrics)
+//	clawnap check [-label fleet.cell] [-json] [container...]   read-only host + cell security inspection
 package main
 
 import (
@@ -26,33 +26,33 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prathish-ks/fleet-supervisor/internal/hostcheck"
-	"github.com/prathish-ks/fleet-supervisor/internal/ingress"
-	"github.com/prathish-ks/fleet-supervisor/internal/provision"
-	"github.com/prathish-ks/fleet-supervisor/internal/reclaim"
-	"github.com/prathish-ks/fleet-supervisor/internal/registry"
-	"github.com/prathish-ks/fleet-supervisor/internal/runtime"
-	"github.com/prathish-ks/fleet-supervisor/internal/supervisor"
+	"github.com/prathish-ks/clawnap/internal/hostcheck"
+	"github.com/prathish-ks/clawnap/internal/ingress"
+	"github.com/prathish-ks/clawnap/internal/provision"
+	"github.com/prathish-ks/clawnap/internal/reclaim"
+	"github.com/prathish-ks/clawnap/internal/registry"
+	"github.com/prathish-ks/clawnap/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/supervisor"
 )
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "fleetd:", err)
+		fmt.Fprintln(os.Stderr, "clawnap:", err)
 		os.Exit(1)
 	}
 }
 
 // dataDir holds the registry and, under cells/, every cell's state. As root
-// it is the FHS service location /var/lib/fleetd: cell state is a bind mount
+// it is the FHS service location /var/lib/clawnap: cell state is a bind mount
 // into a tenant container and the launcher refuses mounts under /root, so a
 // root-run daemon must not default to its own home. A registry left in the
 // old /root/.fleetd location is read once and migrated.
 func dataDir() string {
-	if d := os.Getenv("FLEETD_DATA"); d != "" {
+	if d := envOr("CLAWNAP_DATA", "FLEETD_DATA"); d != "" {
 		return d
 	}
 	if os.Geteuid() == 0 {
-		return "/var/lib/fleetd"
+		return dataRoot()
 	}
 	h, _ := os.UserHomeDir()
 	return filepath.Join(h, ".fleetd")
@@ -60,11 +60,13 @@ func dataDir() string {
 
 func cellsRoot() string { return filepath.Join(dataDir(), "cells") }
 
-func newRunner() runtime.ExecRunner { return runtime.ExecRunner{Binary: os.Getenv("FLEETD_RUNTIME")} }
+func newRunner() runtime.ExecRunner {
+	return runtime.ExecRunner{Binary: envOr("CLAWNAP_RUNTIME", "FLEETD_RUNTIME")}
+}
 
 func openRegistry() (*registry.Store, error) {
 	p := filepath.Join(dataDir(), "cells.json")
-	if os.Geteuid() == 0 && os.Getenv("FLEETD_DATA") == "" {
+	if os.Geteuid() == 0 && envOr("CLAWNAP_DATA", "FLEETD_DATA") == "" {
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			old := "/root/.fleetd/cells.json"
 			if b, err := os.ReadFile(old); err == nil {
@@ -82,7 +84,7 @@ func openRegistry() (*registry.Store, error) {
 // is reachable, so the CLI never runs a second supervisor that the daemon's
 // reclaim loop cannot see. Returns handled=false when no daemon answers.
 func viaDaemon(ctx context.Context, verb, name string) (handled bool, out string, err error) {
-	addr := os.Getenv("FLEETD_INGRESS")
+	addr := envOr("CLAWNAP_INGRESS", "FLEETD_INGRESS")
 	if addr == "" {
 		addr = "http://127.0.0.1:8080"
 	}
@@ -90,7 +92,7 @@ func viaDaemon(ctx context.Context, verb, name string) (handled bool, out string
 	if err != nil {
 		return false, "", err
 	}
-	if t := os.Getenv("FLEETD_TOKEN"); t != "" {
+	if t := envOr("CLAWNAP_TOKEN", "FLEETD_TOKEN"); t != "" {
 		req.Header.Set("Authorization", "Bearer "+t)
 	}
 	res, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
@@ -137,11 +139,14 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: fleetd <cells|reconcile|hibernate|wake|serve> ...")
+		return fmt.Errorf("usage: clawnap <cells|reconcile|hibernate|wake|prefetch|serve|check|version> ...")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch args[0] {
+	case "version":
+		fmt.Println("clawnap", version)
+		return nil
 	case "cells":
 		return cells(args[1:])
 	case "reconcile":
@@ -250,7 +255,7 @@ func run(args []string) error {
 	case "serve":
 		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 		listen := fs.String("listen", "127.0.0.1:8080", "ingress listen address")
-		token := fs.String("token", os.Getenv("FLEETD_TOKEN"), "bearer token for /wake and /hibernate (required unless listening on loopback)")
+		token := fs.String("token", envOr("CLAWNAP_TOKEN", "FLEETD_TOKEN"), "bearer token for /wake and /hibernate (required unless listening on loopback)")
 		opts := loopFlags(fs)
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
@@ -266,7 +271,7 @@ func run(args []string) error {
 		metrics := func(w http.ResponseWriter) { sup.Metrics().Write(w, sup.Cells()) }
 		srv := &http.Server{Addr: *listen, Handler: (&ingress.Server{Reg: reg, Waker: wakeAdapter{sup}, Token: *token, Metrics: metrics}).Handler(), ReadHeaderTimeout: 5 * time.Second}
 		go func() { <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
-		slog.Info("fleetd serving", "listen", *listen)
+		slog.Info("clawnap serving", "listen", *listen)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			return err
 		}
@@ -384,4 +389,30 @@ func cells(args []string) error {
 		return enc.Encode(reg.List())
 	}
 	return fmt.Errorf("unknown cells command %q", args[0])
+}
+
+// version is stamped by the release workflow (-X main.version=vX.Y.Z).
+var version = "dev"
+
+// envOr reads the first set variable: the clawnap name, then the pre-rename
+// FLEETD_* name so an existing host keeps working until it is redeployed.
+func envOr(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// dataRoot is /var/lib/clawnap, or /var/lib/fleetd when only that exists
+// (hosts set up before the rename).
+func dataRoot() string {
+	if _, err := os.Stat("/var/lib/clawnap"); err == nil {
+		return "/var/lib/clawnap"
+	}
+	if _, err := os.Stat("/var/lib/fleetd"); err == nil {
+		return "/var/lib/fleetd"
+	}
+	return "/var/lib/clawnap"
 }
