@@ -19,7 +19,7 @@ Use as the body of a DM, a Discord post in a hosting channel, or a reply under a
 I run a small host-side supervisor for stock OpenClaw cells (nothing changed inside the container) and have been measuring it on a Hetzner CX43, 8 vCPU / 16 GB:
 
 - Stock cells with zram degrade at ~35 per host. Supervised: **100 cells on the same host, all healthy, 9 GB of RAM still free** (idle cells paused and their memory reclaimed to a swapfile; ~50 MiB of RAM per cold cell).
-- Wake on the first inbound Telegram message: recently active cells 0.7–1.2 s; cold cells 1.5–2 s alone, 7–15 s when ten wake at once on a cloud volume (page-in bandwidth, not the gateway).
+- Wake on the first inbound Telegram message: recently active cells ~1 s; cold cells ~3 s alone, 3–8 s for the last of ten waking at once. At any instant no more than ~15 % of cells hold their memory (5 % warm, up to 10 mid-wake); the rest sit at ~50 MiB each.
 - No user-visible artefact of the freeze: the supervisor covers OpenClaw's post-thaw window from the cell's own log; the tenant's config stays at defaults.
 
 All of this was measured on the smallest sensible host (8 shared vCPU, 16 GB, throttled NVMe): the supervisor is tuned by three numbers, resident share, the burst of cold wakes you want at page-in speed, and the RAM you have, and it scales with better hardware rather than needing it. Per-cell infrastructure cost drops by roughly 60–70 % on a cloud host at that density. If you run OpenClaw for customers on cloud VMs, I'd like to run a 30-day pilot on one of your hosts with your real tenants and give you the before/after numbers. Happy to share the full measurements first.

@@ -67,6 +67,7 @@ Phase 0c runs after 0b numbers exist (not before) and before Phase 1 code harden
 - Driver interface as a cell tree; Isthmus driver second, stock NanoClaw third.
 
 ## Decisions log
+- 2026-10-02: operating envelope on the reference host (8 vCPU / 16 GB, 100 cells): at most ~15 % of cells resident at any instant: 5 % warm guaranteed (300 MiB, ~1 s wake), up to 10 % warm when memory allows, plus up to 10 cells mid-wake (700–800 MiB each for the 3-minute post-thaw window). Cold burst of ten 3–8 s. Optimisation of this host class stops here; further gains come from the provider's hardware or from an upstream post-thaw signal.
 - 2026-10-01 (evening): operating rule: a woken cell stays awake at least 3 min and is not idle while above 10 % of a core (post-thaw maintenance). Recovery concurrency bounded at 4. Pressure reclaim yields to wakes in flight. Sizing rule unchanged; resident count self-adjusts to the host's available memory.
 - 2026-10-01: design 1 adopted. Tiers: warm = paused cell reclaimed to the 300 MiB floor (hot set recorded), cold = 150 MiB floor with the hot set prefetched at wake. No memory.high cap. Sizing rule: RAM ≈ 1 GB + 50 MiB × cold + 300 MiB × warm + 0.3 GB × burst. Design 2 (supervisor-side compressed store) not needed on this evidence.
 - 2026-10-01: no compressing block layer under swap (ZFS, dm-vdo), final. Fewer bytes per cold wake, if pursued, is a supervisor problem (which pages to prefetch), not a storage one. Kernel stays 6.8 on the reference host; a kernel change requires re-measuring the cold floor and available memory.
