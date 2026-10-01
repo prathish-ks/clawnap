@@ -130,10 +130,15 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 	maxRecov := fs.Int("max-recovering", 4, "cells allowed between unpause and ready at once (post-thaw recovery is CPU-bound)")
 	idleCPU := fs.Float64("idle-cpu-pct", 10, "a running cell using more CPU than this (percent of one core) is not idle, whatever its traffic; negative = ignore CPU")
 	minAwake := fs.Duration("min-awake", 3*time.Minute, "never hibernate a cell within this long of its last wake (OpenClaw's post-thaw maintenance must finish); negative = off")
+	burst := fs.Int("burst-target", 0, "cold wakes to absorb at full speed at once; sets -headroom-mib to 800 MiB per wake when that flag is not given (measured: a woken cell holds ~800 MiB through its post-thaw window)")
 	headroom := fs.Int64("headroom-mib", 0, "keep at least this much MemAvailable by reclaiming the longest-paused resident cells first (0 = timed reclaim only)")
 	return func() supervisor.Options {
+		head := *headroom
+		if head == 0 && *burst > 0 {
+			head = int64(*burst) * 800
+		}
 		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_,
-			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch, MaxConcurrent: *wakeConc, MaxRecovering: *maxRecov, IdleCPUPct: *idleCPU, MinAwake: *minAwake, Headroom: *headroom << 20, ThawSettle: *settle, WarmKeep: *warmKeep << 20, HotSetDir: filepath.Join(dataDir(), "hotsets")}
+			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch, MaxConcurrent: *wakeConc, MaxRecovering: *maxRecov, IdleCPUPct: *idleCPU, MinAwake: *minAwake, Headroom: head << 20, ThawSettle: *settle, WarmKeep: *warmKeep << 20, HotSetDir: filepath.Join(dataDir(), "hotsets")}
 	}
 }
 
