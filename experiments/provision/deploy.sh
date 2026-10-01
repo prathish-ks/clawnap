@@ -15,4 +15,4 @@ GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 go build -o bin/clawnap-linux ./cmd/clawna
 ssh ${SSHOPT[@]+"${SSHOPT[@]}"} "$HOST" mkdir -p clawnap/bin clawnap/experiments
 scp ${SSHOPT[@]+"${SSHOPT[@]}"} bin/clawnap-linux "$HOST":clawnap/bin/clawnap
 scp ${SSHOPT[@]+"${SSHOPT[@]}"} experiments/*.sh experiments/README.md "$HOST":clawnap/experiments/
-ssh ${SSHOPT[@]+"${SSHOPT[@]}"} "$HOST" 'chmod +x clawnap/bin/clawnap fleet/experiments/*.sh && echo deployed && clawnap/bin/clawnap cells list'
+ssh ${SSHOPT[@]+"${SSHOPT[@]}"} "$HOST" 'chmod +x clawnap/bin/clawnap clawnap/experiments/*.sh && echo deployed && clawnap/bin/clawnap cells list'
