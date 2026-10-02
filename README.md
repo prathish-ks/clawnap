@@ -72,8 +72,8 @@ RAM ≈ 1 GB (OS) + 50 MiB × cold cells + 300 MiB × warm cells + 0.8 GB × col
 | `-reclaim-keep-mib 150` | the cold floor |
 | `-headroom-mib 4096` | available memory the host keeps; below it, the longest-paused warm cells go cold. Size it for the burst of cold wakes you want to absorb |
 | `-reclaim-after 30m` | timed limit after which a warm cell goes cold anyway |
-| `-wake-concurrency 2` | page-ins in flight (disk-bound) |
-| `-max-recovering 4` | cells between unpause and ready at once (CPU-bound: OpenClaw's recovery) |
+| `-wake-concurrency 4` | page-ins in flight (a hot-set wake reads ~270 MiB) |
+| `-max-recovering 8` | cells between unpause and ready at once (CPU-bound: OpenClaw's recovery; tuned for 8 vCPUs) |
 | `-min-awake 3m`, `-idle-cpu-pct 10` | a woken cell is not paused again inside its post-thaw housekeeping |
 | `-thaw-settle 1s` | hold on the first forwarded message after a thaw, keyed on the cell's own log |
 

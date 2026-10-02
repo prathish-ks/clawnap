@@ -129,10 +129,10 @@ func (o *Options) defaults() {
 		o.StopWakeTimeout = 3 * time.Minute // OpenClaw gateway measured 50–90 s to ready after start
 	}
 	if o.MaxRecovering == 0 {
-		o.MaxRecovering = 4
+		o.MaxRecovering = 8
 	}
 	if o.MaxConcurrent == 0 {
-		o.MaxConcurrent = 2 // page-in is bandwidth bound: two in flight saturate a cloud volume, and sequencing gives earlier cells earlier wakes
+		o.MaxConcurrent = 4 // hot-set wakes read ~270 MiB: four in flight stay under a cloud volume's bandwidth (measured 2026-10-02); sequencing still gives earlier cells earlier wakes
 	}
 	if o.MemAvailable == nil {
 		o.MemAvailable = memAvailable

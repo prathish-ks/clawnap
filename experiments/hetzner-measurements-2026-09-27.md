@@ -583,3 +583,26 @@ Findings:
 - So the tenant-facing cold wake is **~5 s on 9.6 and ~7 s on 9.7** for a lone message, consistent with the 28 Sep real turn (8.7 s including a model call) and the settle runs.
 - What 9.7 does cost is CPU: the post-thaw work it runs while the restart is pending made ten simultaneous thaws saturate 8 vCPUs for 12–20 s (readiness 3–18 s in round three) where 9.6 stays under 2 s of stall. That is a burst-shaped regression, not a per-message one, and it is the note for upstream.
 - Clock discipline, now stated on the results page: the burst tables measure readiness (wake request to /health plus the settle); "delivered" measures the platform's push to the ingress 200; "answered" measures push to the reply. Readiness is what the supervisor controls; answered is what the tenant feels, and it adds the gateway's admission and the model round trip.
+
+## Where a 9.7 burst's time goes, per cell, and the concurrency sweep (07:30–08:00 UTC)
+Per-cell split of the round-three burst (v21..v30, 2026.9.7), reading the gateway's own `host timing gap detected` line as the unpause and the daemon's `woke` line minus the 1 s settle as health:
+
+| | Per cell |
+|---|---|
+| Gateway: unpause → answers /health | **0 to 1.4 s** on all ten |
+| Gateway: unpause → channel restart finished (`admission reopened`) | 31–61 s, off the critical path for health and for the message |
+| Daemon: page-in slot acquired → ready (prefetch, recovery slot, settle) | 3.2 to 8.4 s |
+
+So the gateway is ready almost at once; the spread is the daemon's sequencing, two page-ins at a time with a slot held until the pages land, and each advise call slowing from ~0.3 s to 1–2 s under the CPU load of the earlier cells' housekeeping. The two-at-a-time rule dates from 700 MiB wakes on a saturated disk; at 270 MiB per wake the disk is idle most of the burst.
+
+Sweep on cold 9.7 cells, same host:
+
+| Page-ins / recoveries in flight | Burst | min / p50 / max | CPU stall |
+|---|---|---|---|
+| 2 / 4 (shipped) | first wake of v41..v50 | 7.4 / 14.7 / 19.9 s | 10.9 s |
+| 4 / 8 | first wake of v51..v60 | 7.3 / 11.6 / 16.1 s | 13.2 s |
+| 4 / 8 | second wake of v41..v50 | **5.0 / 9.9 / 11.5 s** | 4.7 s |
+
+Findings:
+- Doubling both concurrency bounds takes about 20 % off the tail on 9.7 (19.9 → 16.1 s on first wakes, 11.5 s on a second wake) with no failures; the remaining time is the gateways' post-thaw CPU work, which scales with cores. New defaults: `-wake-concurrency 4`, `-max-recovering 8`, tuned for 8 vCPUs; a bigger host raises both.
+- On 9.7 the burst stays above the 9.6 numbers (3–8 s) because of that CPU work; the per-message cost is ~2 s (previous section). The upstream note carries both.
