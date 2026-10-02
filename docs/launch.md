@@ -40,3 +40,7 @@ Body: the Discord text, then three bullets of what did not work (zram as the sto
 ## 6. The three providers (DM or email)
 
 Use the outreach note in docs/community.md, now with the repo link and one line: "the README quickstart is the exact setup I measured; I can run the first host with you".
+
+## 7. Regression note for the #114145 follow-up (add after the numbers)
+
+2026.9.7 regression, measured side by side on one host: after a thaw, a 2026.9.6 cell logs `[admission] reopened` in the same second; a 2026.9.7 cell logs `host thaw channel restart deferred: gateway still has active work` and reopens 31 s later. The thaw recovery module (`server-maintenance`) is unchanged between the versions and retries on `TICK_INTERVAL_MS` = 30 s; what changed is `gateway-active-work`, which now also counts admitted agent runs, ACP turns and media generations, and on an idle cell one of those is non-zero at thaw. Net effect for any host that pauses cells: every thaw on 9.7 costs an extra ~30 s before channel traffic is processed, and ten concurrent thaws saturate 8 vCPUs for 12–20 s where 9.6 stays under 2 s. Suggested fix: re-check `restartChannelsIfIdle` when the active-work count drains rather than on the 30 s tick, or exclude post-thaw housekeeping runs from the gate. Full logs and the A/B are in the repository's measurements file.

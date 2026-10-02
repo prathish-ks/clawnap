@@ -554,3 +554,17 @@ Findings:
 | Round 3 | 3.4 / 9.7 / 16.4 s | 3.9 / 9.7 / 18.0 s | 4.2 / 5.8 / 7.7 s | 11.7–12.5 s |
 
 It does not converge to the reference. The first cell of a burst is now fast (3.4–3.9 s, the hot-set prefetch doing its job) but the tail stays at 16–18 s with the CPU saturated for 12 s by ten gateways' post-thaw work, and warm wakes stay at 4–8 s. Combined with the A/B, the conclusion is a version effect: **on OpenClaw 2026.9.7 the post-thaw path costs several seconds of CPU per cell and reopens admission 25–30 s after a thaw**, where 2026.9.6 reopens within a second and the same host and policy give 1 s warm and 3–8 s cold bursts. Zero wake failures in every round. For the release: measured version pinned in the README; the 9.7 regression goes into the upstream follow-up with these numbers. For the supervisor: nothing to change; the cost is inside the gateway after the thaw, which is exactly the ready-signal and deferred-housekeeping ask already on the thread.
+
+## Why 2026.9.7 thaws slowly: a 30-second channel-restart deferral (06:00–06:40 UTC)
+Read from the shipped bundles of both versions (`dist/server-maintenance-*.mjs`, `dist/gateway-active-work-*.mjs`, `dist/server-constants-*.mjs`) and confirmed in cell logs on the same host.
+
+- The host-thaw recovery module is **identical** in 9.6 and 9.7: on `host timing gap detected` it calls `restartChannelsIfIdle`; if that reports `active-work` it logs `host thaw channel restart deferred: gateway still has active work` and retries on the maintenance tick, `TICK_INTERVAL_MS = 30000`, for up to 10 minutes.
+- What changed is the **active-work snapshot**: 9.7 adds `agentRuns` ("admitted agent run(s)"), `acpRuns` and `mediaRuns` to the counts that block the restart. On an idle 9.7 cell one of these is non-zero at thaw, so the channel restart is deferred to the next tick.
+- Measured: 9.6 cell, cold thaw → `admission reopened` in the same second. 9.7 cell, same host, same policy → `deferred: gateway still has active work` at +0 s, `admission reopened` at **+31 s**. Every 9.7 thaw in this week's fresh-host runs shows the same 25–31 s gap; no 9.6 thaw does.
+- Effect on the supervisor's numbers: /health answers early, so the daemon's wake and the hot-set prefetch are unchanged (2.9 vs 3.5 s cold in the A/B), but the gateway only processes channel traffic once admission reopens, and the post-thaw work it runs meanwhile is what saturated the CPU in the ten-cell bursts (12–20 s CPU stall on 9.7 vs under 2 s on 9.6).
+
+What the host can and cannot do about it:
+- Cannot shorten the 30 s tick or change what counts as active work: both are constants inside the gateway, and changing a tenant's cell is out of bounds.
+- Can keep tenants on the measured version until upstream fixes it (providers pin image tags), which the README now says.
+- Could pre-empt the penalty by pulsing cells so the counted work runs during pulses rather than at the user-facing thaw; measured cost would be a page-in and ~5 CPU-seconds per cell per pulse, i.e. a standing load at 100 cells. Not adopted without upstream confirmation of what the counter is.
+- The fix belongs upstream and is small: re-check `restartChannelsIfIdle` when the active-work count drains instead of on the 30 s tick, or exclude housekeeping runs from the thaw gate. Filed in the #114145 follow-up with these numbers and code pointers.
