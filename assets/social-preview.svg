@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="clawnap: hibernate idle OpenClaw cells, wake them on their first message">
+  <rect width="1280" height="640" fill="#0B1220"/>
+  <g transform="translate(96 128) scale(0.75)">
+    <rect width="512" height="512" rx="112" fill="#111B33"/>
+    <path d="M 338 150 A 150 150 0 1 0 338 394" fill="none" stroke="#F97316" stroke-width="70" stroke-linecap="round"/>
+    <path d="M 338 150 L 384 198" fill="none" stroke="#F97316" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 338 394 L 384 346" fill="none" stroke="#F97316" stroke-width="56" stroke-linecap="round"/>
+    <circle cx="392" cy="272" r="50" fill="#FDE68A"/>
+    <circle cx="412" cy="254" r="44" fill="#111B33"/>
+  </g>
+  <text x="540" y="300" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="128" font-weight="700" fill="#F8FAFC">clawnap</text>
+  <text x="540" y="372" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="40" fill="#CBD5E1">Hibernate idle OpenClaw cells. Wake them on their first message.</text>
+  <text x="540" y="432" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="34" fill="#F97316">100 stock cells per 16 GB host, measured. Apache-2.0.</text>
+</svg>

@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" alt="clawnap" width="96" align="left">
+
 # clawnap
 
 A small Go daemon that lets a host run many more stock [OpenClaw](https://github.com/openclaw/openclaw) cells than it has RAM for, by hibernating the idle ones and waking them on their first inbound message. Nothing changes inside the cells: same image, same config, same bot token, which the host never holds.
@@ -126,4 +128,4 @@ Packages: `runtime` (Docker/Podman CLI seam), `registry` (durable cell records),
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE).
+Copyright 2026 Prathish KS. Apache-2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE).
