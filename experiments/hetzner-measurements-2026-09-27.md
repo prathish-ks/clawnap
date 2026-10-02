@@ -568,3 +568,18 @@ What the host can and cannot do about it:
 - Can keep tenants on the measured version until upstream fixes it (providers pin image tags), which the README now says.
 - Could pre-empt the penalty by pulsing cells so the counted work runs during pulses rather than at the user-facing thaw; measured cost would be a page-in and ~5 CPU-seconds per cell per pulse, i.e. a standing load at 100 cells. Not adopted without upstream confirmation of what the counter is.
 - The fix belongs upstream and is small: re-check `restartChannelsIfIdle` when the active-work count drains instead of on the 30 s tick, or exclude housekeeping runs from the thaw gate. Filed in the #114145 follow-up with these numbers and code pointers.
+
+## What the 9.7 deferral costs a tenant: a real message to a cold cell, both versions (07:20–07:24 UTC)
+Same fresh host, both cells verified paused and cold immediately before the push, a signed Telegram update from an unpaired sender through the public ingress, timed from the POST to the cell's outbound reply (its pairing notice, so no model latency in the number).
+
+| Version | Ingress answered 200 | Cell's reply sent | Cell log |
+|---|---|---|---|
+| 2026.9.6 (bob) | 3.8 s | **+4.9 s** | timing gap → admission closed and reopened in the same second |
+| 2026.9.7 (alice) | 5.6 s | **+6.7 s** | timing gap → "channel restart deferred: gateway still has active work"; reply sent anyway |
+| 2026.9.7, cell already awake (first attempt, invalid as a cold test) | 0.6 s | +1.7 s | – |
+
+Findings:
+- **The 31 s deferral does not hold the tenant's message.** The deferred thing is the *restart* of the channels; the running channel keeps delivering, the turn is admitted and answered, and `admission reopened` 31 s later marks the restart completing, not the message being released. A cold 9.7 cell answered 1.8 s after a cold 9.6 cell, not 30.
+- So the tenant-facing cold wake is **~5 s on 9.6 and ~7 s on 9.7** for a lone message, consistent with the 28 Sep real turn (8.7 s including a model call) and the settle runs.
+- What 9.7 does cost is CPU: the post-thaw work it runs while the restart is pending made ten simultaneous thaws saturate 8 vCPUs for 12–20 s (readiness 3–18 s in round three) where 9.6 stays under 2 s of stall. That is a burst-shaped regression, not a per-message one, and it is the note for upstream.
+- Clock discipline, now stated on the results page: the burst tables measure readiness (wake request to /health plus the settle); "delivered" measures the platform's push to the ingress 200; "answered" measures push to the reply. Readiness is what the supervisor controls; answered is what the tenant feels, and it adds the gateway's admission and the model round trip.
