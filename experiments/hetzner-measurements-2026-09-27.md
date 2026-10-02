@@ -520,3 +520,37 @@ A real message from the paired-nowhere owner through the public ingress woke `al
 99 more cells created with the README command, five at a time, with a fill override (`-min-awake -1s -idle-cpu-pct -1`) and a health loop that accepted "paused" as booted. Consequence: cells that were still booting after their config restart went network-idle, the daemon paused them mid-boot, the warm stage recorded a half-started process as a hot set (170 MiB, 2 procs), and the "cold" cells had never finished starting. The scenario then "woke" ten half-booted gateways at once: each resumed a full boot (`loading configuration… starting HTTP server…`), CPU saturated for a minute (cpu some 61–67 s), cold bursts 22–90 s, seven wake timeouts. Also: with all 100 "cold" the host used 12.3 GB, because these fresh ~340 MiB cells sit below the 150 MiB floor (v60: 97 MiB resident, 0 in swap) and the floor never engaged.
 
 Lessons, both recorded as follow-ups: (1) a fill must boot every cell to /health under the shipped policy before pausing it, which the CPU gate and the minimum awake time do by themselves (the override removed both); (2) the cold floor should be a fraction of the cell for small cells rather than a fixed 150 MiB, or `-reclaim-keep-mib` should default lower (cold cells on the reference host measured 35–71 MiB after reclaim). Rerun in progress with every cell booted to health under the shipped policy first.
+
+# 2026-10-02, fresh host, clean run
+
+## 100 cells booted to health under the shipped policy, then the scenario
+After the power cycle every container was Exited. Started ten at a time, each waited to /health (no shortcuts), paced on available memory, under the shipped policy (warm floor 300 MiB, cold floor 150, headroom 4 GB, min awake 3 m, CPU gate 10 %). Boot pass 65 min, 0 exited. All booted and paused: 7.7 GB available, 7.9 GB used, 76 GB in swap; a cold cell 31 MiB resident with 802 MiB in swap. So once cells have really booted, the floors engage and the host looks like the reference host; the 12 GB / no-swap state of 1 Oct was the half-booted fill.
+
+| Fresh host, OpenClaw 2026.9.7 cells | Warm burst of five | Cold burst of ten, v21..v30 | Cold burst of ten, v31..v40 | CPU stall in the cold bursts |
+|---|---|---|---|---|
+| Round 1 (first wake after first pause) | 2.7 / 3.9 / 5.2 s | 7.1 / 13.6 / 24.3 s | 7.9 / 14.2 / 25.9 s | 20 s |
+| Round 2 | 3.8 / 6.8 / 7.8 s | 4.8 / 10.9 / 14.9 s | 6.4 / 11.0 / 13.9 s | 3.3–4.6 s |
+| Reference host, 2026.9.6, steady state (1 Oct) | 1.1–1.3 s | 2.8 / 5.4 / 8.3 s | – | 1.7–1.8 s |
+
+Zero wake failures in every round. The first-wake debt (post-thaw housekeeping) is visible again: round two halved the cold burst and cut the CPU stall from 20 s to under 5. Round two still runs about twice the reference, and the cell log shows admission reopening 25–30 s after a thaw on these cells where the reference cells reopen within a second.
+
+## A/B on the same host: OpenClaw 2026.9.6 vs 2026.9.7
+One fresh cell per version, same policy, hibernated through the API between wakes (warm), then a timed cold reclaim.
+
+| | 2026.9.6 | 2026.9.7 |
+|---|---|---|
+| Warm wake 1 / 2 / 3 | 2.0 / 1.0 / 0.95 s | 4.2 / 2.6 / 1.6 s |
+| Cold wake, hot-set prefetch | 2.9 s (365 MiB advised, 253 landed) | 3.5 s (377 MiB advised, 266 landed) |
+
+Findings:
+- **The reference numbers reproduce on a fresh host with the reference version**: a 2026.9.6 cell wakes warm in about a second and cold in under three, from zero, with the published cloud-init, binary and quickstart.
+- **2026.9.7 is slower after a thaw and converges with use**: 4.2 → 2.6 → 1.6 s over three warm wakes, 0.6 s more on a cold wake. Most of the fresh host's burst gap to the reference is this version's heavier post-thaw path plus the first-wake debt of cells that have been woken only once or twice; a third round is running to show where it settles.
+- Release consequence: the README states the measured version (2026.9.6) and that 2026.9.7 adds roughly half a second to a second per wake in this A/B; the upstream follow-up gains a concrete regression note (admission reopening 25–30 s after a thaw on 2026.9.7).
+- Harness lessons kept: a fill must boot every cell to health under the shipped policy; "paused" is not "booted".
+
+### Round three on the 2026.9.7 cells (05:47–05:57 UTC)
+| | Cold burst v21..v30 | Cold burst v31..v40 | Warm burst of five | CPU stall (cold) |
+|---|---|---|---|---|
+| Round 3 | 3.4 / 9.7 / 16.4 s | 3.9 / 9.7 / 18.0 s | 4.2 / 5.8 / 7.7 s | 11.7–12.5 s |
+
+It does not converge to the reference. The first cell of a burst is now fast (3.4–3.9 s, the hot-set prefetch doing its job) but the tail stays at 16–18 s with the CPU saturated for 12 s by ten gateways' post-thaw work, and warm wakes stay at 4–8 s. Combined with the A/B, the conclusion is a version effect: **on OpenClaw 2026.9.7 the post-thaw path costs several seconds of CPU per cell and reopens admission 25–30 s after a thaw**, where 2026.9.6 reopens within a second and the same host and policy give 1 s warm and 3–8 s cold bursts. Zero wake failures in every round. For the release: measured version pinned in the README; the 9.7 regression goes into the upstream follow-up with these numbers. For the supervisor: nothing to change; the cost is inside the gateway after the thaw, which is exactly the ready-signal and deferred-housekeeping ask already on the thread.

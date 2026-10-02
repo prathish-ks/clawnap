@@ -2,7 +2,7 @@
 
 A small Go daemon that lets a host run many more stock [OpenClaw](https://github.com/openclaw/openclaw) cells than it has RAM for, by hibernating the idle ones and waking them on their first inbound message. Nothing changes inside the cells: same image, same config, same bot token, which the host never holds.
 
-Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw 2026.9.6, a real Telegram bot:
+Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **2026.9.6**, a real Telegram bot. Reproduced from zero on a second host from this repository alone (cloud-init, binary, the quickstart below). OpenClaw 2026.9.7 was about half a second to a second slower per wake in an A/B on the same host; pin the image tag you measure.
 
 | | Stock | With clawnap |
 |---|---|---|
@@ -46,7 +46,7 @@ systemctl daemon-reload && systemctl enable --now clawnap
 
 # 3. a cell with a Telegram bot, reached through a public HTTPS ingress (Caddy in front of 127.0.0.1:8080 works; a free hostname such as sslip.io is enough)
 echo "<bot token from BotFather>" > /root/bot.token && chmod 600 /root/bot.token
-clawnap cells create -name alice -port 22001 -hook-port 22901 \
+clawnap cells create -name alice -port 22001 -hook-port 22901 -image ghcr.io/openclaw/openclaw:2026.9.6 \
   -ingress-url https://<your-host> -telegram-token-file /root/bot.token -idle 10m
 ```
 
