@@ -7,7 +7,7 @@ Post in this order on the day the repository goes public, each from your own acc
 Follow-up to my comment from last week, with the host-side implementation now public: <repo> (Apache-2.0, Go, stock cells unchanged).
 
 Numbers since the last comment, same 8 vCPU / 16 GB cloud host, OpenClaw 2026.9.6:
-- 100 cells on the host, all healthy, 9 GB RAM free, versus ~35 stock. A cold cell costs ~50 MiB of RAM and ~700 MiB of swapfile; a warm one ~300 MiB.
+- 100 cells on the host, all healthy, 8–9 GB RAM free, versus ~35 stock. A cold cell costs ~65 MiB of RAM and ~700 MiB of swapfile; a warm one ~300 MiB.
 - Wake of a recently active cell ~1 s; a cold cell ~3 s from the platform's push to the 200; ten cold cells at once, last one ready in 3–8 s. The cold wake prefetches only the cell's hot set (the pages the kernel kept at a 300 MiB floor), ~270 MiB instead of the whole ~700.
 - No user-visible artefact of the freeze with the tenant's config at defaults: the host holds the first forwarded message for a bound keyed on the cell's own `host timing gap detected` line.
 
