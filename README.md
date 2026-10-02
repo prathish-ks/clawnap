@@ -10,7 +10,7 @@ Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **
 | RAM per idle cell | ~750 MiB | ~50 MiB cold, 300 MiB warm |
 | Wake of a recently active cell | always on | ~1 s |
 | Wake of a cold cell on its first message | always on | ~3 s, answer delivered on the platform's first push |
-| Ten cold cells waking at once | – | last one ready in 3–8 s |
+| Ten cold cells waking at once | – | last one ready to serve in 3–8 s (readiness; a reply adds admission and the model round trip, measured 5 s end to end for a cold cell without a model call) |
 | User-visible artefacts of the freeze | – | none: the host covers OpenClaw's post-thaw window from the cell's own log |
 
 Every number, including the ones that did not work (zram, zswap, ZFS, dm-vdo, KSM, memory caps), is in [experiments/hetzner-measurements-2026-09-27.md](experiments/hetzner-measurements-2026-09-27.md). The plan and decisions are in [docs/plan.md](docs/plan.md).
