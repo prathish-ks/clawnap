@@ -1,0 +1,22 @@
+12:21:55 batch 1-5 up avail=10529MB load=5.78
+12:22:21 batch 6-10 up avail=6575MB load=11.98
+12:22:45 batch 11-15 up avail=3512MB load=13.08
+12:23:27 batch 16-20 up avail=4838MB load=16.42
+12:24:00 batch 21-25 up avail=4158MB load=14.96
+12:24:23 batch 26-30 up avail=4040MB load=17.32
+12:25:07 batch 31-35 up avail=3355MB load=17.89
+12:25:31 batch 36-40 up avail=3389MB load=19.27
+12:26:36 batch 41-45 up avail=4452MB load=14.51
+12:27:03 batch 46-50 up avail=4000MB load=19.14
+12:28:04 batch 51-55 up avail=4596MB load=11.88
+12:28:20 batch 56-60 up avail=3766MB load=12.51
+12:29:31 batch 61-65 up avail=3673MB load=8.59
+12:29:49 batch 66-70 up avail=3388MB load=11.96
+12:30:54 batch 71-75 up avail=3556MB load=9.86
+12:31:22 batch 76-80 up avail=3406MB load=11.49
+12:32:19 batch 81-85 up avail=4278MB load=9.65
+12:32:46 batch 86-90 up avail=3710MB load=12.14
+12:33:43 batch 91-95 up avail=4307MB load=8.76
+12:34:09 batch 96-99 up avail=4414MB load=10.02
+12:35:31 booted: paused=100 exited=0 avail=6271MB swap_used=64249MB
+BOOT-DONE

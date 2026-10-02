@@ -1,0 +1,6 @@
+04:34:40 recreated v1-v5 avail=3135MB
+04:35:47 recreated v6-v10 avail=4510MB
+04:36:11 recreated v11-v15 avail=4765MB
+04:37:19 recreated v16-v20 avail=3596MB
+04:37:19 entrypoint now: [tini -s --] user=1000:1000 caps=[]
+PREP-DONE

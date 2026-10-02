@@ -1,0 +1,12 @@
+07:53:36 fleetd policy: -headroom-mib 8192 -prefetch-on-wake
+07:53:57 STATE 0-all-cold: RESIDENT=0 [] resident_sum=0 | HEADROOM avail=8702MB used=6910MB free=8320MB swap_used=68415MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+07:54:01 fleetd policy: -headroom-mib 6144 -prefetch-on-wake
+07:56:29 STATE 1-five-resident-capped: RESIDENT=5 [v1 v2 v3 v4 v5] resident_sum=1622M (per cell 324M) | HEADROOM avail=7164MB used=8448MB free=6770MB swap_used=67039MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+07:56:34 BURST warm-5 (the resident five, cap lifted at wake): codes= 5 200; min=1.36s p50=1.97s max=2.48s | times: 1.36 1.8 1.97 2.39 2.48 | psi(ms) mem_full=403 cpu_some=1098 io_full=537 | avail before=7185MB after=6618MB
+07:58:17 STATE 2-after-warm: RESIDENT=5 [v1 v2 v3 v4 v5] resident_sum=1449M (per cell 289M) | HEADROOM avail=7360MB used=8253MB free=6965MB swap_used=67153MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+07:58:38 BURST cold-10 (v21..v30 from disk, prefetch): codes= 10 200; min=8.5s p50=16.19s max=19.08s | times: 8.5 13.85 14.68 15.83 16.19 16.92 17.02 17.28 17.31 19.08 | psi(ms) mem_full=0 cpu_some=7830 io_full=7052 | avail before=7366MB after=1085MB
+07:59:54 STATE 3-after-cold-1: RESIDENT=1 [v21] resident_sum=655M (per cell 655M) | HEADROOM avail=6294MB used=9319MB free=5860MB swap_used=65825MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+08:00:17 BURST cold-10 (v31..v40 from disk, prefetch): codes= 10 200; min=16.24s p50=19.04s max=20.99s | times: 16.24 16.27 17.93 18.36 19.04 19.48 19.54 19.65 20.24 20.99 | psi(ms) mem_full=86 cpu_some=8109 io_full=8918 | avail before=6290MB after=955MB
+08:01:29 STATE 4-after-cold-2: RESIDENT=0 [] resident_sum=0 | HEADROOM avail=6202MB used=9403MB free=5643MB swap_used=64643MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+08:01:37 restored: fleetd active shipped policy; exited=0
+SCEN-DONE

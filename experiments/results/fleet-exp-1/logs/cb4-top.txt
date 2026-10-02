@@ -1,0 +1,1 @@
+%CPU COMMAND;233.3 opencla+;120.0 opencla+;66.7 opencla+;20.0 opencla+;13.3 top;0.0 systemd;0.0 kthreadd;

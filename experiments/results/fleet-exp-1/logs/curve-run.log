@@ -1,0 +1,36 @@
+11:24:27 phase 1: burst-size curve at 50 cells; swap: /swap.img file 40G 31.6G -2;
+11:25:07 settled: paused=50/50 swap_used=32336MB free=8551MB load=0.29
+11:25:14 BURST c50 n=1: codes= 1 200; wall_all=4.7s min=4.65s p50=4.65s max=4.65s | times: 4.65 | si_peak=456MB/s so_total=13MB min_idle=40% peak_wa=22% | psi(ms) mem_full=176 cpu_some=608 io_full=1764
+11:26:43 settled: paused=50/50 swap_used=32404MB free=1156MB load=0.72
+11:26:51 BURST c50 n=2: codes= 2 200; wall_all=5.7s min=3.47s p50=3.47s max=5.66s | times: 3.47 5.66 | si_peak=437MB/s so_total=17MB min_idle=37% peak_wa=37% | psi(ms) mem_full=13 cpu_some=715 io_full=769
+11:28:19 settled: paused=50/50 swap_used=32360MB free=1427MB load=0.56
+11:28:30 BURST c50 n=4: codes= 4 200; wall_all=8.3s min=5.29s p50=5.46s max=8.23s | times: 5.29 5.46 7.75 8.23 | si_peak=629MB/s so_total=212MB min_idle=2% peak_wa=77% | psi(ms) mem_full=1462 cpu_some=1317 io_full=2126
+11:29:59 settled: paused=50/50 swap_used=32569MB free=3444MB load=0.32
+11:30:16 BURST c50 n=8: codes= 8 200; wall_all=14.7s min=4.5s p50=8.37s max=14.6s | times: 4.5 6.73 7.17 8.37 9.26 11.04 13.89 14.6 | si_peak=611MB/s so_total=272MB min_idle=12% peak_wa=61% | psi(ms) mem_full=965 cpu_some=2063 io_full=4245
+11:31:44 settled: paused=50/50 swap_used=32811MB free=3835MB load=0.31
+11:32:08 BURST c50 n=10: codes= 10 200; wall_all=21.2s min=7.56s p50=15.48s max=21.15s | times: 7.56 7.97 8.0 8.3 15.48 15.66 16.0 16.14 20.8 21.15 | si_peak=0MB/s so_total=553MB min_idle=97% peak_wa=0% | psi(ms) mem_full=1277 cpu_some=2707 io_full=4453
+11:33:36 settled: paused=50/50 swap_used=33095MB free=4341MB load=0.71
+11:33:36 phase 2: growing to 100 cells; swap: /swap.img file 40G 32.3G -2;/swap2.img file 40G 0B -3;
+11:33:59 batch 50-54 up cells=55 free=493MB swap_used=33095MB load=2.97 exited=0
+11:34:23 batch 55-59 up cells=60 free=277MB swap_used=35585MB load=6.35 exited=0
+11:34:53 batch 60-64 up cells=65 free=320MB swap_used=37899MB load=15.39 exited=0
+11:35:23 batch 65-69 up cells=70 free=308MB swap_used=39572MB load=14.91 exited=0
+11:35:56 batch 70-74 up cells=75 free=385MB swap_used=43144MB load=22.16 exited=0
+11:37:37 settled: paused=75/75 swap_used=51621MB free=9445MB load=5.04
+11:37:38 STEP 75 cells: used=5375MB free=9445MB swap_used=51621MB exited=0 oom=0
+11:38:06 BURST c75 n=10: codes= 10 200; wall_all=26.4s min=9.86s p50=19.46s max=26.33s | times: 9.86 10.02 10.2 10.32 19.46 19.48 19.63 19.71 26.32 26.33 | si_peak=0MB/s so_total=17MB min_idle=43% peak_wa=0% | psi(ms) mem_full=33 cpu_some=3699 io_full=5794
+11:39:36 settled: paused=75/75 swap_used=50608MB free=8177MB load=1.37
+11:39:59 batch 75-79 up cells=80 free=4335MB swap_used=50607MB load=4.07 exited=0
+11:40:25 batch 80-84 up cells=85 free=259MB swap_used=51066MB load=13.88 exited=0
+11:40:55 batch 85-89 up cells=90 free=252MB swap_used=54497MB load=18.06 exited=0
+11:41:23 batch 90-94 up cells=95 free=266MB swap_used=57963MB load=22.68 exited=0
+11:41:50 batch 95-99 up cells=100 free=218MB swap_used=61364MB load=24.20 exited=0
+11:43:34 settled: paused=100/100 swap_used=70118MB free=9066MB load=6.79
+11:43:34 STEP 100 cells: used=5678MB free=9066MB swap_used=70118MB exited=0 oom=0
+11:44:01 BURST c100 n=10: codes= 10 200; wall_all=24.7s min=9.64s p50=18.77s max=24.72s | times: 9.64 9.66 9.79 9.97 18.77 18.93 18.98 19.04 24.69 24.72 | si_peak=0MB/s so_total=20MB min_idle=30% peak_wa=0% | psi(ms) mem_full=47 cpu_some=3821 io_full=5388
+11:45:31 settled: paused=100/100 swap_used=69279MB free=7755MB load=2.02
+fleetd_cells{phase="hibernated"} 100
+fleetd_wakes_total{kind="reclaimed"} 65
+fleetd_wake_failures_total 0
+11:45:33 final: cells=100 paused=100 exited=0 free=7820MB swap_used=69279MB
+RUN-DONE

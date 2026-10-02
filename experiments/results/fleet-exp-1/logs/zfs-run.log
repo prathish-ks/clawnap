@@ -1,0 +1,12 @@
+12:19:08 swap: /swap.img file 40G 39.6G -2;/swap2.img file 40G 27.8G -3;/dev/zd0 partition 80G 191.3M 200; arc_max=536870912
+12:22:40 after tgw cycles: zvol_used=597M ratio=2.07x pool_alloc=598M files: /swap.img=39.5G /swap2.img=27.8G 
+12:24:26 settled: paused=100/100 free=7138MB load=7.96 zvol_used=694M ratio=2.06x pool_alloc=731M files: /swap.img=39.2G /swap2.img=27.7G 
+12:24:26 migrated v1-v8
+12:26:14 settled: paused=100/100 free=5947MB load=15.99 zvol_used=984M ratio=2.07x pool_alloc=1.04G files: /swap.img=37.4G /swap2.img=27.7G 
+12:26:14 migrated v9-v16
+12:28:03 settled: paused=100/100 free=3175MB load=22.28 zvol_used=1.66G ratio=2.09x pool_alloc=1.76G files: /swap.img=35.2G /swap2.img=27.7G 
+12:28:03 migrated v17-v24
+12:31:04 settled: paused=100/100 free=4240MB load=28.40 zvol_used=3.39G ratio=2.09x pool_alloc=3.39G files: /swap.img=32.9G /swap2.img=27.7G 
+12:31:04 migrated v25-v32
+12:33:01 settled: paused=100/100 free=3841MB load=24.11 zvol_used=3.92G ratio=2.09x pool_alloc=4.04G files: /swap.img=30.7G /swap2.img=27.7G 
+12:33:01 migrated v33-v40

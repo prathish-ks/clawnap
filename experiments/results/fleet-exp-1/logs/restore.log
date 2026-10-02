@@ -1,0 +1,13 @@
+11:38:38 swap: /swap.img file 40G 0B 100 root_free=84G
+11:39:01 batch 1-5 up free=10597MB load=3.70
+11:39:23 batch 6-10 up free=6433MB load=10.41
+11:40:30 batch 11-15 up free=3906MB load=9.87
+11:40:53 batch 16-20 up free=3125MB load=13.35
+11:41:15 batch 21-25 up free=3579MB load=13.72
+11:42:17 batch 26-30 up free=4175MB load=9.90
+11:43:05 batch 31-35 up free=6431MB load=8.75
+11:43:23 batch 36-40 up free=3200MB load=9.28
+11:44:07 batch 41-45 up free=3049MB load=14.62
+11:44:58 batch 46-49 up free=3236MB load=9.47
+11:46:29 restored: paused=50 exited=0 free=9924MB swap_used=33457MB
+RESTORE-DONE

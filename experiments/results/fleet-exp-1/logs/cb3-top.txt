@@ -1,0 +1,1 @@
+%CPU COMMAND;130.8 opencla+;76.9 opencla+;38.5 opencla+;30.8 opencla+;23.1 top;7.7 codex;0.0 systemd;

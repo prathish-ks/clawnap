@@ -1,0 +1,15 @@
+13:06:52 STATE start: paused=100 warm=9 cold=91 untrimmed=0 warm:[v41 v42 v43 v44 v45 v46 v47 v49 v50] avail=5026MB used=10587MB hotsets=100
+13:08:13 BURST cold-10 (v51..v60): codes= 10 200; min=4.82s p50=11.06s max=19.05s | times: 4.82 7.44 10.19 10.59 11.06 12.76 12.9 12.96 16.31 19.05 | psi(ms) mem_full=810 cpu_some=8700 io_full=4704 | avail before=4944MB after=944MB
+cell=v56 scope=hot advised_mib=247 swap_before_mib=533 landed_mib=207 advise_took=948.660294ms pagein_took=503.249908ms;cell=v59 scope=hot advised_mib=262 swap_before_mib=646 landed_mib=233 advise_took=459.725508ms pagein_took=504.514546ms;
+
+cell=v60 start=78.319534ms ready=3.531096901s;cell=v56 start=176.293107ms ready=6.130622751s;cell=v52 start=70.939704ms ready=10.098550208s;cell=v53 start=63.956658ms ready=10.458001235s;cell=v55 start=73.506344ms ready=8.57616822s;cell=v57 start=76.741504ms ready=7.840866348s;cell=v58 start=117.698795ms ready=2.603978495s;cell=v59 start=173.432779ms ready=5.433398195s;cell=v54 start=64.956047ms ready=13.237703676s;cell=v51 start=86.983602ms ready=8.226563215s;
+
+13:10:27 STATE after-1: paused=100 warm=8 cold=92 untrimmed=0 warm:[v51 v53 v54 v55 v56 v57 v58 v59] avail=5977MB used=9636MB hotsets=100
+13:10:47 BURST cold-10 (v61..v70): codes= 10 200; min=5.77s p50=12.62s max=17.52s | times: 5.77 7.89 9.73 11.68 12.62 12.88 13.19 14.65 16.62 17.52 | psi(ms) mem_full=456 cpu_some=8053 io_full=4977 | avail before=5978MB after=1168MB
+cell=v56 scope=hot advised_mib=247 swap_before_mib=533 landed_mib=207 advise_took=948.660294ms pagein_took=503.249908ms;cell=v59 scope=hot advised_mib=262 swap_before_mib=646 landed_mib=233 advise_took=459.725508ms pagein_took=504.514546ms;
+
+cell=v60 start=78.319534ms ready=3.531096901s;cell=v56 start=176.293107ms ready=6.130622751s;cell=v52 start=70.939704ms ready=10.098550208s;cell=v53 start=63.956658ms ready=10.458001235s;cell=v55 start=73.506344ms ready=8.57616822s;cell=v57 start=76.741504ms ready=7.840866348s;cell=v58 start=117.698795ms ready=2.603978495s;cell=v59 start=173.432779ms ready=5.433398195s;cell=v54 start=64.956047ms ready=13.237703676s;cell=v51 start=86.983602ms ready=8.226563215s;cell=v66 start=173.042545ms ready=5
+
+13:12:06 STATE after-2: paused=100 warm=9 cold=91 untrimmed=0 warm:[v61 v62 v63 v64 v65 v67 v68 v69 v70] avail=6066MB used=9547MB hotsets=100
+13:12:06 wake_failures=0
+CB-DONE

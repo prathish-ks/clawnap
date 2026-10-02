@@ -1,0 +1,20 @@
+13:22:15 STATE start: paused=100 warm=10 cold=90 untrimmed=0 warm:[v51 v52 v53 v55 v56 v57 v58 v59 v60 v81] avail=5801MB used=9812MB hotsets=100
+13:23:12   vmstat: si_peak=0MB/s so_total=1513MB min_idle=0% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;361.5 opencla+;123.1 opencla+;115.4 opencla+;30.8 opencla+;15.4 top;0.0 systemd;0.0 kthreadd;
+13:23:12 BURST cold-10 long-paused (v71..v80, ~45 min): codes= 10 200; min=9.03s p50=16.41s max=25.11s | times: 9.03 9.04 9.09 9.38 16.41 17.18 17.36 17.43 25.09 25.11 | psi(ms) mem_full=1508 cpu_some=11637 io_full=7221 | avail before=5847MB after=707MB
+
+cell=v81 start=69.401458ms ready=4.325761964s;cell=v96 start=194.957126ms ready=7.747143181s;cell=v95 start=62.91337ms ready=8.979127983s;cell=v98 start=73.630459ms ready=7.826698631s;cell=v90 start=146.347691ms ready=9.168910213s;cell=v93 start=61.237179ms ready=13.529784781s;cell=v91 start=162.132501ms ready=8.051801588s;cell=v92 start=96.338755ms ready=8.233579978s;cell=v94 start=61.273337ms ready=14.529083343s;cell=v99 start=83.323745ms ready=14.557604104s;cell=v97 start=101.290587ms ready=1
+
+13:25:10 STATE after-1: paused=100 warm=6 cold=94 untrimmed=0 warm:[v91 v92 v93 v94 v97 v99] avail=6544MB used=9068MB hotsets=100
+13:25:32   vmstat: si_peak=0MB/s so_total=188MB min_idle=3% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;233.3 opencla+;120.0 opencla+;66.7 opencla+;20.0 opencla+;13.3 top;0.0 systemd;0.0 kthreadd;
+13:25:32 BURST cold-10 (v81..v89 + v80): codes= 9 200; min=8.45s p50=15.37s max=19.38s | times: 8.45 8.48 8.8 8.96 15.37 15.4 15.52 15.96 19.38 | psi(ms) mem_full=44 cpu_some=8476 io_full=5251 | avail before=6544MB after=797MB
+cell=v81 scope=hot advised_mib=264 swap_before_mib=714 landed_mib=164 advise_took=895.350301ms pagein_took=503.365074ms;
+
+cell=v96 start=194.957126ms ready=7.747143181s;cell=v95 start=62.91337ms ready=8.979127983s;cell=v98 start=73.630459ms ready=7.826698631s;cell=v90 start=146.347691ms ready=9.168910213s;cell=v93 start=61.237179ms ready=13.529784781s;cell=v91 start=162.132501ms ready=8.051801588s;cell=v92 start=96.338755ms ready=8.233579978s;cell=v94 start=61.273337ms ready=14.529083343s;cell=v99 start=83.323745ms ready=14.557604104s;cell=v97 start=101.290587ms ready=14.656184545s;cell=v89 start=93.882807ms ready=
+
+13:27:29 STATE after-2: paused=100 warm=6 cold=94 untrimmed=0 warm:[v81 v82 v84 v85 v86 v87] avail=6225MB used=9387MB hotsets=100
+2026-09-30T13:22:51.082 timing gap  <- v90
+2026-09-30T13:23:00.361 timing gap  <- v91
+2026-09-30T13:23:00.471 timing gap  <- v92
+2026-09-30T13:22:59.889 timing gap  <- v93
+13:27:29 wake_failures=0
+CB-DONE

@@ -1,0 +1,6 @@
+11:47:20 settled: paused=50 free=9828MB avail=10559MB swap_used=33456MB load=1.05
+11:47:20 daemon: serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 20s -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s binary=0a98c702
+11:47:44 BURST before n=10: codes= 10 200; wall_all=22.0s min=8.22s p50=16.06s max=21.93s | times: 8.22 8.26 8.4 8.45 16.06 16.07 16.2 16.31 21.84 21.93 | psi(ms) mem_full=21 cpu_some=10876 io_full=3849
+cell=v1 start=760.859438ms ready=8.142270596s;cell=v6 start=115.055537ms ready=8.174804835s;cell=v7 start=317.134761ms ready=8.263318582s;cell=v8 start=180.195173ms ready=8.286260759s;cell=v5 start=693.224178ms ready=7.822543569s;cell=v2 start=497.456067ms ready=7.795313522s;cell=v10 start=141.097788ms ready=7.68700066s;cell=v9 start=119.847917ms ready=7.716381816s;cell=v3 start=105.669642ms ready=5.754055973s;cell=v4 start=64.381964ms ready=5.850527156s;
+11:49:18 settled: paused=50 free=8662MB avail=9433MB swap_used=33955MB load=2.16
+BURST-DONE

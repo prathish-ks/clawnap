@@ -1,0 +1,43 @@
+09:09:13 == store trial: disk-k7
+09:09:14 STATE start: paused=100 avail=6251MB used=9357MB vdo_used=3.0G saving=0%
+swap: /swap.img=31.7G /swap2.img=31.9G 
+09:09:18 fleetd policy: -headroom-mib 8192
+09:13:28 batch [tgw v1 v2 v3 v4] in store: avail=5781MB load=0.48 vdo_used=3.0G saving=0%
+swap: /swap.img=31.5G /swap2.img=31.6G 
+09:17:37 batch [v5 v6 v7 v8 v9] in store: avail=5202MB load=0.47 vdo_used=3.0G saving=0%
+swap: /swap.img=31G /swap2.img=31.1G 
+09:21:26 batch [v10 v11 v12 v13 v14] in store: avail=4848MB load=0.48 vdo_used=3.0G saving=0%
+swap: /swap.img=31.1G /swap2.img=31.3G 
+09:25:36 batch [v15 v16 v17 v18 v19] in store: avail=4378MB load=0.42 vdo_used=3.0G saving=0%
+swap: /swap.img=30.6G /swap2.img=30.8G 
+09:29:46 batch [v20 v21 v22 v23 v24] in store: avail=4374MB load=0.38 vdo_used=3.0G saving=0%
+swap: /swap.img=30.5G /swap2.img=30.7G 
+09:33:55 batch [v25 v26 v27 v28 v29] in store: avail=4544MB load=0.33 vdo_used=3.0G saving=0%
+swap: /swap.img=30.7G /swap2.img=30.8G 
+09:38:04 batch [v30 v31 v32 v33 v34] in store: avail=4477MB load=0.47 vdo_used=3.0G saving=0%
+swap: /swap.img=30.5G /swap2.img=30.7G 
+09:42:14 batch [v35 v36 v37 v38 v39] in store: avail=4601MB load=0.40 vdo_used=3.0G saving=0%
+swap: /swap.img=30.3G /swap2.img=30.5G 
+09:45:40 batch [v40] in store: avail=4495MB load=0.26 vdo_used=3.0G saving=0%
+swap: /swap.img=30.2G /swap2.img=30.4G 
+09:45:40 fill done in 2182s, memory full stall over the fill: 2219ms
+09:46:01 STATE 41-cells-in-store: paused=100 avail=4486MB used=11123MB vdo_used=3.0G saving=0%
+swap: /swap.img=30.2G /swap2.img=30.4G 
+09:46:48 single cold wake 1: api=2.52s swap_before_mib=843 landed_mib=730 advise_took=1.013950411s pagein_took=503.298097ms 
+09:47:32 single cold wake 2: api=2.88s swap_before_mib=855 landed_mib=733 advise_took=1.385581478s pagein_took=502.943866ms 
+09:48:16 single cold wake 3: api=2.33s 
+09:48:20 fleetd policy: -headroom-mib 6144
+09:50:12 STATE 5-resident: paused=100 avail=4128MB used=11480MB vdo_used=3.0G saving=0%
+swap: /swap.img=30.2G /swap2.img=30.4G 
+09:50:23 BURST warm-5 (cap lifted at wake): codes= 5 200; min=6.45s p50=7.1s max=8.9s | times: 6.45 6.52 7.1 8.27 8.9 | psi(ms) mem_full=219 cpu_some=1711 io_full=2145 | avail before=4138MB after=1452MB
+09:51:57 STATE after-warm: paused=100 avail=4128MB used=11474MB vdo_used=3.0G saving=0%
+swap: /swap.img=30.1G /swap2.img=30.3G 
+09:52:23 BURST cold-10 (v21..v30 from the store): codes= 10 200; min=10.55s p50=14.68s max=23.78s | times: 10.55 10.73 12.06 12.66 14.68 14.69 17.72 22.65 23.71 23.78 | psi(ms) mem_full=8936 cpu_some=8046 io_full=8647 | avail before=4097MB after=999MB
+09:53:40 STATE after-cold-1: paused=100 avail=5649MB used=9959MB vdo_used=3.0G saving=0%
+swap: /swap.img=30.9G /swap2.img=31.1G 
+09:54:01 BURST cold-10 (v31..v40 from the store): codes= 10 200; min=11.98s p50=17.05s max=18.48s | times: 11.98 14.64 15.84 15.95 17.05 17.43 17.48 18.09 18.16 18.48 | psi(ms) mem_full=3411 cpu_some=7502 io_full=6257 | avail before=5650MB after=1140MB
+09:55:17 STATE after-cold-2: paused=100 avail=5918MB used=9692MB vdo_used=3.0G saving=0%
+swap: /swap.img=31.2G /swap2.img=31.3G 
+09:55:22 fleetd policy: -headroom-mib 8192
+09:55:22 wake_failures=0 exited=0
+TRIAL-DONE

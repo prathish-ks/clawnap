@@ -1,0 +1,6 @@
+02:14:17 zswap Y/zstd pool=2301MB avail=7207MB
+02:14:51 paused resident: v1:res=168M/z=136M/s=666M v2:res=171M/z=138M/s=663M v3:res=170M/z=138M/s=657M v4:res=168M/z=136M/s=655M v5:res=168M/z=137M/s=654M 
+02:15:02 trimmed in 10.9s: v1:res=82M/z=52M/s=666M v2:res=86M/z=56M/s=665M v3:res=83M/z=54M/s=657M v4:res=82M/z=52M/s=655M v5:res=83M/z=54M/s=655M  pool=2288MB avail=7245MB
+02:16:13 WAKE trimmed x5: wall=7.2s times: 3.62 3.72 5.82 5.89 7.16 | after: v1:res=702M/z=26M/s=565M v2:res=708M/z=29M/s=564M v3:res=690M/z=27M/s=554M v4:res=695M/z=25M/s=553M v5:res=717M/z=27M/s=556M 
+02:16:33 20 s later: v1:res=671M/z=26M/s=563M v2:res=676M/z=29M/s=562M v3:res=658M/z=26M/s=553M v4:res=663M/z=25M/s=552M v5:res=684M/z=26M/s=553M  health=200,200,200,200,200,
+TRIM-DONE

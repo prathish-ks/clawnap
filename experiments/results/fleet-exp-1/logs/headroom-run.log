@@ -1,0 +1,21 @@
+11:59:57 daemon relaunched: -reclaim-after 30m -headroom-mib 2048 (active)
+12:00:11 woke v1-v10: avail=3496MB
+12:01:41 after idle: paused=50 resident_among_v1-10=10 avail=3953MB reclaims_since=0 headroom_lines=0
+12:01:44 BURST resident n=10: codes= 10 200; wall_all=1.2s min=0.71s p50=0.94s max=1.17s | times: 0.71 0.75 0.79 0.93 0.94 0.96 0.98 1.06 1.16 1.17 | psi(ms) mem_full=5 cpu_some=1326 io_full=8
+cell=v6 start=46.084489ms ready=9.638139512s;cell=v2 start=119.468107ms ready=10.438482834s;cell=v8 start=50.907225ms ready=10.839106637s;cell=v5 start=104.176576ms ready=10.638801185s;cell=v9 start=51.775546ms ready=8.915980894s;cell=v4 start=177.607592ms ready=8.719637471s;cell=v1 start=92.628034ms ready=7.296450696s;cell=v3 s
+BURST-DONE
+12:03:21 daemon relaunched: -reclaim-after 30m -headroom-mib 12000 (active)
+12:04:36 pressure: avail_before=4005MB avail_after=9419MB
+memory headroom below target: reclaiming longest-paused cells available_mib=4039 target_mib=12000 cells=10
+reclaimed cell=v10 before_mib=678 after_mib=149 swap_mib=628
+reclaimed cell=v9 before_mib=713 after_mib=149 swap_mib=622
+reclaimed cell=v4 before_mib=691 after_mib=149 swap_mib=612
+reclaimed cell=v6 before_mib=689 after_mib=149 swap_mib=608
+reclaimed cell=v5 before_mib=709 after_mib=149 swap_mib=636
+reclaimed cell=v1 before_mib=703 after_mib=149 swap_mib=627
+reclaimed cell=v2 before_mib=714 after_mib=149 swap_mib=622
+reclaimed cell=v3 before_mib=711 after_mib=149 swap_mib=622
+reclaimed cell=v8 before_mib=675 after_mib=149 swap_mib=609
+reclaimed cell=v7 before_mib=698 after_mib=149 swap_mib=621
+12:04:39 daemon relaunched: -reclaim-after 20s (active)
+HR-DONE

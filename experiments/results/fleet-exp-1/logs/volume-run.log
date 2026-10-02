@@ -1,0 +1,50 @@
+12:30:54 batch 1-5 up
+12:31:25 batch 6-10 up
+12:31:55 batch 11-15 up
+12:32:31 batch 16-20 up
+12:33:09 batch 21-25 up
+12:33:45 batch 26-30 up
+12:34:20 batch 31-35 up
+12:34:55 batch 36-40 up
+12:35:34 batch 41-45 up
+12:36:11 batch 46-49 up
+12:36:11 all cells up; waiting for pause + reclaim of all 50
+12:48:50 paused=49 reclaims=50 used=13758MB zram=30.5G
+12:48:50 USER: send a message to @Ocfleet_bot NOW (the real tenth wake)
+12:50:10 --- results
+65]: 2026/09/27 12:49:32 INFO thaw recovery window: holding first forward cell=v9 hold=2.826002424s
+65]: 2026/09/27 12:49:32 INFO thaw recovery window: holding first forward cell=v1 hold=2.647886721s
+65]: 2026/09/27 12:49:32 INFO thaw recovery window: holding first forward cell=v5 hold=2.715693345s
+65]: 2026/09/27 12:49:35 INFO woke cell=v1 start=18.537334924s ready=24.548399131s
+65]: 2026/09/27 12:49:35 INFO woke cell=v5 start=18.234763257s ready=24.638882205s
+65]: 2026/09/27 12:49:35 INFO woke cell=v9 start=18.613798986s ready=24.669154189s
+65]: 2026/09/27 12:49:39 INFO thaw recovery window: holding first forward cell=v2 hold=2.958738486s
+65]: 2026/09/27 12:49:39 INFO thaw recovery window: holding first forward cell=v4 hold=2.96553581s
+65]: 2026/09/27 12:49:39 INFO thaw recovery window: holding first forward cell=v7 hold=2.962175514s
+65]: 2026/09/27 12:49:42 INFO woke cell=v2 start=116.586396ms ready=7.236653209s
+65]: 2026/09/27 12:49:42 INFO woke cell=v4 start=84.37645ms ready=7.275784861s
+65]: 2026/09/27 12:49:42 INFO woke cell=v7 start=71.459489ms ready=7.485432898s
+65]: 2026/09/27 12:49:46 INFO thaw recovery window: holding first forward cell=v8 hold=2.925042128s
+65]: 2026/09/27 12:49:46 INFO thaw recovery window: holding first forward cell=v3 hold=2.95152949s
+65]: 2026/09/27 12:49:47 INFO thaw recovery window: holding first forward cell=v6 hold=2.960367738s
+65]: 2026/09/27 12:49:49 INFO woke cell=v8 start=85.886247ms ready=7.054414578s
+65]: 2026/09/27 12:49:49 INFO woke cell=v3 start=103.387534ms ready=7.054536849s
+65]: 2026/09/27 12:49:50 INFO woke cell=v6 start=102.067033ms ready=7.238825231s
+65]: 2026/09/27 12:49:55 WARN hook listener not serving after wake cell=v1 port=22901 err="Post \"http://127.0.0.1:22901/
+65]: 2026/09/27 12:49:55 WARN hook listener not serving after wake cell=v5 port=22905 err="Post \"http://127.0.0.1:22905/
+65]: 2026/09/27 12:49:55 WARN hook listener not serving after wake cell=v9 port=22909 err="Post \"http://127.0.0.1:22909/
+65]: 2026/09/27 12:50:02 INFO woke cell=tgw start=433.870728ms ready=51.734609248s
+65]: 2026/09/27 12:50:02 WARN hook listener not serving after wake cell=v2 port=22902 err="Post \"http://127.0.0.1:22902/
+65]: 2026/09/27 12:50:02 WARN hook listener not serving after wake cell=v4 port=22904 err="Post \"http://127.0.0.1:22904/
+65]: 2026/09/27 12:50:03 WARN hook listener not serving after wake cell=v7 port=22907 err="Post \"http://127.0.0.1:22907/
+65]: 2026/09/27 12:50:09 WARN hook listener not serving after wake cell=v8 port=22908 err="Post \"http://127.0.0.1:22908/
+65]: 2026/09/27 12:50:09 WARN hook listener not serving after wake cell=v3 port=22903 err="Post \"http://127.0.0.1:22903/
+65]: 2026/09/27 12:50:10 WARN hook listener not serving after wake cell=v6 port=22906 err="Post \"http://127.0.0.1:22906/
+12:50:15 still paused: 40  running: 10  exited: 0
+fleetd_cells{phase="active"} 10
+fleetd_cells{phase="hibernated"} 40
+fleetd_wakes_total{kind="reclaimed"} 10
+fleetd_wakes_total{kind="stop"} 1
+fleetd_wake_failures_total 0
+12:50:15 load: 15.41 21.68 31.52
+RUN-DONE

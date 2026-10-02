@@ -1,0 +1,5 @@
+== disk cycles=3 wb= 10:43:23 swap: /swap.img file  40G   0B   50;
+10:44:18 cycle 1: hib cur=841 swap=0 -> cur=149 swap=511 |  | wake_api=1.51s health=1.53s | cell=tgw start=53.989572ms ready=1.446452796s | prefetch swap_before_mib=511 took=634.062823ms | psi(ms) mem_full=93 mem_some=101 cpu_some=50 io_full=114 | vmstat si peak=499272K/s sum=501652K min_idle=71% peak_wa=10%
+10:45:14 cycle 2: hib cur=731 swap=421 -> cur=149 swap=624 |  | wake_api=1.85s health=2.05s | cell=tgw start=61.107846ms ready=1.807583084s | prefetch swap_before_mib=624 took=838.115294ms | psi(ms) mem_full=173 mem_some=180 cpu_some=129 io_full=396 | vmstat si peak=484432K/s sum=517671K min_idle=31% peak_wa=13%
+10:46:14 cycle 3: hib cur=899 swap=456 -> cur=149 swap=786 |  | wake_api=2.05s health=2.07s | cell=tgw start=57.150185ms ready=1.979263436s | prefetch swap_before_mib=786 took=899.196388ms | psi(ms) mem_full=12 mem_some=13 cpu_some=95 io_full=477 | vmstat si peak=640296K/s sum=692225K min_idle=50% peak_wa=23%
+RUN-DONE disk

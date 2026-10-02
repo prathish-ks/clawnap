@@ -1,0 +1,20 @@
+12:26:51 == settle bound 1500ms
+12:28:42 bound=1500ms wake=1 http=200 delivered_in=3.91s detector=1 hold=1.45765434s abort=0 notice=0 outbound_lines=1
+12:30:30 bound=1500ms wake=2 http=200 delivered_in=4.86s detector=1 hold=1.462986962s abort=0 notice=0 outbound_lines=1
+12:32:18 bound=1500ms wake=3 http=200 delivered_in=4.17s detector=1 hold=1.470558149s abort=0 notice=0 outbound_lines=1
+12:34:05 bound=1500ms wake=4 http=200 delivered_in=4.01s detector=1 hold=1.47390459s abort=0 notice=0 outbound_lines=1
+12:35:53 bound=1500ms wake=5 http=200 delivered_in=4.48s detector=1 hold=1.454362003s abort=0 notice=0 outbound_lines=1
+12:35:56 == settle bound 1s
+12:37:44 bound=1s wake=1 http=200 delivered_in=2.99s detector=1 hold=965.30641ms abort=0 notice=0 outbound_lines=1
+12:39:31 bound=1s wake=2 http=200 delivered_in=4.18s detector=1 hold=959.339146ms abort=0 notice=0 outbound_lines=1
+12:41:18 bound=1s wake=3 http=200 delivered_in=3.93s detector=1 hold=954.926443ms abort=0 notice=0 outbound_lines=1
+12:43:06 bound=1s wake=4 http=200 delivered_in=4.1s detector=1 hold=960.220041ms abort=0 notice=0 outbound_lines=1
+12:44:53 bound=1s wake=5 http=200 delivered_in=3.96s detector=1 hold=948.793286ms abort=0 notice=0 outbound_lines=1
+12:44:56 == settle bound 500ms
+12:46:44 bound=500ms wake=1 http=200 delivered_in=3.58s detector=1 hold=460.115325ms abort=0 notice=0 outbound_lines=1
+12:48:31 bound=500ms wake=2 http=200 delivered_in=3.54s detector=1 hold=442.264728ms abort=0 notice=0 outbound_lines=1
+12:50:17 bound=500ms wake=3 http=200 delivered_in=3.12s detector=1 hold=454.767153ms abort=0 notice=0 outbound_lines=1
+12:52:04 bound=500ms wake=4 http=200 delivered_in=3.35s detector=1 hold=464.191765ms abort=0 notice=0 outbound_lines=1
+12:53:51 bound=500ms wake=5 http=200 delivered_in=3.6s detector=1 hold=456.844868ms abort=0 notice=0 outbound_lines=1
+12:53:51 restored fleetd service: active
+SETTLE-DONE

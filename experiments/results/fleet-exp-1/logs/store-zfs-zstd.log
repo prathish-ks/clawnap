@@ -1,0 +1,8 @@
+08:31:34 == store trial: zfs-zstd
+08:31:35 STATE start: paused=100 avail=6165MB used=9448MB zvol_used=56K ratio=1.57x arc=4MiB
+swap: /swap.img=31.6G /swap2.img=31.6G /dev/zd0=0B 
+08:31:39 fleetd policy: -headroom-mib 8192
+08:36:06 batch [tgw v1 v2 v3 v4] in store: avail=5243MB load=22.43 zvol_used=1.49G ratio=2.81x arc=36MiB
+swap: /swap.img=30.3G /swap2.img=30.2G /dev/zd0=3.5G 
+08:40:16 batch [v5 v6 v7 v8 v9] in store: avail=3572MB load=31.28 zvol_used=2.71G ratio=2.80x arc=49MiB
+swap: /swap.img=28.6G /swap2.img=28.5G /dev/zd0=6.9G 

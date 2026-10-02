@@ -1,0 +1,20 @@
+13:13:37 STATE start: paused=100 warm=9 cold=91 untrimmed=0 warm:[v61 v62 v63 v64 v65 v67 v68 v69 v70] avail=6069MB used=9544MB hotsets=100
+13:14:34   vmstat: si_peak=0MB/s so_total=1660MB min_idle=0% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;129.4 opencla+;129.4 opencla+;123.5 opencla+;47.1 opencla+;11.8 dockerd;11.8 top;11.8 docker;
+13:14:34 BURST cold-10 long-paused (v71..v80, ~45 min): codes= 10 200; min=7.91s p50=15.9s max=24.39s | times: 7.91 8.85 8.93 9.88 15.9 15.92 15.94 16.11 23.23 24.39 | psi(ms) mem_full=1422 cpu_some=11388 io_full=6346 | avail before=6006MB after=775MB
+
+cell=v76 start=102.683981ms ready=6.44356042s;cell=v80 start=59.908758ms ready=8.765941882s;cell=v72 start=227.388332ms ready=7.421864302s;cell=v75 start=99.121326ms ready=9.754808178s;cell=v78 start=55.04654ms ready=12.901126874s;cell=v71 start=169.509483ms ready=6.817523933s;cell=v79 start=72.660294ms ready=12.930750152s;cell=v77 start=115.897228ms ready=8.120408063s;cell=v74 start=88.425908ms ready=13.005258961s;cell=v73 start=130.503482ms ready=15.433209894s;
+
+13:16:32 STATE after-1: paused=100 warm=8 cold=92 untrimmed=0 warm:[v71 v72 v73 v74 v75 v77 v78 v79] avail=6812MB used=8801MB hotsets=100
+13:16:56   vmstat: si_peak=0MB/s so_total=30MB min_idle=34% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;130.8 opencla+;76.9 opencla+;38.5 opencla+;30.8 opencla+;23.1 top;7.7 codex;0.0 systemd;
+13:16:56 BURST cold-10 recently active (v51..v60, paused ~10 min): codes= 10 200; min=9.16s p50=17.56s max=21.84s | times: 9.16 9.89 12.36 13.32 17.56 18.01 18.15 18.16 21.66 21.84 | psi(ms) mem_full=102 cpu_some=5301 io_full=7101 | avail before=6812MB after=2158MB
+cell=v51 scope=hot advised_mib=296 swap_before_mib=783 landed_mib=226 advise_took=1.268660295s pagein_took=504.3682ms;cell=v54 scope=hot advised_mib=347 swap_before_mib=656 landed_mib=224 advise_took=1.402147208s pagein_took=510.089402ms;cell=v52 scope=hot advised_mib=301 swap_before_mib=735 landed_mib=259 advise_took=1.067521627s pagein_took=503.689263ms;cell=v53 scope=hot advised_mib=318 swap_before_mib=689 landed_mib=196 advise_took=963.58892ms pagein_took=504.255797ms;cell=v59 scope=hot advised_mib=345 swap_before_mib=767 landed_mib=293 advise_took=1.378413333s pagein_took=503.826753ms;cell=v55 scope=hot advised_mib=303 swap_before_mib=710 landed_mib=180 advise_took=446.605011ms pagein_took=503.711168ms;cell=v56 scope=hot advised_mib=278 swap_before_mib=758 landed_mib=191 advise_took=556.155104ms pagein_took=503.896539ms;
+
+cell=v76 start=102.683981ms ready=6.44356042s;cell=v80 start=59.908758ms ready=8.765941882s;cell=v72 start=227.388332ms ready=7.421864302s;cell=v75 start=99.121326ms ready=9.754808178s;cell=v78 start=55.04654ms ready=12.901126874s;cell=v71 start=169.509483ms ready=6.817523933s;cell=v79 start=72.660294ms ready=12.930750152s;cell=v77 start=115.897228ms ready=8.120408063s;cell=v74 start=88.425908ms ready=13.005258961s;cell=v73 start=130.503482ms ready=15.433209894s;cell=v54 start=153.683046ms ready
+
+13:19:03 STATE after-2: paused=100 warm=9 cold=91 untrimmed=0 warm:[v51 v52 v53 v55 v56 v57 v58 v59 v60] avail=6091MB used=9526MB hotsets=100
+2026-09-30T13:14:21.503 timing gap  <- v71
+2026-09-30T13:14:14.682 timing gap  <- v72
+2026-09-30T13:14:27.934 timing gap  <- v73
+2026-09-30T13:14:27.476 timing gap  <- v74
+13:19:04 wake_failures=0
+CB-DONE

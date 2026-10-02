@@ -1,0 +1,1 @@
+%CPU COMMAND;200.0 opencla+;164.3 opencla+;35.7 opencla+;28.6 opencla+;21.4 top;7.1 fleetd;7.1 kworker+;

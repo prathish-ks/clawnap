@@ -1,0 +1,4 @@
+12:55:57 swap: /dev/zd0 partition 80G 0B 200; zvol_used=6.64G ratio=2.09x swap_used=0MB arc=12MiB
+12:56:22 batch 1-5 up free=10464MB load=5.27 zvol_used=6.64G ratio=2.09x swap_used=0MB arc=12MiB
+12:56:44 batch 6-10 up free=6192MB load=9.58 zvol_used=6.64G ratio=2.09x swap_used=0MB arc=12MiB
+12:58:56 batch 11-15 up free=3025MB load=28.66 zvol_used=6.62G ratio=2.10x swap_used=1845MB arc=86MiB

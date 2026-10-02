@@ -1,0 +1,64 @@
+daemon-up 04:07:39
+step 10: 10 cells booted in 26s
+  wake s9 -> 200 129ms
+  wake s8 -> 200 107ms
+  wake s4 -> 200 91ms
+  wake s5 -> 200 115ms
+  wake s7 -> 200 108ms
+10,10,10,5,5,0,5694,8005,2.9G,772.7M,0.83,108,129,5,0
+step 20: 10 cells booted in 26s
+  wake s17 -> 200 142ms
+  wake s19 -> 200 122ms
+  wake s3 -> 200 2182ms
+  wake s11 -> 200 136ms
+  wake s8 -> 200 2144ms
+20,20,21,0,20,0,8461,6145,9.6G,2.5G,0.49,142,2182,5,0
+step 30: 10 cells booted in 26s
+  wake s2 -> 200 2101ms
+  wake s26 -> 200 137ms
+  wake s18 -> 200 1973ms
+  wake s11 -> 200 2180ms
+  wake s1 -> 200 2743ms
+30,30,33,0,30,0,10813,4183,14.9G,3.9G,0.33,2101,2743,5,0
+step 35: 5 cells booted in 16s
+  wake s14 -> 200 2119ms
+  wake s4 -> 200 2032ms
+  wake s15 -> 200 2153ms
+  wake s9 -> 200 2316ms
+  wake s2 -> 200 2027ms
+35,35,40,0,35,0,14441,564,15.2G,4G,0.17,2119,2316,5,0
+step 40: 5 cells booted in 137s
+  wake s1 -> 200 212ms
+  wake s18 -> 200 181ms
+  wake s28 -> 200 3167ms
+  wake s36 -> 200 1232ms
+  wake s9 -> 200 3179ms
+40,40,42,0,40,0,15140,279,15.2G,4G,10.70,1232,3179,5,0
+step 45: 5 cells booted in 997s
+  wake s27 -> 200 2007ms
+  wake s39 -> 200 1265ms
+  wake s9 -> 200 295ms
+  wake s41 -> 502 120156ms
+  wake s36 -> 200 874ms
+45,45,42,0,42,3,14366,1003,15.2G,4G,0.01,1265,120156,5,1
+ceiling: exits at 45
+=== final 04:56:31
+Mem:           15613       14367        1002           5         593        1246
+Swap:          15613       15613           0
+/dev/zram0 zstd         15.2G 15.2G    4G  4.1G       8 [SWAP]
+fleetd_cells{phase="hibernated"} 45
+fleetd_wakes_total{kind="pause"} 10
+fleetd_wakes_total{kind="reclaimed"} 19
+fleetd_wake_failures_total 1
+fleetd_hibernates_total{tier="pause"} 72
+fleetd_reclaims_total 61
+fleetd_reclaimed_bytes_total 24653246464
+Sep 27 04:53:23 fleet-exp-1 fleetd[48592]: 2026/09/27 04:53:23 INFO hibernated cell=s27 tier=pause took=80.949096ms
+Sep 27 04:54:11 fleet-exp-1 fleetd[48592]: 2026/09/27 04:54:11 WARN wake failed cell=s41 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:20041/healt
+Sep 27 04:54:12 fleet-exp-1 fleetd[48592]: 2026/09/27 04:54:12 INFO prefetched cell=s36 mechanism=process_madvise procs=6 mappings=1870 advised_mib=4353 swap_before_mib=1
+Sep 27 04:54:12 fleet-exp-1 fleetd[48592]: 2026/09/27 04:54:12 INFO woke cell=s36 start=81.071354ms ready=826.875553ms
+Sep 27 04:55:06 fleet-exp-1 fleetd[48592]: 2026/09/27 04:55:06 INFO reclaimed cell=s9 before_mib=597 after_mib=312 swap_mib=461
+Sep 27 04:55:07 fleet-exp-1 fleetd[48592]: 2026/09/27 04:55:07 INFO reclaimed cell=s27 before_mib=594 after_mib=491 swap_mib=225
+Sep 27 04:55:07 fleet-exp-1 fleetd[48592]: 2026/09/27 04:55:07 INFO reclaimed cell=s39 before_mib=933 after_mib=603 swap_mib=24
+Sep 27 04:55:08 fleet-exp-1 fleetd[48592]: 2026/09/27 04:55:08 INFO hibernated cell=s36 tier=pause took=57.785784ms
+RUN-DONE

@@ -1,0 +1,21 @@
+13:50:18 STATE start: paused=100 warm=6 cold=94 untrimmed=0 warm:[v81 v82 v84 v85 v86 v87] avail=6229MB used=9384MB hotsets=100
+13:51:14   vmstat: si_peak=0MB/s so_total=21MB min_idle=1% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;214.3 opencla+;121.4 opencla+;114.3 opencla+;50.0 opencla+;28.6 top;21.4 MainThr+;21.4 MainThr+;
+13:51:14 BURST cold-10 (v90..v99, image cached): codes= 10 200; min=7.19s p50=16.63s max=23.67s | times: 7.19 12.2 12.35 13.06 16.63 20.26 20.74 21.37 23.46 23.67 | psi(ms) mem_full=1495 cpu_some=7620 io_full=5877 | avail before=6191MB after=2062MB
+cell=v97 scope=hot advised_mib=295 swap_before_mib=733 landed_mib=174 advise_took=896.926215ms pagein_took=502.987652ms;cell=v98 scope=hot advised_mib=384 swap_before_mib=699 landed_mib=258 advise_took=1.537276796s pagein_took=504.027865ms;cell=v90 scope=hot advised_mib=340 swap_before_mib=683 landed_mib=220 advise_took=688.931872ms pagein_took=503.199619ms;cell=v92 scope=hot advised_mib=323 swap_before_mib=686 landed_mib=203 advise_took=915.755222ms pagein_took=503.11933ms;cell=v93 scope=hot advised_mib=356 swap_before_mib=685 landed_mib=233 advise_took=1.057875019s pagein_took=503.970741ms;cell=v91 scope=hot advised_mib=328 swap_before_mib=704 landed_mib=206 advise_took=1.045432204s pagein_took=506.877701ms;cell=v96 scope=hot advised_mib=280 swap_before_mib=753 landed_mib=161 advise_took=671.624248ms pagein_took=503.271137ms;cell=v94 scope=hot advised_mib=300 swap_before_mib=688 landed
+
+cell=v98 start=153.755186ms ready=7.065017113s;cell=v92 start=183.541717ms ready=9.731410014s;cell=v90 start=255.711034ms ready=10.554475259s;cell=v93 start=97.444432ms ready=9.579175303s;cell=v97 start=180.480947ms ready=16.498181467s;cell=v91 start=52.692825ms ready=16.071187171s;cell=v94 start=80.515328ms ready=8.465475564s;cell=v96 start=115.362126ms ready=14.0599133s;cell=v99 start=75.771265ms ready=10.959816238s;cell=v95 start=128.632239ms ready=9.814375405s;
+
+13:54:00 STATE after-1: paused=100 warm=7 cold=93 untrimmed=0 warm:[v91 v92 v93 v94 v95 v96 v99] avail=6033MB used=9580MB hotsets=100
+13:54:29   vmstat: si_peak=0MB/s so_total=53MB min_idle=0% peak_wa=0% peak_sy=0% top@6s: %CPU COMMAND;200.0 opencla+;164.3 opencla+;35.7 opencla+;28.6 opencla+;21.4 top;7.1 fleetd;7.1 kworker+;
+13:54:29 BURST cold-10 (v71..v80 again, image cached): codes= 10 200; min=11.18s p50=18.91s max=26.54s | times: 11.18 12.18 12.32 18.3 18.91 19.39 24.65 25.45 25.48 26.54 | psi(ms) mem_full=172 cpu_some=6892 io_full=8269 | avail before=6033MB after=1458MB
+cell=v72 scope=hot advised_mib=320 swap_before_mib=694 landed_mib=206 advise_took=1.41419835s pagein_took=505.135264ms;cell=v73 scope=hot advised_mib=319 swap_before_mib=826 landed_mib=254 advise_took=1.539793823s pagein_took=505.285625ms;cell=v77 scope=hot advised_mib=307 swap_before_mib=759 landed_mib=245 advise_took=1.269781066s pagein_took=503.322728ms;cell=v78 scope=hot advised_mib=297 swap_before_mib=747 landed_mib=237 advise_took=1.31831148s pagein_took=503.669511ms;cell=v79 scope=hot advised_mib=303 swap_before_mib=734 landed_mib=242 advise_took=1.115206496s pagein_took=502.622164ms;cell=v74 scope=hot advised_mib=315 swap_before_mib=740 landed_mib=229 advise_took=1.101524449s pagein_took=503.831044ms;cell=v71 scope=hot advised_mib=384 swap_before_mib=718 landed_mib=319 advise_took=1.066778049s pagein_took=504.31687ms;cell=v76 scope=hot advised_mib=283 swap_before_mib=771 landed_m
+
+cell=v72 start=54.501253ms ready=11.101748799s;cell=v77 start=85.042848ms ready=10.052847736s;cell=v78 start=171.35972ms ready=9.955315012s;cell=v73 start=101.861599ms ready=18.209364889s;cell=v71 start=99.466579ms ready=7.599533214s;cell=v79 start=52.727541ms ready=15.364073574s;cell=v74 start=161.009544ms ready=20.194188224s;cell=v76 start=90.615129ms ready=13.086708934s;cell=v75 start=138.192974ms ready=12.480456875s;cell=v80 start=64.29728ms ready=8.137867184s;
+
+13:56:26 STATE after-2: paused=100 warm=8 cold=92 untrimmed=0 warm:[v71 v73 v74 v75 v76 v77 v79 v80] avail=5350MB used=10263MB hotsets=100
+2026-09-30T13:50:55.198 timing gap  <- v90
+2026-09-30T13:51:06.690 timing gap  <- v91
+2026-09-30T13:50:58.084 timing gap  <- v92
+2026-09-30T13:50:59.140 timing gap  <- v93
+13:56:26 wake_failures=0
+CB-DONE

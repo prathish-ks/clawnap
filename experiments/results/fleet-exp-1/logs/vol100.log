@@ -1,0 +1,27 @@
+13:20:40 swap: /swap.img file 40G 34.6G 100;/swap2.img file 40G 3.4G 100; root_free=41G daemon: -headroom-mib 3072 -wake-concurrency 2 
+13:20:40 create v60 failed
+13:20:41 create v61 failed
+13:20:42 create v62 failed
+13:20:44 create v63 failed
+13:20:45 create v64 failed
+13:21:01 batch 60-64 up cells=65 free=1755MB avail=4253MB swap_used=38815MB load=3.10 exited=0
+13:21:54 batch 65-69 up cells=70 free=1330MB avail=3443MB swap_used=41860MB load=6.61 exited=0
+13:37:18 batch 70-74 up cells=75 free=1291MB avail=3855MB swap_used=45270MB load=0.13 exited=1
+13:37:50 batch 75-79 up cells=80 free=1002MB avail=3571MB swap_used=49070MB load=4.66 exited=1
+13:38:29 batch 80-84 up cells=85 free=799MB avail=3330MB swap_used=52653MB load=6.55 exited=1
+13:39:04 batch 85-89 up cells=90 free=1457MB avail=3109MB swap_used=56500MB load=10.70 exited=1
+13:39:39 batch 90-94 up cells=95 free=1144MB avail=3394MB swap_used=60289MB load=17.23 exited=1
+13:40:14 batch 95-99 up cells=100 free=1086MB avail=3378MB swap_used=64102MB load=19.02 exited=1
+13:44:03 settled: paused=100/100 free=1105MB avail=3583MB swap_used=64700MB load=0.87
+13:44:03 STEP 100 cells: used=12030MB free=1105MB avail=3583MB swap_used=64700MB exited=0 oom=0 resident_paused=10
+13:44:08 v1-v10 swapped=10/10 before the cold burst
+13:44:36 BURST cold100 n=10: codes= 10 200; wall_all=25.6s min=19.91s p50=23.09s max=25.55s | times: 19.91 20.34 22.91 22.96 23.09 23.21 23.4 23.42 25.39 25.55 | psi(ms) mem_full=7730 cpu_some=5099 io_full=12818
+cell=v6 start=583.715795ms ready=6.888313711s;cell=v7 start=174.68154ms ready=6.373602322s;cell=v5 start=737.302519ms ready=18.794282928s;cell=v1 start=630.094962ms ready=16.425465353s;cell=v3 start=510.527594ms ready=11.899485418s;cell=v8 start=851.442986ms ready=13.453645744s;cell=v2 start=970.610791ms ready=15.826668904s;cell=v4 start=130.665314ms ready=19.839213999s;cell=v9 start=85.951539ms ready=25.297474477s;cell=v10 start=463.844938ms ready=25.45714824s;
+13:46:07 settled: paused=100/100 free=2781MB avail=3842MB swap_used=67845MB load=2.12
+13:46:07 v1-v10 resident=10/10 avail=3847MB before the warm burst
+13:46:11 BURST warm100 n=10: codes= 10 200; wall_all=1.5s min=0.72s p50=0.99s max=1.39s | times: 0.72 0.83 0.89 0.95 0.99 1.03 1.1 1.31 1.31 1.39 | psi(ms) mem_full=5 cpu_some=1420 io_full=22
+13:47:42 settled: paused=100/100 free=2771MB avail=3851MB swap_used=67810MB load=0.97
+fleetd_cells{phase="hibernated"} 100
+fleetd_wake_failures_total 0
+13:47:43 final: cells=100 paused=100 exited=0 free=2787MB swap_used=67810MB
+RUN-DONE

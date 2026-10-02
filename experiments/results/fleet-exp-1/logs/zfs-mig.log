@@ -1,0 +1,16 @@
+12:36:57 trimmed: cells=50 free=6517MB avail=7752MB load=15.80 zvol=5.44G ratio=2.09x /swap.img=22.4G /swap2.img=126.5M /dev/zd0=9.5G 
+12:36:57 swapoff /swap2.img start: free=6516MB avail=7751MB load=15.80 zvol=5.44G ratio=2.09x /swap.img=22.4G /swap2.img=126.5M /dev/zd0=9.5G 
+12:37:00 swapoff /swap2.img rc=0 took=3s: free=6284MB avail=7519MB load=15.80 zvol=5.44G ratio=2.09x /swap.img=22.4G /dev/zd0=9.5G 
+12:37:01 removed /swap2.img root_free=60G
+12:37:01 swapoff /swap.img start: free=6284MB avail=7522MB load=15.80 zvol=5.44G ratio=2.09x /swap.img=22.4G /dev/zd0=9.5G 
+12:37:16   … free=5161MB avail=6398MB load=12.52 zvol=5.44G ratio=2.09x /swap.img=21.4G /dev/zd0=9.5G 
+12:37:31   … free=4108MB avail=5357MB load=9.97 zvol=5.44G ratio=2.09x /swap.img=20.4G /dev/zd0=9.5G 
+12:37:46   … free=3142MB avail=4390MB load=8.30 zvol=5.44G ratio=2.09x /swap.img=19.5G /dev/zd0=9.5G 
+12:38:01   … free=2101MB avail=3351MB load=6.68 zvol=5.44G ratio=2.09x /swap.img=18.5G /dev/zd0=9.5G 
+12:38:16   … free=949MB avail=1942MB load=5.50 zvol=5.44G ratio=2.09x /swap.img=17.5G /dev/zd0=9.5G 
+12:38:31   … free=356MB avail=1515MB load=4.74 zvol=5.44G ratio=2.09x /swap.img=16.5G /dev/zd0=9.5G 
+12:38:46   … free=305MB avail=1479MB load=3.61 zvol=5.45G ratio=2.09x /swap.img=15.5G /dev/zd0=9.5G 
+12:39:01   … free=180MB avail=1309MB load=5.90 zvol=5.51G ratio=2.09x /swap.img=14.7G /dev/zd0=9.7G 
+12:39:16   … free=188MB avail=1366MB load=12.42 zvol=5.67G ratio=2.10x /swap.img=13.9G /dev/zd0=10.2G 
+12:39:31   … free=252MB avail=1406MB load=17.81 zvol=5.83G ratio=2.10x /swap.img=13.2G /dev/zd0=11.9G 
+12:39:46   … free=336MB avail=1403MB load=22.23 zvol=6.02G ratio=2.10x /swap.img=12.4G /dev/zd0=12.6G 

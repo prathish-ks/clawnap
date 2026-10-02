@@ -1,0 +1,32 @@
+14:46:05 fleetd policy: -reclaim-after 20s (active)
+14:46:05 == cycles: zswap off zswap=N/lz4/zsmalloc pool=0MB zswapped=0MB written_back=0 reject_alloc=0 avail=9073MB
+== zoff cycles=3 wb= 14:35:22 swap: /swap.img  file  40G 39.7G  100;/swap2.img file  40G 28.6G  100;
+14:36:33 cycle 1: hib cur=1023 swap=365 -> cur=149 swap=962 |  | wake_api=3.89s health=4.13s | cell=tgw start=55.191845ms ready=3.81608854s | prefetch swap_before_mib=962 took=1.615588369s took=505.02
+14:38:39 cycle 2: hib cur=975 swap=558 -> cur=975 swap=557 |  | wake_api=1.25s health=1.27s | cell=tgw start=69.887248ms ready=1.176671582s | prefetch 
+14:40:44 cycle 3: hib cur=758 swap=481 -> cur=758 swap=481 |  | wake_api=1.21s health=1.23s | cell=tgw start=56.840771ms ready=1.128234743s | prefetch 
+== zoff cycles=3 wb= 14:46:05 swap: /swap.img  file  40G 39.5G  100;/swap2.img file  40G 28.6G  100;
+14:47:08 cycle 1: hib cur=829 swap=582 -> cur=146 swap=677 |  | wake_api=2.55s health=2.57s | cell=tgw start=51.727899ms ready=2.48002046s | prefetch swap_before_mib=677 took=1.808503686s 
+14:48:08 cycle 2: hib cur=829 swap=656 -> cur=149 swap=663 |  | wake_api=2.50s health=2.52s | cell=tgw start=68.71218ms ready=2.437601252s | prefetch swap_before_mib=663 took=1.752237587s 
+14:49:08 cycle 3: hib cur=815 swap=658 -> cur=149 swap=658 |  | wake_api=2.46s health=2.48s | cell=tgw start=60.95123ms ready=2.374350456s | prefetch swap_before_mib=658 took=1.709266476s 
+14:49:08 == cycles: zswap lz4 zswap=Y/lz4/zsmalloc pool=0MB zswapped=0MB written_back=0 reject_alloc=0 avail=8217MB
+== zlz4 cycles=3 wb= 14:40:44 swap: /swap.img  file  40G 39.5G  100;/swap2.img file  40G 28.5G  100;
+14:42:50 cycle 1: hib cur=753 swap=479 -> cur=753 swap=478 |  | wake_api=1.18s health=1.19s | cell=tgw start=60.354483ms ready=1.114151793s | prefetch 
+14:44:55 cycle 2: hib cur=751 swap=477 -> cur=751 swap=477 |  | wake_api=1.17s health=1.18s | cell=tgw start=55.235769ms ready=1.107079201s | prefetch 
+== zlz4 cycles=3 wb= 14:49:08 swap: /swap.img  file  40G 39.5G  100;/swap2.img file  40G 28.6G  100;
+14:50:08 cycle 1: hib cur=814 swap=655 -> cur=149 swap=658 |  | wake_api=2.40s health=2.42s | cell=tgw start=54.508154ms ready=2.354035839s | prefetch swap_before_mib=658 took=1.726917417s 
+14:51:09 cycle 2: hib cur=816 swap=654 -> cur=147 swap=667 |  | wake_api=2.61s health=2.63s | cell=tgw start=59.662438ms ready=2.534760135s | prefetch swap_before_mib=667 took=1.848158766s 
+14:52:08 cycle 3: hib cur=817 swap=657 -> cur=144 swap=661 |  | wake_api=2.43s health=2.45s | cell=tgw start=42.702863ms ready=2.354009589s | prefetch swap_before_mib=661 took=1.737827316s 
+14:52:08 after lz4 cycles: zswap=Y/lz4/zsmalloc pool=23MB zswapped=8MB written_back=1092 reject_alloc=0 avail=8227MB
+14:52:08 == cycles: zswap zstd zswap=Y/zstd/zsmalloc pool=23MB zswapped=8MB written_back=1092 reject_alloc=0 avail=8218MB
+== zzstd cycles=3 wb= 14:52:08 swap: /swap.img  file  40G 39.5G  100;/swap2.img file  40G 28.6G  100;
+14:53:08 cycle 1: hib cur=826 swap=654 -> cur=153 swap=673 |  | wake_api=2.52s health=2.55s | cell=tgw start=43.150927ms ready=2.450322645s | prefetch swap_before_mib=673 took=1.793626979s 
+14:54:07 cycle 2: hib cur=827 swap=656 -> cur=149 swap=663 |  | wake_api=2.45s health=2.46s | cell=tgw start=54.841532ms ready=2.392664404s | prefetch swap_before_mib=663 took=1.767191397s 
+14:55:08 cycle 3: hib cur=837 swap=658 -> cur=156 swap=680 |  | wake_api=2.52s health=2.53s | cell=tgw start=59.566881ms ready=2.475277265s | prefetch swap_before_mib=680 took=1.794356777s 
+14:55:08 after zstd cycles: zswap=Y/zstd/zsmalloc pool=52MB zswapped=22MB written_back=1342 reject_alloc=0 avail=8174MB
+14:55:11 fleetd policy: -reclaim-after 30m -headroom-mib 8192 (active)
+14:57:25 before burst: paused=100 v1-v10 swapped=9/10 zswap=Y/lz4/zsmalloc pool=197MB zswapped=319MB written_back=2226 reject_alloc=0 avail=8263MB
+14:57:37 BURST zswap-lz4 n=10: wall=9.8s min=3.0s p50=5.43s max=9.79s | times: 3.0 3.54 4.76 4.79 5.43 6.46 7.11 8.34 8.84 9.79 | psi(ms) mem_full=48 cpu_some=2019 io_full=2235 | si_peak=608MB/s bi_peak=609MB/s
+14:57:37 after burst: zswap=Y/lz4/zsmalloc pool=187MB zswapped=202MB written_back=2226 reject_alloc=0 avail=3062MB
+cell=v10 swap_before_mib=581 landed_mib=494 advise_took=1.772617739s pagein_took=503.300502ms;cell=v8 swap_before_mib=572 landed_mib=502 advise_took=1.069667289s pagein_took=502.848331ms;cell=v6 swap_before_mib=567 landed_mib=498 advise_took=1.131050383s pagein_took=503.169496ms;cell=v2 swap_before_mib=598 landed_mib=521 advise_took=914.249723ms pagein_took=503.187849ms;cell=v5 swap_before_mib=589 landed_mib=505 advise_took=1.034666216s pagein_took=502.672241ms;cell=v3 swap_before_mib=569 landed_mib=493 advise_took=1.187321623s pagein_took=503.229949ms;cell=v7 swap_before_mib=581 landed_mib=496 advise_took=1.019910471s pagein_took=503.844334ms;cell=v9 swap_before_mib=589 landed_mib=505 advise_took=899.10652ms pagein_took=503.81083ms;
+14:58:52 final: paused=100 exited=0 wake_failures=0 zswap=Y/lz4/zsmalloc pool=250MB zswapped=428MB written_back=2226 reject_alloc=0 avail=8421MB
+ZSWAP-DONE

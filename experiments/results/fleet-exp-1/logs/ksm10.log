@@ -1,0 +1,20 @@
+04:51:15 fleetd policy: -headroom-mib 8192 -prefetch-on-wake
+04:51:36 STATE A-all-cold: RESIDENT=0 [] resident_sum=0 | HEADROOM avail=8760MB used=6852MB free=8146MB swap_used=67217MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+04:51:40 fleetd policy: -headroom-mib 2048 -prefetch-on-wake
+04:53:56 STATE B-10-resident-capped: RESIDENT=10 [v1 v10 v2 v3 v4 v5 v6 v7 v8 v9] resident_sum=2994M (per cell 299M) | HEADROOM avail=6088MB used=9525MB free=5447MB swap_used=64086MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+04:54:02 BURST B-warm-10 (resident, capped): codes= 10 200; min=1.79s p50=3.3s max=3.93s | times: 1.79 1.82 1.86 2.47 3.3 3.46 3.65 3.76 3.92 3.93 | psi(ms) mem_full=353 cpu_some=3055 io_full=319 | avail before=6093MB after=5670MB
+04:55:20 STATE B-after-warm: RESIDENT=10 [v1 v10 v2 v3 v4 v5 v6 v7 v8 v9] resident_sum=2946M (per cell 294M) | HEADROOM avail=6136MB used=9477MB free=5490MB swap_used=63720MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+04:55:45 BURST B-cold-10 (disk, prefetch): codes= 10 200; min=15.07s p50=20.27s max=22.78s | times: 15.07 16.36 16.36 20.25 20.27 20.72 21.39 21.4 22.52 22.78 | psi(ms) mem_full=1011 cpu_some=6786 io_full=8915 | avail before=6126MB after=1840MB
+04:57:03 STATE B-after-cold: RESIDENT=11 [v21 v22 v23 v24 v25 v26 v27 v28 v29 v30 v7] resident_sum=6612M (per cell 601M) | HEADROOM avail=2329MB used=13284MB free=1709MB swap_used=61480MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+04:57:34 recreated v1-v5 avail=4404MB
+04:58:06 recreated v6-v10 avail=4396MB
+04:58:06 recreated 10 cells with ksmexec; mappings flagged mergeable across them: 0
+05:00:06 STATE C-10-recreated-capped (KSM off): RESIDENT=4 [v23 v27 v30 v7] resident_sum=2198M (per cell 549M) | HEADROOM avail=4132MB used=11481MB free=3490MB swap_used=62025MB | ksm(run=0 shared=0MB sharing=0MB saved≈0MB unshared=0MB full_scans=0 profit=0MB) | paused=100
+05:00:26 KSM scanned: full_scans=3 after ~30s
+05:00:28 STATE C-10-resident-KSM: RESIDENT=4 [v23 v27 v30 v7] resident_sum=2192M (per cell 548M) | HEADROOM avail=4116MB used=11497MB free=3474MB swap_used=62025MB | ksm(run=1 shared=8MB sharing=48MB saved≈48MB unshared=2685MB full_scans=3 profit=5MB) | paused=100
+05:00:32 BURST C-warm-10 (resident, capped, KSM): codes= 10 200; min=1.19s p50=1.52s max=1.81s | times: 1.19 1.3 1.32 1.43 1.52 1.58 1.61 1.63 1.72 1.81 | psi(ms) mem_full=1375 cpu_some=927 io_full=1518 | avail before=4158MB after=3912MB
+05:01:43 STATE C-after-warm: RESIDENT=13 [v1 v10 v2 v23 v27 v3 v30 v4 v5 v6 v7 v8 v9] resident_sum=4931M (per cell 379M) | HEADROOM avail=4254MB used=11358MB free=3615MB swap_used=61375MB | ksm(run=1 shared=11MB sharing=124MB saved≈124MB unshared=192MB full_scans=39 profit=80MB) | paused=100
+05:02:06 BURST C-cold-10 (disk, prefetch): codes= 10 200; min=7.49s p50=18.92s max=20.8s | times: 7.49 7.61 16.28 17.35 18.92 19.64 19.7 20.16 20.69 20.8 | psi(ms) mem_full=343 cpu_some=8580 io_full=6069 | avail before=4134MB after=1674MB
+05:03:25 STATE C-after-cold: RESIDENT=10 [v31 v32 v33 v34 v35 v36 v37 v38 v39 v40] resident_sum=5903M (per cell 590M) | HEADROOM avail=2356MB used=13257MB free=1713MB swap_used=60493MB | ksm(run=1 shared=6MB sharing=96MB saved≈96MB unshared=1MB full_scans=141 profit=75MB) | paused=100
+05:04:43 restored: fleetd active shipped policy; KSM off; caps cleared; wake_failures=0 exited=10
+KSM-DONE

@@ -1,0 +1,5 @@
+13:49:14 fleetd restarted with headroom 8192 MiB (active)
+13:49:45 before burst: paused=100 avail=8305MB v1-v10 swapped=7/10 resident_paused=3
+13:49:57 BURST cold100 headroom=8192: wall=10.6s min=4.06s p50=7.72s max=10.54s | times: 4.06 7.4 7.45 7.49 7.72 7.8 7.91 8.18 8.97 10.54 | psi(ms) mem_full=1404 io_full=2308
+13:51:24 after: paused=100 avail=8581MB wake_failures=0
+HR8-DONE

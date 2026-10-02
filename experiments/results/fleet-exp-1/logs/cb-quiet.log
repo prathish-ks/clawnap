@@ -1,0 +1,15 @@
+12:57:27 STATE start: paused=100 warm=6 cold=94 untrimmed=0 warm:[v21 v22 v26 v27 v29 v30] avail=4120MB used=11493MB hotsets=100
+12:58:49 BURST cold-10 (v31..v40, quiet disk): codes= 10 200; min=18.05s p50=18.29s max=19.35s | times: 18.05 18.05 18.2 18.21 18.29 18.36 18.6 18.67 18.76 19.35 | psi(ms) mem_full=852 cpu_some=10040 io_full=5808 | avail before=4127MB after=1119MB
+cell=v36 scope=hot advised_mib=264 swap_before_mib=619 landed_mib=237 advise_took=729.010258ms pagein_took=503.169662ms;
+
+cell=v37 start=62.13781ms ready=16.624356658s;cell=v38 start=118.48997ms ready=16.630855937s;cell=v33 start=61.417149ms ready=18.095847821s;cell=v36 start=167.551327ms ready=14.163971739s;cell=v40 start=182.748271ms ready=13.126445107s;cell=v34 start=84.985379ms ready=14.256752566s;cell=v39 start=124.337412ms ready=12.940476321s;cell=v32 start=97.120169ms ready=18.45954408s;cell=v35 start=93.097407ms ready=15.904118813s;cell=v31 start=119.094154ms ready=16.501321439s;
+
+13:01:02 STATE after-1: paused=100 warm=6 cold=94 untrimmed=0 warm:[v31 v33 v36 v37 v38 v40] avail=4223MB used=11390MB hotsets=100
+13:01:28 BURST cold-10 (v41..v50, quiet disk): codes= 10 200; min=12.32s p50=22.33s max=24.15s | times: 12.32 20.18 21.11 21.73 22.33 22.8 23.09 23.16 23.76 24.15 | psi(ms) mem_full=1320 cpu_some=13481 io_full=6174 | avail before=4223MB after=1133MB
+cell=v36 scope=hot advised_mib=264 swap_before_mib=619 landed_mib=237 advise_took=729.010258ms pagein_took=503.169662ms;
+
+cell=v37 start=62.13781ms ready=16.624356658s;cell=v38 start=118.48997ms ready=16.630855937s;cell=v33 start=61.417149ms ready=18.095847821s;cell=v36 start=167.551327ms ready=14.163971739s;cell=v40 start=182.748271ms ready=13.126445107s;cell=v34 start=84.985379ms ready=14.256752566s;cell=v39 start=124.337412ms ready=12.940476321s;cell=v32 start=97.120169ms ready=18.45954408s;cell=v35 start=93.097407ms ready=15.904118813s;cell=v31 start=119.094154ms ready=16.501321439s;cell=v48 start=181.203896ms 
+
+13:02:41 STATE after-2: paused=100 warm=9 cold=91 untrimmed=0 warm:[v41 v42 v43 v44 v45 v46 v47 v49 v50] avail=4961MB used=10652MB hotsets=100
+13:02:41 wake_failures=0
+CB-DONE

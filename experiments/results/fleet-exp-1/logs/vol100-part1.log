@@ -1,0 +1,3 @@
+13:09:38 swap: /swap.img file 40G 32G 100;/swap2.img file 40G 0B 100; root_free=44G daemon: -headroom-mib 3072 -wake-concurrency 2 
+13:10:01 batch 50-54 up cells=55 free=3722MB avail=5289MB swap_used=32730MB load=3.33 exited=0
+13:15:26 batch 55-59 up cells=60 free=1191MB avail=3424MB swap_used=34556MB load=0.15 exited=0

@@ -1,0 +1,34 @@
+09:56:11 == store trial: vdo-lz4
+09:56:12 STATE start: paused=100 avail=5835MB used=9774MB vdo_used=3.0G saving=0%
+swap: /swap.img=31.2G /swap2.img=31.3G /dev/dm-2=0B 
+09:56:16 fleetd policy: -headroom-mib 8192
+10:00:21 batch [tgw v1 v2 v3 v4] in store: avail=5875MB load=0.82 vdo_used=4.4G saving=58%
+swap: /swap.img=29.7G /swap2.img=29.9G /dev/dm-2=2.9G 
+10:04:24 batch [v5 v6 v7 v8 v9] in store: avail=5455MB load=0.91 vdo_used=5.5G saving=58%
+swap: /swap.img=28.2G /swap2.img=28.3G /dev/dm-2=5.8G 
+10:08:34 batch [v10 v11 v12 v13 v14] in store: avail=4944MB load=0.92 vdo_used=6.7G saving=58%
+swap: /swap.img=26.5G /swap2.img=26.7G /dev/dm-2=8.4G 
+10:12:44 batch [v15 v16 v17 v18 v19] in store: avail=4809MB load=1.23 vdo_used=7.8G saving=58%
+swap: /swap.img=25.1G /swap2.img=25.2G /dev/dm-2=11.2G 
+10:16:54 batch [v20 v21 v22 v23 v24] in store: avail=4693MB load=1.28 vdo_used=8.9G saving=58%
+swap: /swap.img=23.6G /swap2.img=23.8G /dev/dm-2=13.9G 
+10:21:02 batch [v25 v26 v27 v28 v29] in store: avail=4820MB load=1.41 vdo_used=10.0G saving=58%
+swap: /swap.img=22.2G /swap2.img=22.4G /dev/dm-2=16.6G 
+10:25:12 batch [v30 v31 v32 v33 v34] in store: avail=4823MB load=1.01 vdo_used=11.1G saving=58%
+swap: /swap.img=20.9G /swap2.img=21G /dev/dm-2=19.2G 
+10:29:21 batch [v35 v36 v37 v38 v39] in store: avail=4836MB load=0.90 vdo_used=12.2G saving=58%
+swap: /swap.img=19.5G /swap2.img=19.6G /dev/dm-2=21.9G 
+10:32:47 batch [v40] in store: avail=4863MB load=0.69 vdo_used=12.5G saving=58%
+swap: /swap.img=19.2G /swap2.img=19.4G /dev/dm-2=22.4G 
+10:32:47 fill done in 2191s, memory full stall over the fill: 2588ms
+10:33:09 STATE 41-cells-in-store: paused=100 avail=4799MB used=10810MB vdo_used=12.5G saving=58%
+swap: /swap.img=19.2G /swap2.img=19.4G /dev/dm-2=22.4G 
+10:34:07 single cold wake 1: api=5.43s swap_before_mib=799 landed_mib=676 advise_took=3.28513924s pagein_took=502.585043ms 
+10:34:53 single cold wake 2: api=4.63s swap_before_mib=812 landed_mib=690 advise_took=3.070122842s pagein_took=502.990576ms 
+10:35:40 single cold wake 3: api=4.71s 
+10:35:44 fleetd policy: -headroom-mib 6144
+10:37:45 STATE 5-resident: paused=100 avail=4632MB used=10976MB vdo_used=12.9G saving=57%
+swap: /swap.img=19.2G /swap2.img=19.4G /dev/dm-2=22.4G 
+10:38:03 BURST warm-5 (cap lifted at wake): codes= 5 200; min=11.55s p50=14.32s max=15.05s | times: 11.55 14.27 14.32 14.45 15.05 | psi(ms) mem_full=584 cpu_some=2069 io_full=6444 | avail before=4643MB after=1803MB
+10:39:35 STATE after-warm: paused=100 avail=4657MB used=10951MB vdo_used=12.9G saving=56%
+swap: /swap.img=19.2G /swap2.img=19.4G /dev/dm-2=22.2G 

@@ -1,0 +1,5 @@
+== zram cycles=3 wb= 10:48:51 swap: /dev/zram0 partition 30.5G   0B  100;
+10:49:59 cycle 1: hib cur=783 swap=0 -> cur=149 swap=605 |  | wake_api=2.53s health=2.55s | cell=tgw start=57.819622ms ready=2.474814149s | prefetch swap_before_mib=605 took=1.652863299s | psi(ms) mem_full=2 mem_some=2 cpu_some=26 io_full=166 | vmstat si peak=304256K/s sum=576375K min_idle=72% peak_wa=3%
+10:51:00 cycle 2: hib cur=719 swap=484 -> cur=149 swap=612 |  | wake_api=2.39s health=2.41s | cell=tgw start=37.349447ms ready=2.335978252s | prefetch swap_before_mib=612 took=1.467530709s | psi(ms) mem_full=48 mem_some=49 cpu_some=20 io_full=227 | vmstat si peak=288396K/s sum=508401K min_idle=79% peak_wa=4%
+10:52:00 cycle 3: hib cur=704 swap=535 -> cur=149 swap=604 |  | wake_api=2.38s health=2.39s | cell=tgw start=43.156761ms ready=2.323262497s | prefetch swap_before_mib=604 took=1.564391805s | psi(ms) mem_full=15 mem_some=15 cpu_some=22 io_full=221 | vmstat si peak=307984K/s sum=572488K min_idle=73% peak_wa=4%
+RUN-DONE zram

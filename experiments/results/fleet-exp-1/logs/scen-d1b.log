@@ -1,0 +1,23 @@
+11:43:26 STATE start: paused=100 warm=0 cold=100 untrimmed=0 warm:[] avail=3882MB used=11731MB hotsets=26
+11:43:30 fleetd policy: -warm-keep-mib 300 -reclaim-after 30m -headroom-mib 3072 (active, binary d2a62ab2)
+11:45:16 STATE 5-warm: paused=100 warm=5 cold=95 untrimmed=0 warm:[v1 v2 v3 v4 v5] avail=3168MB used=12445MB hotsets=26
+11:45:19 BURST warm-5 (warm floor 300 MiB, no prefetch): codes= 5 200; min=0.66s p50=0.73s max=1.34s | times: 0.66 0.71 0.73 0.74 1.34 | psi(ms) mem_full=10 cpu_some=1048 io_full=36 | avail before=3168MB after=2783MB
+cell=v4 scope=hot advised_mib=231 swap_before_mib=425 landed_mib=103 advise_took=271.915058ms pagein_took=505.240042ms;cell=v5 scope=hot advised_mib=254 swap_before_mib=548 landed_mib=130 advise_took=316.933586ms pagein_took=504.616871ms;cell=v2 scope=hot advised_mib=265 swap_before_mib=521 landed_mib=143 advise_took=437.745573ms pagein_took=504.866745ms;cell=v1 scope=hot advised_mib=257 swap_before_mib=537 landed_mib=136 advise_took=489.673207ms pagein_took=503.85413ms;cell=v3 scope=hot advised_mib=262 swap_before_mib=538 landed_mib=140 advise_took=268.702348ms pagein_took=506.547418ms;
+
+cell=v4 start=61.365654ms ready=2.507958718s;cell=v5 start=61.029812ms ready=2.677284316s;cell=v1 start=101.406579ms ready=2.677505257s;cell=v2 start=75.276489ms ready=2.720934374s;cell=v3 start=59.482893ms ready=2.20357077s;cell=v4 start=61.245889ms ready=1.113564867s;
+
+11:47:19 STATE after-warm: paused=100 warm=4 cold=96 untrimmed=0 warm:[v2 v3 v4 v5] avail=3297MB used=12316MB hotsets=26
+11:47:23 BURST warm-5 again: codes= 5 200; min=0.64s p50=1.16s max=2.27s | times: 0.64 0.75 1.16 1.17 2.27 | psi(ms) mem_full=9 cpu_some=527 io_full=120 | avail before=3297MB after=2911MB
+cell=v1 scope=hot advised_mib=190 swap_before_mib=538 landed_mib=72 advise_took=364.452075ms pagein_took=503.6262ms;
+
+cell=v4 start=61.245889ms ready=1.113564867s;cell=v5 start=42.424529ms ready=1.100529207s;cell=v2 start=43.336857ms ready=1.066955614s;cell=v1 start=49.973846ms ready=2.106474848s;
+
+11:48:49 STATE after-warm-2: paused=100 warm=5 cold=95 untrimmed=0 warm:[v1 v2 v3 v4 v5] avail=3168MB used=12445MB hotsets=26
+11:48:58 BURST cold-10 (v21..v30, hot-set prefetch, 3 GB target): codes= 10 200; min=2.76s p50=5.16s max=6.79s | times: 2.76 2.82 4.78 4.87 5.16 5.66 6.07 6.11 6.35 6.79 | psi(ms) mem_full=774 cpu_some=1603 io_full=1860 | avail before=3168MB after=1694MB
+cell=v1 scope=hot advised_mib=190 swap_before_mib=538 landed_mib=72 advise_took=364.452075ms pagein_took=503.6262ms;cell=v23 scope=hot advised_mib=268 swap_before_mib=518 landed_mib=143 advise_took=303.016947ms pagein_took=504.088909ms;cell=v28 scope=hot advised_mib=266 swap_before_mib=516 landed_mib=141 advise_took=449.691917ms pagein_took=503.376413ms;cell=v21 scope=hot advised_mib=260 swap_before_mib=534 landed_mib=134 advise_took=201.892402ms pagein_took=505.33571ms;cell=v29 scope=hot advised_mib=267 swap_before_mib=532 landed_mib=144 advise_took=234.259231ms pagein_took=503.578484ms;cell=v27 scope=hot advised_mib=265 swap_before_mib=529 landed_mib=142 advise_took=239.301853ms pagein_took=503.893758ms;cell=v30 scope=hot advised_mib=255 swap_before_mib=516 landed_mib=129 advise_took=402.173751ms pagein_took=525.42772ms;cell=v26 scope=hot advised_mib=264 swap_before_mib=532 landed_mib=
+
+cell=v5 start=42.424529ms ready=1.100529207s;cell=v2 start=43.336857ms ready=1.066955614s;cell=v1 start=49.973846ms ready=2.106474848s;cell=v28 start=128.477942ms ready=2.641898972s;cell=v23 start=60.691825ms ready=2.763368832s;cell=v29 start=127.692332ms ready=3.573248251s;cell=v27 start=114.85497ms ready=3.048222851s;cell=v30 start=183.654405ms ready=3.020234493s;cell=v26 start=76.067896ms ready=2.87732304s;cell=v22 start=56.944722ms ready=2.201221113s;cell=v21 start=56.375399ms ready=5.130132
+
+11:50:32 STATE after-cold: paused=100 warm=4 cold=96 untrimmed=0 warm:[v21 v23 v29 v30] avail=3245MB used=12368MB hotsets=26
+11:50:32 wake_failures=0 exited=0
+D1-DONE

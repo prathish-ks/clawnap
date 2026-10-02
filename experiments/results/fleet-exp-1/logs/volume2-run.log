@@ -1,0 +1,23 @@
+10:59:57 swap: /swap.img file 40G 0B -2;
+11:00:17 batch 1-5 up free=8656MB
+11:00:42 batch 6-10 up free=3599MB
+11:01:07 batch 11-15 up free=184MB
+11:01:32 batch 16-20 up free=294MB
+11:01:59 batch 21-25 up free=309MB
+11:02:23 batch 26-30 up free=322MB
+11:02:50 batch 31-35 up free=310MB
+11:03:16 batch 36-40 up free=335MB
+11:03:43 batch 41-45 up free=324MB
+11:04:07 batch 46-49 up free=335MB
+11:04:07 all cells up; waiting for pause + reclaim of all 50
+11:05:50 paused=50 swap_used=33990MB used=4625MB free=10324MB avail=10988MB load=4.39 8.35 4.40
+11:06:10 tgw 200 19648 ms (started +8 ms)
+11:06:19 v6 502 29298 ms (started +8 ms)
+11:06:19 v3 502 29372 ms (started +5 ms)
+11:06:19 v8 502 29397 ms (started +7 ms)
+11:06:19 v7 502 29398 ms (started +6 ms)
+11:06:27 v4 502 37266 ms (started +6 ms)
+11:06:27 v2 502 37337 ms (started +6 ms)
+11:06:28 v9 502 37532 ms (started +10 ms)
+11:06:34 v5 502 43803 ms (started +8 ms)
+11:06:34 v1 502 43847 ms (started +6 ms)

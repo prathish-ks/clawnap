@@ -1,0 +1,10 @@
+== zoff cycles=3 wb= 14:35:22 swap: /swap.img  file  40G 39.7G  100;/swap2.img file  40G 28.6G  100;
+14:36:33 cycle 1: hib cur=1023 swap=365 -> cur=149 swap=962 |  | wake_api=3.89s health=4.13s | cell=tgw start=55.191845ms ready=3.81608854s | prefetch swap_before_mib=962 took=1.615588369s took=505.021218ms | psi(ms) mem_full=137 mem_some=141 cpu_some=541 io_full=715 | vmstat si peak=417128K/s sum=880444K min_idle=56% peak_wa=19%
+14:38:39 cycle 2: hib cur=975 swap=558 -> cur=975 swap=557 |  | wake_api=1.25s health=1.27s | cell=tgw start=69.887248ms ready=1.176671582s | prefetch | psi(ms) mem_full=4 mem_some=5 cpu_some=27 io_full=12 | vmstat si peak=4712K/s sum=7124K min_idle=77% peak_wa=1%
+14:40:44 cycle 3: hib cur=758 swap=481 -> cur=758 swap=481 |  | wake_api=1.21s health=1.23s | cell=tgw start=56.840771ms ready=1.128234743s | prefetch | psi(ms) mem_full=1 mem_some=1 cpu_some=33 io_full=5 | vmstat si peak=4659K/s sum=4975K min_idle=79% peak_wa=1%
+RUN-DONE zoff
+== zoff cycles=3 wb= 14:46:05 swap: /swap.img  file  40G 39.5G  100;/swap2.img file  40G 28.6G  100;
+14:47:08 cycle 1: hib cur=829 swap=582 -> cur=146 swap=677 |  | wake_api=2.55s health=2.57s | cell=tgw start=51.727899ms ready=2.48002046s | prefetch swap_before_mib=677 took=1.808503686s | psi(ms) mem_full=7 mem_some=12 cpu_some=431 io_full=158 | vmstat si peak=391756K/s sum=692125K min_idle=80% peak_wa=8%
+14:48:08 cycle 2: hib cur=829 swap=656 -> cur=149 swap=663 |  | wake_api=2.50s health=2.52s | cell=tgw start=68.71218ms ready=2.437601252s | prefetch swap_before_mib=663 took=1.752237587s | psi(ms) mem_full=0 mem_some=0 cpu_some=517 io_full=143 | vmstat si peak=374868K/s sum=678849K min_idle=81% peak_wa=7%
+14:49:08 cycle 3: hib cur=815 swap=658 -> cur=149 swap=658 |  | wake_api=2.46s health=2.48s | cell=tgw start=60.95123ms ready=2.374350456s | prefetch swap_before_mib=658 took=1.709266476s | psi(ms) mem_full=0 mem_some=0 cpu_some=489 io_full=132 | vmstat si peak=380876K/s sum=673284K min_idle=82% peak_wa=7%
+RUN-DONE zoff

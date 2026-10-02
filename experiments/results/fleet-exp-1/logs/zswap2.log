@@ -1,0 +1,16 @@
+02:04:34 zswap: Y/zstd max_pool=30% pool=1919MB zswapped=6873MB stored_pages=1759660 written_back=291327 avail=5434MB
+02:05:20 after first reclaim of fresh cells: pool=1919MB zswapped=6873MB stored_pages=1759660 written_back=291327 avail=5435MB
+02:05:20 cells: tgw:z=147M/s=652M v1:z=154M/s=664M v5:z=149M/s=661M v10:z=149M/s=662M 
+02:06:28 tgw wake 1: api=3.37s swap_before_mib=956 landed_mib=823 advise_took=1.884765827s pagein_took=503.638798ms  tgw:z=72M/s=583M 
+02:07:26 tgw wake 2: api=3.23s swap_before_mib=906 landed_mib=776 advise_took=1.844071158s pagein_took=503.227486ms  tgw:z=75M/s=479M 
+02:08:24 tgw wake 3: api=3.68s swap_before_mib=911 landed_mib=771 advise_took=2.228500817s pagein_took=503.341643ms  tgw:z=106M/s=602M 
+02:09:10 before burst 1: paused=100 pool=1955MB zswapped=6879MB stored_pages=1761225 written_back=464198 avail=5418MB v1:z=154M/s=664M v5:z=149M/s=661M v10:z=149M/s=662M 
+02:09:31 BURST pool-1: wall=18.3s min=4.39s p50=9.84s max=18.28s | times: 4.39 4.41 6.98 7.44 9.84 10.27 14.04 14.05 18.05 18.28 | psi(ms) mem_full=2479 cpu_some=6726 io_full=241
+swap_before_mib=659 landed_mib=579 advise_took=1.705476276s pagein_took=504.004484ms;swap_before_mib=664 landed_mib=576 advise_took=1.822648109s pagein_took=502.839187ms;swap_before_mib=661 landed_mib=581 advise_took=1.889650075s pagein_took=503.204035ms;swap_before_mib=802 landed_mib=692 advise_took=2.42685114s pagein_took=503.599299ms;swap_before_mib=661 landed_mib=583 advise_took=2.332961539s p
+
+02:11:13 before burst 2: paused=100 pool=2294MB zswapped=8281MB stored_pages=2120043 written_back=636187 avail=6832MB v1:z=145M/s=685M v5:z=141M/s=671M v10:z=155M/s=690M 
+02:11:30 BURST pool-2: wall=14.5s min=3.64s p50=8.26s max=14.45s | times: 3.64 3.76 5.77 6.45 8.26 8.88 10.89 11.38 13.7 14.45 | psi(ms) mem_full=923 cpu_some=2184 io_full=132
+swap_before_mib=676 landed_mib=590 advise_took=1.794297042s pagein_took=503.738295ms;swap_before_mib=675 landed_mib=589 advise_took=1.855443056s pagein_took=503.542077ms;swap_before_mib=682 landed_mib=599 advise_took=2.117954869s pagein_took=505.656513ms;swap_before_mib=690 landed_mib=593 advise_took=1.911992124s pagein_took=502.582616ms;swap_before_mib=685 landed_mib=598 advise_took=1.786467271s 
+
+02:13:06 final: paused=100 exited=0 wake_failures=0 pool=2301MB zswapped=8210MB stored_pages=2101804 written_back=724615 avail=7216MB
+Z2-DONE

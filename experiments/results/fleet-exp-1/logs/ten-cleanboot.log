@@ -1,0 +1,18 @@
+12:41:17 == ten-warm run: cleanboot (shipped policy: -headroom-mib 4096 -warm-keep-mib 300)
+12:41:17 meminfo: MemAvailable:6229MB Cached:299MB SwapCached:123MB AnonPages:6008MB Slab:1232MB PageTables:2014MB 
+12:41:18 STATE start: paused=100 warm=6 cold=94 untrimmed=0 warm:[v93 v94 v96 v97 v98 v99] avail=6323MB used=9290MB hotsets=100
+12:44:20 STATE after waking ten and letting the headroom rule settle: paused=100 warm=8 cold=92 untrimmed=0 warm:[v1 v10 v2 v4 v5 v6 v7 v9] avail=4720MB used=10893MB hotsets=100
+12:44:20 warm survivors: 8 [v1 v10 v2 v4 v5 v6 v7 v9]
+12:44:26 BURST warm-8 (the survivors): codes= 8 200; min=1.46s p50=2.5s max=3.78s | times: 1.46 1.5 1.79 2.5 3.03 3.18 3.5 3.78 | psi(ms) mem_full=225 cpu_some=1622 io_full=234 | avail before=4721MB after=4223MB
+
+cell=v3 start=276.278044ms ready=7.385955454s;cell=v4 start=138.672806ms ready=9.579680347s;cell=v5 start=95.692222ms ready=12.809377081s;cell=v2 start=76.047834ms ready=11.504815254s;cell=v7 start=101.488831ms ready=7.481023582s;cell=v9 start=137.202849ms ready=9.244097899s;cell=v1 start=108.811501ms ready=12.209061646s;cell=v8 start=113.162269ms ready=10.951712939s;cell=v10 start=69.528293ms ready=14.069094778s;cell=v6 start=90.895586ms ready=8.592825299s;cell=v1 start=103.322241ms ready=1.165
+
+12:45:53 STATE after-warm: paused=100 warm=8 cold=92 untrimmed=0 warm:[v1 v10 v2 v4 v5 v6 v7 v9] avail=4730MB used=10882MB hotsets=100
+12:46:11 BURST cold-10 (v21..v30, hot-set prefetch): codes= 10 200; min=4.61s p50=8.72s max=16.39s | times: 4.61 5.62 6.46 8.04 8.72 15.6 15.66 15.86 16.02 16.39 | psi(ms) mem_full=80 cpu_some=7587 io_full=3663 | avail before=4730MB after=1281MB
+cell=v25 scope=hot advised_mib=258 swap_before_mib=740 landed_mib=224 advise_took=933.141623ms pagein_took=504.010925ms;cell=v26 scope=hot advised_mib=260 swap_before_mib=732 landed_mib=231 advise_took=708.210608ms pagein_took=503.372003ms;cell=v21 scope=hot advised_mib=229 swap_before_mib=718 landed_mib=190 advise_took=527.738017ms pagein_took=503.794137ms;cell=v23 scope=hot advised_mib=256 swap_before_mib=727 landed_mib=223 advise_took=1.298295486s pagein_took=504.096717ms;
+
+cell=v1 start=103.322241ms ready=1.165783248s;cell=v2 start=78.599346ms ready=1.273102112s;cell=v5 start=74.883914ms ready=1.658200365s;cell=v4 start=82.272428ms ready=2.30566222s;cell=v7 start=56.710283ms ready=2.962887198s;cell=v9 start=162.64983ms ready=2.866270637s;cell=v10 start=49.749864ms ready=3.369923899s;cell=v6 start=50.068865ms ready=3.700400631s;cell=v27 start=70.769682ms ready=4.489830775s;cell=v26 start=113.117595ms ready=4.069140402s;cell=v29 start=79.347765ms ready=3.518958298s;
+
+12:47:23 STATE after-cold: paused=100 warm=5 cold=95 untrimmed=0 warm:[v21 v22 v23 v24 v25] avail=4252MB used=11361MB hotsets=100
+12:47:23 wake_failures=0 exited=0
+TEN-DONE

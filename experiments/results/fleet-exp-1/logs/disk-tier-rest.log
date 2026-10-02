@@ -1,0 +1,3 @@
+10:48:51 zram: /dev/zram0 zstd 30.5G 4K 59B 20K 8 [SWAP]
+10:52:00 zram+wb: backing=/dev/loop0 /dev/zram0 zstd 30G 4K 59B 20K 8 [SWAP]
+10:55:41 RUN-DONE rest

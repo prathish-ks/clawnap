@@ -1,0 +1,12 @@
+13:58:19 idle timer for v90..v99 set to 6 min; cpu_s before: 61 59 62 55 58 62 67 63 55 64 
+13:59:06 woken; letting maintenance run. cpu_s at +30s: 67 65 67 60 63 68 72 69 61 69 
+14:00:06 cpu_s at +90s: 69 67 69 62 65 70 74 72 64 72 
+14:01:07 cpu_s at +150s: 72 70 72 64 68 73 78 75 67 75 
+14:02:08 cpu_s at +210s: 75 74 75 68 71 77 82 79 71 79 
+14:10:23 v90..v99 paused and cold again (2/10 cold) avail=5409MB
+14:11:01 BURST cold-10 after maintenance completed: min=1.77s p50=3.78s max=6.47s | times: 1.77 3.36 3.41 3.5 3.78 4.56 4.66 4.86 4.9 6.47 | psi(ms) mem_full=1061 cpu_some=1333 io_full=1216
+14:10:55.443+00:00 [health] host timing gap detected: process was frozen ~360176ms; restarting channels when idle and re
+14:10:55.479+00:00 [admission] closed: suspend phase
+14:10:55.489+00:00 [admission] reopened: suspend phase
+14:11:02 idle timers restored
+I5-DONE

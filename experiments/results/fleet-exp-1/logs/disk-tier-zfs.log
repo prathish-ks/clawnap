@@ -1,0 +1,6 @@
+== zfs cycles=3 wb= 12:17:38 swap: /swap.img  file       40G 39.9G   -2;/swap2.img file       40G 27.8G   -3;/dev/zd0   partition  80G    0B  200;
+== zfs cycles=3 wb= 12:19:08 swap: /swap.img  file       40G  39.6G   -2;/swap2.img file       40G  27.8G   -3;/dev/zd0   partition  80G 191.3M  200;
+12:20:34 cycle 1: hib cur=979 swap=426 -> cur=149 swap=1014 |  | wake_api=6.40s health=6.42s | cell=tgw start=60.020778ms ready=6.326365352s | prefetch swap_before_mib=1014 took=654.935528ms | psi(ms) mem_full=0 mem_some=0 cpu_some=1062 io_full=1529 | vmstat si peak=770180K/s sum=834944K min_idle=0% peak_wa=54%
+12:21:42 cycle 2: hib cur=619 swap=372 -> cur=149 swap=678 |  | wake_api=2.37s health=2.39s | cell=tgw start=55.70155ms ready=2.293765299s | prefetch swap_before_mib=678 took=375.970522ms | psi(ms) mem_full=0 mem_some=0 cpu_some=660 io_full=538 | vmstat si peak=564416K/s sum=573094K min_idle=19% peak_wa=41%
+12:22:40 cycle 3: hib cur=677 swap=508 -> cur=149 swap=646 |  | wake_api=2.18s health=2.20s | cell=tgw start=61.209028ms ready=2.106623373s | prefetch swap_before_mib=646 took=340.064204ms | psi(ms) mem_full=0 mem_some=0 cpu_some=626 io_full=742 | vmstat si peak=531176K/s sum=540363K min_idle=17% peak_wa=45%
+RUN-DONE zfs

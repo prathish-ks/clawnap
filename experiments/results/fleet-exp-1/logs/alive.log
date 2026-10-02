@@ -1,0 +1,13 @@
+02:39:36 fleetd stopped for the test; paused=100
+02:40:26 == zswap-zstd: alive, no limit: resident_sum=2703M zswap_sum=640M swap_sum=5327M per_cell=270M health_ms(avg=2 worst=5) load=0.80
+02:42:00 zswap-zstd high=450M +90s: resident_sum=2764M zswap_sum=634M swap_sum=5276M per_cell=276M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=1 worst=3) psi(ms) cpu_some=2405 mem_some=66 load=0.72 pool=2241MB
+02:44:04 zswap-zstd high=450M +210s: resident_sum=2821M zswap_sum=630M swap_sum=5254M per_cell=282M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=1 worst=9) load=0.36
+02:45:38 zswap-zstd high=350M +90s: resident_sum=2682M zswap_sum=650M swap_sum=5326M per_cell=268M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=4 worst=22) psi(ms) cpu_some=2684 mem_some=310 load=0.21 pool=2239MB
+02:47:42 zswap-zstd high=350M +210s: resident_sum=2774M zswap_sum=683M swap_sum=5446M per_cell=277M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=1 worst=3) load=0.26
+02:48:49 == disk-only: alive, no limit: resident_sum=6810M zswap_sum=0M swap_sum=2201M per_cell=681M health_ms(avg=2 worst=7) load=17.67
+02:50:28 disk-only high=450M +90s: resident_sum=4292M zswap_sum=0M swap_sum=3574M per_cell=429M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=6 worst=58) psi(ms) cpu_some=3155 mem_some=7694 load=5.41 pool=1456MB
+02:52:32 disk-only high=450M +210s: resident_sum=3935M zswap_sum=0M swap_sum=3899M per_cell=393M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=2 worst=4) load=1.93
+02:54:09 disk-only high=350M +90s: resident_sum=2878M zswap_sum=0M swap_sum=4844M per_cell=287M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=1 worst=4) psi(ms) cpu_some=3752 mem_some=726 load=2.71 pool=1456MB
+02:56:12 disk-only high=350M +210s: resident_sum=2959M zswap_sum=0M swap_sum=4809M per_cell=295M diag(liveness=0 event_loop=0 mem_pressure=0 hb_delayed=0) health_ms(avg=1 worst=3) load=1.29
+02:56:17 fleetd restarted (active); zswap=N
+ALIVE-DONE

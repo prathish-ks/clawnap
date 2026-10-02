@@ -1,0 +1,17 @@
+14:14:51 == ten-warm run: cpuidle1 (shipped policy: -headroom-mib 4096 -warm-keep-mib 300)
+14:14:51 meminfo: MemAvailable:5147MB Cached:458MB SwapCached:452MB AnonPages:6819MB Slab:1033MB PageTables:1936MB 
+14:14:52 STATE start: paused=100 warm=10 cold=90 untrimmed=0 warm:[v90 v91 v92 v93 v94 v95 v96 v97 v98 v99] avail=5162MB used=10451MB hotsets=100
+14:18:37 STATE after waking ten and letting the headroom rule settle: paused=100 warm=5 cold=95 untrimmed=0 warm:[v1 v2 v4 v6 v7] avail=4561MB used=11052MB hotsets=100
+14:18:37 warm survivors: 5 [v1 v2 v4 v6 v7]
+14:18:42 BURST warm-5 (the survivors): codes= 5 200; min=1.34s p50=1.57s max=2.52s | times: 1.34 1.49 1.57 1.79 2.52 | psi(ms) mem_full=260 cpu_some=899 io_full=267 | avail before=4563MB after=4250MB
+
+cell=v7 start=48.096995ms ready=1.272236196s;cell=v6 start=39.111923ms ready=1.349655447s;cell=v2 start=49.432764ms ready=1.446411432s;cell=v1 start=52.595007ms ready=1.728975852s;cell=v4 start=115.495146ms ready=2.355465668s;
+
+14:20:02 STATE after-warm: paused=100 warm=5 cold=95 untrimmed=0 warm:[v1 v2 v4 v6 v7] avail=4520MB used=11093MB hotsets=100
+14:20:26 BURST cold-10 (v21..v30, hot-set prefetch): codes= 10 200; min=8.01s p50=14.1s max=21.83s | times: 8.01 8.77 8.85 8.88 14.1 14.29 14.81 17.84 20.48 21.83 | psi(ms) mem_full=505 cpu_some=4978 io_full=9758 | avail before=4520MB after=850MB
+
+cell=v7 start=48.096995ms ready=1.272236196s;cell=v6 start=39.111923ms ready=1.349655447s;cell=v2 start=49.432764ms ready=1.446411432s;cell=v1 start=52.595007ms ready=1.728975852s;cell=v4 start=115.495146ms ready=2.355465668s;cell=v29 start=92.071465ms ready=5.951652592s;cell=v24 start=197.343244ms ready=6.67598814s;cell=v23 start=73.39917ms ready=8.693307392s;cell=v22 start=126.887756ms ready=8.786717842s;cell=v28 start=77.383886ms ready=10.444875662s;cell=v30 start=210.188001ms ready=5.2862226
+
+14:22:17 STATE after-cold: paused=100 warm=3 cold=97 untrimmed=0 warm:[v21 v26 v27] avail=4348MB used=11265MB hotsets=100
+14:22:17 wake_failures=0 exited=0
+TEN-DONE
