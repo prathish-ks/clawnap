@@ -350,6 +350,16 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 	s.mu.Lock()
 	s.victims = victims
 	s.mu.Unlock()
+	// One runtime snapshot for the whole pass instead of an inspect per cell.
+	names := make([]string, 0, len(cells))
+	for _, c := range cells {
+		names = append(names, c.Container)
+	}
+	snap, err := s.rt.Snapshot(ctx, names)
+	if err != nil {
+		s.opt.Logger.Warn("reconcile: runtime snapshot", "err", err)
+		return // nothing can be decided without the runtime; next pass retries
+	}
 	var wg sync.WaitGroup
 	for _, c := range cells {
 		c := c
@@ -383,7 +393,14 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 				c.Phase = registry.PhaseActive
 				_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseActive })
 			}
-			if err := s.reconcileCell(ctx, c); err != nil {
+			info, ok := snap[c.Container]
+			if !ok { // container renamed since the snapshot: ask for it alone
+				if info, err = s.rt.Info(ctx, c.Container); err != nil {
+					s.opt.Logger.Warn("reconcile", "cell", c.Name, "err", err)
+					return
+				}
+			}
+			if err := s.reconcileCell(ctx, c, info); err != nil {
 				s.opt.Logger.Warn("reconcile", "cell", c.Name, "err", err)
 				_ = s.reg.Update(c.Name, func(x *registry.Cell) { x.LastError = err.Error() })
 			}
@@ -392,11 +409,7 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 	wg.Wait()
 }
 
-func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
-	info, err := s.rt.Info(ctx, c.Container)
-	if err != nil {
-		return err
-	}
+func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info runtime.Info) error {
 	// A recurring due time that slipped past its window (its wakes kept
 	// failing) is moved on, so the schedule survives one bad morning; a
 	// one-shot that slipped stays as a record and is ignored by dueSoon.

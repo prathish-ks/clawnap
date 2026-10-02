@@ -112,3 +112,31 @@ func TestStatsPrefersExactProcfsCounters(t *testing.T) {
 		t.Fatalf("without a pid the rounded figure is the fallback, got %+v %v", st, err)
 	}
 }
+
+func TestSnapshotListsStatesInOnePsAndPidsInOneInspect(t *testing.T) {
+	r := &countingRunner{out: map[string]string{"ps": "a\trunning\nb\tpaused\nstray\texited\n", "inspect": "/a 4242\n"}}
+	c := Client{R: r}
+	snap, err := c.Snapshot(context.Background(), []string{"a", "b", "gone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap["a"].State != StateRunning || snap["a"].Pid != 4242 || snap["b"].State != StatePaused || snap["gone"].State != StateMissing {
+		t.Fatalf("got %+v", snap)
+	}
+	if _, listed := snap["stray"]; listed {
+		t.Fatal("containers outside the registry must not be reported")
+	}
+	if r.calls != 2 {
+		t.Fatalf("want exactly two runtime calls (ps + inspect), got %d", r.calls)
+	}
+}
+
+type countingRunner struct {
+	out   map[string]string
+	calls int
+}
+
+func (r *countingRunner) Run(_ context.Context, args ...string) (string, error) {
+	r.calls++
+	return r.out[args[0]], nil
+}

@@ -120,6 +120,61 @@ func (c Client) Info(ctx context.Context, name string) (Info, error) {
 	return i, nil
 }
 
+// Snapshot returns the state of every named container in two runtime calls
+// (one `ps -a` for states, one inspect for the running ones' pids) instead
+// of one inspect per cell. Measured 2026-10-02 on the 8-vCPU host: the
+// per-cell form at 103 cells on a 5 s interval cost about one core of
+// docker CLI start-up time, continuously. Names not listed are StateMissing.
+func (c Client) Snapshot(ctx context.Context, names []string) (map[string]Info, error) {
+	out, err := c.R.Run(ctx, "ps", "-a", "--no-trunc", "--format", "{{.Names}}\t{{.State}}")
+	if err != nil {
+		if IsDaemonUnreachable(err) {
+			return nil, fmt.Errorf("runtime unreachable: %w", err)
+		}
+		return nil, err
+	}
+	res := make(map[string]Info, len(names))
+	for _, n := range names {
+		res[n] = Info{State: StateMissing}
+	}
+	var running []string
+	for _, l := range strings.Split(out, "\n") {
+		name, st, ok := strings.Cut(strings.TrimSpace(l), "\t")
+		if !ok {
+			continue
+		}
+		if _, wanted := res[name]; !wanted {
+			continue
+		}
+		i := Info{State: StateUnknown}
+		switch s := State(strings.TrimSpace(st)); s {
+		case StateRunning, StateExited, StateCreated, StatePaused:
+			i.State = s
+		}
+		if i.State == StateRunning {
+			running = append(running, name)
+		}
+		res[name] = i
+	}
+	if len(running) > 0 {
+		args := append([]string{"inspect", "-f", "{{.Name}} {{.State.Pid}}"}, running...)
+		if out, err := c.R.Run(ctx, args...); err == nil {
+			for _, l := range strings.Split(out, "\n") {
+				f := strings.Fields(l)
+				if len(f) != 2 {
+					continue
+				}
+				n := strings.TrimPrefix(f[0], "/")
+				if i, ok := res[n]; ok {
+					i.Pid, _ = strconv.Atoi(f[1])
+					res[n] = i
+				}
+			}
+		}
+	}
+	return res, nil
+}
+
 // IsDaemonUnreachable reports whether an error is the runtime daemon being
 // down or unreachable, which must never be read as "container missing".
 func IsDaemonUnreachable(err error) bool {

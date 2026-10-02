@@ -33,8 +33,8 @@ type fakeRunner struct {
 	cpu    map[string]string // container -> docker CPUPerc string
 	calls  []string
 	failOn string
-	// hold makes "inspect" of a container block until the channel is closed,
-	// to pin a reconcile goroutine inside its pool slot.
+	// hold makes "stats" of a running container block until the channel is
+	// closed, to pin a reconcile goroutine inside its pool slot.
 	hold    map[string]chan struct{}
 	holding atomic.Int32 // goroutines currently blocked in hold
 	// thawed counts containers currently unpaused by the supervisor and the
@@ -47,7 +47,7 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 	f.mu.Lock()
 	ch := f.hold[name]
 	f.mu.Unlock()
-	if ch != nil && args[0] == "inspect" {
+	if ch != nil && args[0] == "stats" {
 		f.holding.Add(1)
 		<-ch
 		f.holding.Add(-1)
@@ -56,12 +56,25 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, strings.Join(args, " "))
 	switch args[0] {
+	case "ps": // the per-pass snapshot: every container and its state
+		var b strings.Builder
+		for n, st := range f.state {
+			b.WriteString(n + "\t" + string(st) + "\n")
+		}
+		return b.String(), nil
 	case "inspect":
 		if len(args) > 2 && args[2] == "{{json .Mounts}}" {
 			return "[]", nil
 		}
 		if len(args) > 2 && args[2] == "{{.Id}}" {
 			return "cid-" + name + "-0000000000000000", nil // full-length id like docker prints
+		}
+		if len(args) > 2 && args[2] == "{{.Name}} {{.State.Pid}}" {
+			var b strings.Builder
+			for _, n := range args[3:] {
+				b.WriteString("/" + n + " 0\n")
+			}
+			return b.String(), nil
 		}
 		st, ok := f.state[name]
 		if !ok {
