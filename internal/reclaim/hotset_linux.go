@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const pageSize = 4096
+// pageSize is the kernel's: /proc/<pid>/pagemap holds one entry per page,
+// and process_madvise wants page-aligned ranges, so a 16 or 64 KiB arm64
+// kernel must not be read with x86's 4 KiB stride.
+var pageSize = uint64(os.Getpagesize())
 
 // HotSet snapshots which anonymous pages of every process in the cell's
 // cgroup are resident right now, from /proc/<pid>/pagemap. Meant to be

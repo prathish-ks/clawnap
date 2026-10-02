@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -97,7 +98,18 @@ func viaDaemon(ctx context.Context, verb, name string) (handled bool, out string
 	}
 	res, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
 	if err != nil {
-		return false, "", nil // no daemon: fall back to local
+		// Only "nothing is listening" means there is no daemon. Any other
+		// failure (Ctrl-C, a timeout, a reset mid-response) leaves a daemon
+		// that may still be acting on the cell, and a second supervisor in
+		// this process would race it on the same container.
+		if ctx.Err() != nil {
+			return true, "", ctx.Err()
+		}
+		var oe *net.OpError
+		if errors.As(err, &oe) && oe.Op == "dial" {
+			return false, "", nil // no daemon: fall back to local
+		}
+		return true, "", fmt.Errorf("daemon %s: %w (not retrying locally: the daemon may still be acting on the cell)", verb, err)
 	}
 	defer res.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
@@ -128,8 +140,8 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 	wakeConc := fs.Int("wake-concurrency", 4, "simultaneous page-ins/starts; readiness waits and the thaw settle run outside this bound")
 	settle := fs.Duration("thaw-settle", time.Second, "bound on the hold after a pause wake while the gateway finishes its own post-thaw recovery (keyed on the cell log; measured window 22–800 ms)")
 	maxRecov := fs.Int("max-recovering", 8, "cells allowed between unpause and ready at once (post-thaw recovery is CPU-bound)")
-	idleCPU := fs.Float64("idle-cpu-pct", 10, "a running cell using more CPU than this (percent of one core) is not idle, whatever its traffic; negative = ignore CPU")
-	minAwake := fs.Duration("min-awake", 3*time.Minute, "never hibernate a cell within this long of its last wake (OpenClaw's post-thaw maintenance must finish); negative = off")
+	idleCPU := fs.Float64("idle-cpu-pct", 10, "a running cell using more CPU than this (percent of one core) is not idle, whatever its traffic; 0 = default, negative = ignore CPU")
+	minAwake := fs.Duration("min-awake", 3*time.Minute, "never hibernate a cell within this long of its last wake (OpenClaw's post-thaw maintenance must finish); 0 = default, negative = off")
 	burst := fs.Int("burst-target", 0, "cold wakes to absorb at full speed at once; sets -headroom-mib to 800 MiB per wake when that flag is not given (measured: a woken cell holds ~800 MiB through its post-thaw window)")
 	headroom := fs.Int64("headroom-mib", 0, "keep at least this much MemAvailable by reclaiming the longest-paused resident cells first (0 = timed reclaim only)")
 	return func() supervisor.Options {
@@ -279,6 +291,14 @@ func run(args []string) error {
 		slog.Info("clawnap serving", "listen", *listen)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			return err
+		}
+		// Let wakes and reconcile actions already in flight finish before
+		// the process goes: a cell left half-thawed is adopted on restart,
+		// but the tenant whose message triggered the wake is waiting now.
+		dctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := sup.Drain(dctx); err != nil {
+			slog.Warn("shutdown: actions still in flight", "err", err)
 		}
 		return nil
 	}

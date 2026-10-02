@@ -181,3 +181,54 @@ func TestHookRetriesCellNotReadyThenSucceeds(t *testing.T) {
 		t.Fatalf("want a single 204 after 3 forwards, got %v %v calls=%d", err, res, calls)
 	}
 }
+
+// An oversized body is refused before the cell is woken, for the "none"
+// verifier too; it must never be forwarded as an empty request.
+func TestHookRefusesOversizedBodyBeforeWaking(t *testing.T) {
+	var forwarded int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&forwarded, 1)
+		w.WriteHeader(204)
+	}))
+	defer backend.Close()
+	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	_ = reg.Put(registry.Cell{Name: "big", Container: "oc-big", Port: port, HookVerifier: "none"})
+	fw := &fakeWaker{}
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: fw}).Handler())
+	defer srv.Close()
+	body := strings.NewReader(strings.Repeat("x", maxBody+1))
+	res, err := http.Post(srv.URL+"/hook/big/", "application/json", body)
+	if err != nil || res.StatusCode != http.StatusRequestEntityTooLarge || len(fw.woke) != 0 || atomic.LoadInt32(&forwarded) != 0 {
+		t.Fatalf("want 413 with no wake and no forward, got err=%v status=%v woke=%v forwarded=%d", err, res, fw.woke, forwarded)
+	}
+}
+
+// Only the channel's own "not ready" answer is retried. A 500 from the
+// bot's handler is an application error: forwarded once, passed through.
+func TestHookDoesNotReplayApplicationErrors(t *testing.T) {
+	var calls int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		if string(b) == "{}" {
+			w.WriteHeader(401) // readiness probe
+			return
+		}
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "handler crashed", 500)
+	}))
+	defer backend.Close()
+	port, _ := strconv.Atoi(strings.TrimPrefix(backend.URL, "http://127.0.0.1:"))
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "c.json"))
+	_ = reg.Put(registry.Cell{Name: "e", Container: "oc-e", Port: 1, HookPort: port, HookVerifier: "none"})
+	srv := httptest.NewServer((&Server{Reg: reg, Waker: &fakeWaker{}}).Handler())
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/hook/e/telegram-webhook", "application/json", strings.NewReader(`{"update_id":8}`))
+	if err != nil || res.StatusCode != 500 {
+		t.Fatalf("application error must pass through, got %v %v", err, res)
+	}
+	b, _ := io.ReadAll(res.Body)
+	if atomic.LoadInt32(&calls) != 1 || !strings.Contains(string(b), "handler crashed") {
+		t.Fatalf("want exactly one forward with the cell's body passed through, got calls=%d body=%q", calls, b)
+	}
+}

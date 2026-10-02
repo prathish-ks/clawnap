@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -69,27 +71,53 @@ const (
 	StateUnknown State = "unknown"
 )
 
-// Client wraps a Runner with typed operations.
-type Client struct{ R Runner }
+// Client wraps a Runner with typed operations. ProcRoot is where the host's
+// procfs is mounted (default /proc); tests point it at a fixture tree.
+type Client struct {
+	R        Runner
+	ProcRoot string
+}
+
+// Info is what one inspect call yields: the lifecycle state and, for a
+// running container, the host pid of its init process.
+type Info struct {
+	State State
+	Pid   int
+}
 
 // Inspect returns the container's state.
 func (c Client) Inspect(ctx context.Context, name string) (State, error) {
-	out, err := c.R.Run(ctx, "inspect", "-f", "{{.State.Status}}", name)
+	i, err := c.Info(ctx, name)
+	return i.State, err
+}
+
+// Info returns the container's state and init pid in one runtime call. The
+// pid lets the idle detector read the container's network counters from
+// procfs instead of the rounded figures `docker stats` prints.
+func (c Client) Info(ctx context.Context, name string) (Info, error) {
+	out, err := c.R.Run(ctx, "inspect", "-f", "{{.State.Status}} {{.State.Pid}}", name)
 	if err != nil {
 		if IsDaemonUnreachable(err) {
-			return StateUnknown, fmt.Errorf("runtime unreachable: %w", err)
+			return Info{State: StateUnknown}, fmt.Errorf("runtime unreachable: %w", err)
 		}
 		if strings.Contains(err.Error(), "No such") || strings.Contains(err.Error(), "no such") {
-			return StateMissing, nil
+			return Info{State: StateMissing}, nil
 		}
-		return StateUnknown, err
+		return Info{State: StateUnknown}, err
 	}
-	switch s := State(strings.TrimSpace(out)); s {
+	fields := strings.Fields(out)
+	if len(fields) == 0 {
+		return Info{State: StateUnknown}, nil
+	}
+	i := Info{State: StateUnknown}
+	switch s := State(fields[0]); s {
 	case StateRunning, StateExited, StateCreated, StatePaused:
-		return s, nil
-	default:
-		return StateUnknown, nil
+		i.State = s
 	}
+	if len(fields) > 1 {
+		i.Pid, _ = strconv.Atoi(fields[1])
+	}
+	return i, nil
 }
 
 // IsDaemonUnreachable reports whether an error is the runtime daemon being
@@ -142,6 +170,7 @@ type NetIO struct{ RxBytes, TxBytes int64 }
 // Stats holds the one-shot sample the idle detector consumes.
 type Stats struct {
 	Net      NetIO
+	NetExact bool // counters read from procfs (byte-exact), not docker's rounded NetIO
 	MemBytes int64
 	CPUPct   float64 // docker's CPU %: 100 = one core busy over the sampling window
 }
@@ -152,8 +181,13 @@ type statsJSON struct {
 	CPUPerc  string `json:"CPUPerc"`
 }
 
-// Stats samples a running container's network counters and memory.
-func (c Client) Stats(ctx context.Context, name string) (Stats, error) {
+// Stats samples a running container's network counters, memory and CPU.
+// The network counters come from the container's own /proc/<pid>/net/dev
+// when pid is known and the host's procfs is readable: `docker stats`
+// prints NetIO rounded to three significant digits, so once a cell has
+// moved a few hundred megabytes a whole conversation's traffic is invisible
+// in the difference between two samples. The rounded figure is the fallback.
+func (c Client) Stats(ctx context.Context, name string, pid int) (Stats, error) {
 	out, err := c.R.Run(ctx, "stats", "--no-stream", "--format", "{{json .}}", name)
 	if err != nil {
 		return Stats{}, err
@@ -166,9 +200,61 @@ func (c Client) Stats(ctx context.Context, name string) (Stats, error) {
 	if err != nil {
 		return Stats{}, err
 	}
+	exact := false
+	if pid > 0 {
+		if erx, etx, err := ReadNetDev(filepath.Join(c.procRoot(), strconv.Itoa(pid), "net", "dev")); err == nil {
+			rx, tx, exact = erx, etx, true
+		}
+	}
 	mem, _ := parseMemUsage(sj.MemUsage)
 	cpu, _ := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(sj.CPUPerc), "%"), 64)
-	return Stats{Net: NetIO{RxBytes: rx, TxBytes: tx}, MemBytes: mem, CPUPct: cpu}, nil
+	return Stats{Net: NetIO{RxBytes: rx, TxBytes: tx}, NetExact: exact, MemBytes: mem, CPUPct: cpu}, nil
+}
+
+func (c Client) procRoot() string {
+	if c.ProcRoot != "" {
+		return c.ProcRoot
+	}
+	return "/proc"
+}
+
+// ReadNetDev sums the byte counters of every interface except loopback in
+// a /proc/<pid>/net/dev file (the network namespace of that process).
+func ReadNetDev(path string) (rx, tx int64, err error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	lines := strings.Split(string(b), "\n")
+	if len(lines) < 3 {
+		return 0, 0, fmt.Errorf("%s: no interfaces", path)
+	}
+	seen := false
+	for _, l := range lines[2:] {
+		name, rest, ok := strings.Cut(l, ":")
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(name) == "lo" {
+			continue
+		}
+		f := strings.Fields(rest)
+		if len(f) < 9 {
+			continue
+		}
+		r, err1 := strconv.ParseInt(f[0], 10, 64)
+		t, err2 := strconv.ParseInt(f[8], 10, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		rx += r
+		tx += t
+		seen = true
+	}
+	if !seen {
+		return 0, 0, fmt.Errorf("%s: no interfaces", path)
+	}
+	return rx, tx, nil
 }
 
 // ParseNetIO parses docker's "1.2kB / 3.4MB" form into bytes.

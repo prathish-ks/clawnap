@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prathish-ks/clawnap/internal/idle"
@@ -42,15 +44,20 @@ type Options struct {
 	// (percent of one core) counts as active even with no traffic. Measured:
 	// after a thaw OpenClaw runs cron catch-up and maintenance at ~20 % of a
 	// core for 30–60 s, then ~5 % steady; pausing inside that minute made the
-	// next thaw resume the interrupted work first (wakes 3–4x slower). 0 = off.
+	// next thaw resume the interrupted work first (wakes 3–4x slower).
+	// 0 = default (10), negative = off.
 	IdleCPUPct float64
 	// MinAwake: never hibernate a cell within this long of its last wake.
 	// OpenClaw runs cron catch-up, database verification and memory
 	// maintenance after a thaw, some of it I/O-bound and invisible to the CPU
 	// gate; a cell paused inside that window resumes it on the next thaw and
-	// wakes 3–4x slower. Measured clean after ~3 minutes awake. 0 = off.
-	MinAwake    time.Duration
-	MaxRestarts int           // always-on self-heal budget per cell
+	// wakes 3–4x slower. Measured clean after ~3 minutes awake.
+	// 0 = default (3 m), negative = off.
+	MinAwake time.Duration
+	// MaxRestarts is the always-on self-heal budget per cell. The count is
+	// forgiven once a cell has stayed up for restartForgiveAfter, so the
+	// budget bounds crash loops, not a cell's lifetime.
+	MaxRestarts int
 	PreWake     time.Duration // wake a hibernated cell this long before NextDueAt
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
@@ -128,10 +135,10 @@ func (o *Options) defaults() {
 	if o.StopWakeTimeout == 0 {
 		o.StopWakeTimeout = 3 * time.Minute // OpenClaw gateway measured 50–90 s to ready after start
 	}
-	if o.MaxRecovering == 0 {
+	if o.MaxRecovering <= 0 {
 		o.MaxRecovering = 8
 	}
-	if o.MaxConcurrent == 0 {
+	if o.MaxConcurrent <= 0 {
 		o.MaxConcurrent = 4 // hot-set wakes read ~270 MiB: four in flight stay under a cloud volume's bandwidth (measured 2026-10-02); sequencing still gives earlier cells earlier wakes
 	}
 	if o.MemAvailable == nil {
@@ -221,8 +228,25 @@ type Supervisor struct {
 	cell     map[string]*sync.Mutex // per-cell lock: wake, hibernate, reclaim, pulse never interleave on one cell
 	wakeWant map[string]bool        // a wake is waiting for this cell's lock; reclaim yields between chunks
 	recon    chan struct{}          // reconcile pool, separate from the wake semaphore (a reconcile goroutine may itself wake)
-	m        *Metrics
+	pulsing  int                    // max-pause pulses in flight: thaws too, so pressure reclaim yields to them as to wakes
+	// pressureDeferred counts consecutive passes on which pressure reclaim
+	// stood aside for wakes in flight; bounded, so steady inbound traffic
+	// cannot starve the headroom policy.
+	pressureDeferred atomic.Int32
+	active           sync.WaitGroup // wakes and reconcile passes in flight, for Drain
+	m                *Metrics
 }
+
+// maxPressureDefer is how many consecutive passes pressure reclaim may
+// yield to wakes in flight before it runs regardless (30 s at the shipped
+// 5 s interval). Reclaiming under a burst slows the burst (measured 10–15 s
+// wakes instead of 3–4 s); never reclaiming under steady traffic lets the
+// host run out of headroom, which is worse (20 s+ cold wakes).
+const maxPressureDefer = 6
+
+// restartForgiveAfter is how long an always-on cell must stay up before its
+// self-heal restarts stop counting against MaxRestarts.
+const restartForgiveAfter = 10 * time.Minute
 
 // wakeShare lets coalesced callers observe the leader's real outcome.
 type wakeShare struct {
@@ -264,12 +288,23 @@ func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
 }
 
-// Run loops until ctx is done.
+// Run loops until ctx is done. A pass is bounded by its slowest action (a
+// stop-tier boot can take minutes), so passes may overlap: a tick that
+// arrives while one pass is still waiting starts another, which samples the
+// cells the first one is not holding. At most two run at once.
 func (s *Supervisor) Run(ctx context.Context) error {
 	t := time.NewTicker(s.opt.Interval)
 	defer t.Stop()
+	passes := make(chan struct{}, 2)
 	for {
-		s.ReconcileOnce(ctx)
+		select {
+		case passes <- struct{}{}:
+			go func() {
+				defer func() { <-passes }()
+				s.ReconcileOnce(ctx)
+			}()
+		default: // two passes already in flight: this tick waits
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -278,19 +313,38 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}
 }
 
+// Drain waits for wakes and reconcile actions in flight to finish, or for
+// ctx. Called at shutdown so a tenant's wake is not killed half-way.
+func (s *Supervisor) Drain(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() { s.active.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // ReconcileOnce inspects every cell and acts, cells in parallel under a
 // bounded pool, so one slow action (a 30 s reclaim, a 90 s stop-tier boot)
 // never stalls the others. A cell already being acted on (e.g. a wake in
 // flight from the ingress) is skipped this pass rather than waited for.
 func (s *Supervisor) ReconcileOnce(ctx context.Context) {
+	s.active.Add(1)
+	defer s.active.Done()
 	cells := s.reg.List()
 	// Pressure reclaim yields to wakes in flight: evicting warm cells while a
 	// burst is paging in only adds CPU and I/O to the burst (measured: wakes
 	// that overlapped a pressure reclaim took 10–15 s instead of 3–4 s), and
 	// the kernel's own reclaim already keeps the wakes fed. The target is
-	// restored on the first quiet pass after the burst.
+	// restored on the first quiet pass after the burst, or after
+	// maxPressureDefer busy passes when the traffic never goes quiet.
 	var victims map[string]bool
-	if !s.anyWakeInFlight() {
+	if s.anyWakeInFlight() && s.pressureDeferred.Load() < maxPressureDefer {
+		s.pressureDeferred.Add(1)
+	} else {
+		s.pressureDeferred.Store(0)
 		victims = s.pressureVictims(ctx, cells)
 	}
 	s.mu.Lock()
@@ -302,17 +356,27 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			l := s.lockCell(c.Name)
-			if !l.TryLock() {
-				return // busy: wake/hibernate in progress
-			}
-			defer l.Unlock()
+			// Pool slot first, cell lock second: a goroutine queued for a slot
+			// must not hold its cell's lock, or an inbound wake for that cell
+			// waits behind unrelated cells' slow actions.
 			select {
 			case s.recon <- struct{}{}: // reconcile pool: never the wake semaphore, which a reconcile-driven wake needs
 				defer func() { <-s.recon }()
 			case <-ctx.Done():
 				return
 			}
+			l := s.lockCell(c.Name)
+			if !l.TryLock() {
+				return // busy: wake/hibernate in progress
+			}
+			defer l.Unlock()
+			// The snapshot may predate a wake that finished while this
+			// goroutine queued; decide from the cell as it is now.
+			fresh, err := s.reg.Get(c.Name)
+			if err != nil {
+				return // removed meanwhile
+			}
+			c = fresh
 			// A persisted Waking phase with no wake in flight is a crash
 			// leftover; adopt the runtime's real state instead of honouring it.
 			if c.Phase == registry.PhaseWaking && !s.wakeInFlight(c.Name) {
@@ -329,31 +393,39 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
-	state, err := s.rt.Inspect(ctx, c.Container)
+	info, err := s.rt.Info(ctx, c.Container)
 	if err != nil {
 		return err
 	}
-	switch state {
+	// A recurring due time that slipped past its window (its wakes kept
+	// failing) is moved on, so the schedule survives one bad morning; a
+	// one-shot that slipped stays as a record and is ignored by dueSoon.
+	if c.NextDueEvery > 0 && !c.NextDueAt.IsZero() && c.NextDueAt.Before(s.opt.Now().Add(-s.opt.PreWake)) {
+		_ = s.advanceDue(c.Name)
+	}
+	switch info.State {
 	case runtime.StateMissing:
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = "container missing" })
 	case runtime.StateRunning:
-		return s.observeRunning(ctx, c)
+		return s.observeRunning(ctx, c, info.Pid)
 	case runtime.StatePaused:
 		if s.dueSoon(c) {
-			_ = s.advanceDue(c.Name)
-			_, err := s.wakeLocked(ctx, c.Name)
-			return err
+			return s.wakeDue(ctx, c)
 		}
-		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.MaxPause > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.MaxPause {
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && s.opt.MaxPause > 0 && s.opt.Now().Sub(c.PausedAt) >= s.pauseCap(c.Name) {
 			return s.capPause(ctx, c)
 		}
-		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && c.ReclaimedAt.Before(c.PausedAt) {
-			if s.opt.WarmKeep > 0 && c.WarmAt.Before(c.PausedAt) {
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() {
+			switch f := floorOf(c); {
+			case f == floorCold:
+				// done for this freeze
+			case f == floorResident && s.opt.WarmKeep > 0:
 				return s.warmCell(ctx, c) // stage one: trim to the warm floor now, record the hot set
-			}
-			timed := s.opt.ReclaimAfter > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter
-			if timed || s.isVictim(c.Name) {
-				return s.reclaimCell(ctx, c) // stage two: down to the cold floor
+			default:
+				timed := s.opt.ReclaimAfter > 0 && s.opt.Now().Sub(c.PausedAt) >= s.opt.ReclaimAfter
+				if timed || s.isVictim(c.Name) {
+					return s.reclaimCell(ctx, c) // stage two: down to the cold floor
+				}
 			}
 		}
 		if c.Phase == registry.PhaseHibernated {
@@ -376,13 +448,12 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 			x.Phase = registry.PhaseHibernated
 			x.PausedAt = s.opt.Now().Add(-back)
 			x.ReclaimedAt = time.Time{}
+			x.WarmAt = time.Time{}
 			x.Swapped = false
 		})
 	case runtime.StateExited, runtime.StateCreated:
 		if c.Phase == registry.PhaseHibernated && s.dueSoon(c) {
-			_ = s.advanceDue(c.Name)
-			_, err := s.wakeLocked(ctx, c.Name)
-			return err
+			return s.wakeDue(ctx, c)
 		}
 		if c.Phase == registry.PhaseHibernated {
 			return nil // expected
@@ -396,8 +467,19 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell) error {
 	return nil
 }
 
-func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error {
-	st, err := s.rt.Stats(ctx, c.Container)
+// wakeDue wakes a hibernated cell for its scheduled job and only then moves
+// the due time on, so a wake that fails is retried on the next pass instead
+// of the schedule being consumed by the attempt.
+func (s *Supervisor) wakeDue(ctx context.Context, c registry.Cell) error {
+	_, err := s.wakeLocked(ctx, c.Name)
+	if err == nil {
+		_ = s.advanceDue(c.Name)
+	}
+	return err
+}
+
+func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid int) error {
+	st, err := s.rt.Stats(ctx, c.Container, pid)
 	if err != nil {
 		return err
 	}
@@ -408,13 +490,21 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell) error 
 		d.LastActivity = cur.At // busy on CPU (post-thaw maintenance, cron): not idle yet
 		d.ShouldSleep = false
 	}
-	if err := s.reg.Update(c.Name, func(x *registry.Cell) {
-		x.Phase = registry.PhaseActive
-		x.LastActivity = d.LastActivity
-		x.RxBytes, x.TxBytes = cur.RxBytes, cur.TxBytes
-		x.LastError = ""
-	}); err != nil {
-		return err
+	forgive := c.Restarts > 0 && !c.WokeAt.IsZero() && cur.At.Sub(c.WokeAt) >= restartForgiveAfter
+	// Persist only when something moved: every Update rewrites and fsyncs
+	// the registry file, and a quiet host has nothing new to say.
+	if c.Phase != registry.PhaseActive || !d.LastActivity.Equal(c.LastActivity) || cur.RxBytes != c.RxBytes || cur.TxBytes != c.TxBytes || c.LastError != "" || forgive {
+		if err := s.reg.Update(c.Name, func(x *registry.Cell) {
+			x.Phase = registry.PhaseActive
+			x.LastActivity = d.LastActivity
+			x.RxBytes, x.TxBytes = cur.RxBytes, cur.TxBytes
+			x.LastError = ""
+			if forgive {
+				x.Restarts = 0 // up long enough: not a crash loop
+			}
+		}); err != nil {
+			return err
+		}
 	}
 	if d.ShouldSleep && c.Class == registry.ClassHibernate && !s.jobInsideIdleWindow(c) {
 		if s.opt.MinAwake > 0 && !c.WokeAt.IsZero() && s.opt.Now().Sub(c.WokeAt) < s.opt.MinAwake {
@@ -464,7 +554,7 @@ func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell)
 	deficit := s.opt.Headroom - avail
 	var cand []registry.Cell
 	for _, c := range cells {
-		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && c.ReclaimedAt.Before(c.PausedAt) {
+		if c.Phase == registry.PhaseHibernated && !c.PausedAt.IsZero() && floorOf(c) != floorCold {
 			cand = append(cand, c)
 		}
 	}
@@ -494,7 +584,27 @@ func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell)
 func (s *Supervisor) anyWakeInFlight() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.inflt) > 0
+	return len(s.inflt) > 0 || s.pulsing > 0
+}
+
+func (s *Supervisor) pulseInFlight(delta int) {
+	s.mu.Lock()
+	s.pulsing += delta
+	s.mu.Unlock()
+}
+
+// pauseCap is MaxPause less a per-cell offset of up to a quarter of it, so
+// cells frozen together (a fleet fill, a restart) do not all reach the cap
+// on the same pass and thaw as one cohort every cycle after. Stable per
+// cell, so the spacing persists.
+func (s *Supervisor) pauseCap(name string) time.Duration {
+	if s.opt.MaxPause <= 0 {
+		return s.opt.MaxPause
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	spread := s.opt.MaxPause / 4
+	return s.opt.MaxPause - time.Duration(uint64(h.Sum32())%uint64(spread))
 }
 
 func (s *Supervisor) isVictim(name string) bool {
@@ -621,13 +731,22 @@ func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
 	before, _ := s.opt.Reclaimer.Stats(id)
 	scope := "all"
 	var st reclaim.PrefetchStats
-	if hs, ok := s.loadHotSet(c.Name); ok && c.ReclaimedAt.After(c.WarmAt) {
+	if hs, ok := s.loadHotSet(c.Name); ok && hotSetCurrent(c) {
 		st, err = s.opt.Reclaimer.PrefetchHot(pctx, id, hs)
 		scope = "hot"
-		if errors.Is(err, reclaim.ErrStaleHotSet) {
+		if err != nil {
+			// Stale (the cell restarted) or unusable (an advise failed):
+			// either way the bulk page-in must still happen, so fall back to
+			// everything that is in swap rather than faulting it in one page
+			// at a time.
+			reason := "stale"
+			if !errors.Is(err, reclaim.ErrStaleHotSet) {
+				reason = "unusable"
+				s.opt.Logger.Warn("hot set prefetch failed; prefetching everything", "cell", c.Name, "err", err)
+			}
 			_ = os.Remove(s.hotSetPath(c.Name))
 			st, err = s.opt.Reclaimer.Prefetch(pctx, id, 0)
-			scope = "all (hot set stale)"
+			scope = "all (hot set " + reason + ")"
 		}
 	} else {
 		st, err = s.opt.Reclaimer.Prefetch(pctx, id, 0)
@@ -637,8 +756,17 @@ func (s *Supervisor) prefetch(ctx context.Context, c registry.Cell) {
 		return
 	}
 	expect := st.SwapBefore
-	if scope == "hot" && st.Bytes < expect {
-		expect = st.Bytes // only the hot set is coming back; do not wait for the rest
+	if scope == "hot" {
+		// Only the hot set is coming back, and the pages still resident at
+		// the cold floor are its hottest part, already here: wait for the
+		// difference, or the wait can only end on the stall detector.
+		hot := st.Bytes - before.CurrentBytes
+		if hot < 0 {
+			hot = 0
+		}
+		if hot < expect {
+			expect = hot
+		}
 	}
 	landed, wait := s.waitPagedIn(pctx, id, before.CurrentBytes, expect)
 	s.opt.Logger.Info("prefetched", "cell", c.Name, "scope", scope, "mechanism", st.Mechanism, "procs", st.Processes, "mappings", st.Mappings, "advised_mib", st.Bytes>>20, "swap_before_mib", st.SwapBefore>>20, "landed_mib", landed>>20, "advise_took", st.Took, "pagein_took", wait)
@@ -704,17 +832,39 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 		s.opt.Logger.Info("pause cap: fell through to stop", "cell", c.Name, "frozen", frozen, "took", took)
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = time.Time{} })
 	}
+	// A pulse is a thaw and is bounded like one: the page-in slot covers the
+	// prefetch and the unpause, the recovery slot the time the gateway runs.
+	// Without this, every cell that reached the cap in the same interval
+	// thawed at once, outside both bounds.
+	s.pulseInFlight(1)
+	defer s.pulseInFlight(-1)
+	select {
+	case s.sem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	release := sync.OnceFunc(func() { <-s.sem })
+	defer release()
 	if s.opt.PrefetchOnWake && reclaimed(c) {
 		s.prefetch(ctx, c) // a pulse is a thaw: pay page-in in bulk, not fault by fault
 	}
+	select {
+	case s.recov <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-s.recov }()
 	if _, err := s.rt.Unpause(ctx, c.Container); err != nil {
 		return err
 	}
+	release()
 	if err := s.waitReady(ctx, c.Port, s.pauseWakeTimeout(c)); err != nil {
 		// gateway did not come back healthy after the thaw: leave it running
 		// and let the next reconcile observe it (self-exit shows as exited).
+		// It just thawed, so MinAwake applies from now.
 		s.opt.Logger.Warn("pause cap: pulse, gateway not ready", "cell", c.Name, "err", err)
-		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseActive; x.PausedAt = time.Time{} })
+		now := s.opt.Now()
+		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseActive; x.PausedAt = time.Time{}; x.WokeAt = now })
 	}
 	select {
 	case <-ctx.Done():
@@ -727,27 +877,64 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 	}
 	s.m.pulse()
 	s.opt.Logger.Info("pause cap: pulsed", "cell", c.Name, "frozen", frozen, "window", s.opt.PulseWindow, "repause", took)
-	// A pulse brings back only what it touched; the rest is still in swap.
-	// Keep the reclaimed mark so the next wake prefetches and gets the
-	// longer timeout, and do not re-arm a full reclaim for the same freeze:
-	// ReclaimedAt stays >= PausedAt.
 	now := s.opt.Now()
+	cold := floorOf(c) == floorCold
 	return s.reg.Update(c.Name, func(x *registry.Cell) {
 		x.PausedAt = now
-		if x.Swapped {
+		if cold {
+			// A pulse brings back only what it touched; the rest is still in
+			// swap. Keep the cold mark (the next wake prefetches and gets the
+			// longer timeout; no second full reclaim for the same freeze) and
+			// keep the hot set current with it.
 			x.ReclaimedAt = now
+			x.WarmAt = now
 		} else {
+			// Resident or warm only: the thaw pulled pages back, so the
+			// stages start over from the new pause (the warm trim is cheap,
+			// its cold pages are clean copies of what is already in swap).
 			x.ReclaimedAt = time.Time{}
+			x.WarmAt = time.Time{}
+			x.Swapped = false
 		}
 	})
 }
 
+// floor is how far the current pause has taken a cell's memory. It is read
+// from the stamps here and nowhere else, so every decision (reclaim stages,
+// pressure victims, wake kind, prefetch scope, the pulse) sees one tier.
+type floor int
+
+const (
+	floorResident floor = iota // nothing reclaimed in this pause
+	floorWarm                  // trimmed to WarmKeep; hot set recorded
+	floorCold                  // reclaimed to ReclaimKeep (or reclaim found impossible; see Swapped)
+)
+
+func floorOf(c registry.Cell) floor {
+	if c.PausedAt.IsZero() {
+		return floorResident
+	}
+	if !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt) {
+		return floorCold
+	}
+	if !c.WarmAt.IsZero() && !c.WarmAt.Before(c.PausedAt) {
+		return floorWarm
+	}
+	return floorResident
+}
+
+// hotSetCurrent: the recorded hot set describes this pause (the warm stage
+// ran in it, before the cold stage), so a cold wake may prefetch it alone.
+func hotSetCurrent(c registry.Cell) bool {
+	return floorOf(c) == floorCold && !c.WarmAt.IsZero() && !c.WarmAt.Before(c.PausedAt) && !c.ReclaimedAt.Before(c.WarmAt)
+}
+
 // reclaimed reports whether the cell's memory was actually pushed to swap
-// during the current pause. ReclaimedAt alone is not enough: it is also
+// during the current pause. The cold floor alone is not enough: it is also
 // stamped when reclaim is impossible so the loop stops retrying. Only a
 // reclaim that moved bytes marks the cell as swapped.
 func reclaimed(c registry.Cell) bool {
-	return c.Swapped && !c.ReclaimedAt.IsZero() && !c.ReclaimedAt.Before(c.PausedAt)
+	return c.Swapped && floorOf(c) == floorCold
 }
 
 // thawTriggered is the line OpenClaw's freeze detector logs the instant it
@@ -903,6 +1090,8 @@ func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) 
 	sh := &wakeShare{done: make(chan struct{})}
 	s.inflt[name] = sh
 	s.mu.Unlock()
+	s.active.Add(1)
+	defer s.active.Done()
 	defer func() {
 		s.mu.Lock()
 		delete(s.inflt, name)
@@ -975,13 +1164,14 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	kind := "stop"
 	if state == runtime.StatePaused {
 		kind = "pause"
-		if reclaimed(c) {
+		switch {
+		case reclaimed(c):
 			kind = "reclaimed" // pages come back from the swap device: a different tier in any dashboard
-			if !c.WarmAt.IsZero() && !c.ReclaimedAt.After(c.WarmAt) {
-				kind = "warm" // trimmed to the warm floor only: its hot set is resident, nothing to prefetch
-			} else if s.opt.PrefetchOnWake {
+			if s.opt.PrefetchOnWake {
 				s.prefetch(ctx, c)
 			}
+		case floorOf(c) == floorWarm:
+			kind = "warm" // trimmed to the warm floor only: its hot set is resident, nothing to prefetch
 		}
 		timeout = s.pauseWakeTimeout(c)
 	}
@@ -991,6 +1181,13 @@ func (s *Supervisor) wakeLocked(ctx context.Context, name string) (WakeResult, e
 	select {
 	case s.recov <- struct{}{}:
 	case <-ctx.Done():
+		// Nothing committed yet: put the phase back so a restart does not
+		// find a Waking cell that nothing is waking.
+		_ = s.reg.Update(name, func(x *registry.Cell) {
+			if x.Phase == registry.PhaseWaking {
+				x.Phase = c.Phase
+			}
+		})
 		return WakeResult{}, ctx.Err()
 	}
 	defer func() { <-s.recov }()

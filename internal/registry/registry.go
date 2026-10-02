@@ -89,6 +89,28 @@ type Store struct {
 	path  string
 	mu    sync.Mutex
 	cells map[string]Cell
+	// loaded identifies the file contents the map reflects, so readers can
+	// skip re-parsing an unchanged file.
+	loadedMod  time.Time
+	loadedSize int64
+}
+
+// refresh re-reads the file only when its size or mtime changed since the
+// last load: cheap enough for every read, so a daemon sees cells the CLI
+// adds or removes without waiting for the next full pass. Caller holds mu.
+func (s *Store) refresh() {
+	fi, err := os.Stat(s.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			s.cells = map[string]Cell{}
+			s.loadedMod, s.loadedSize = time.Time{}, 0
+		}
+		return
+	}
+	if fi.ModTime().Equal(s.loadedMod) && fi.Size() == s.loadedSize {
+		return
+	}
+	_ = s.reload() // best effort; on error keep the last good map
 }
 
 // ErrNotFound is returned for unknown cell names.
@@ -126,6 +148,9 @@ func (s *Store) reload() error {
 		m[c.Name] = c
 	}
 	s.cells = m
+	if fi, err := os.Stat(s.path); err == nil {
+		s.loadedMod, s.loadedSize = fi.ModTime(), fi.Size()
+	}
 	return nil
 }
 
@@ -172,10 +197,11 @@ func (s *Store) Put(c Cell) error {
 	return s.withFileLock(func() error { s.cells[c.Name] = c; return nil })
 }
 
-// Get returns one cell.
+// Get returns one cell, picking up another process's edits first.
 func (s *Store) Get(name string) (Cell, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.refresh()
 	c, ok := s.cells[name]
 	if !ok {
 		return Cell{}, ErrNotFound
@@ -201,7 +227,7 @@ func (s *Store) Delete(name string) error {
 func (s *Store) List() []Cell {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.reload() // best effort; on error keep the last good map
+	s.refresh()
 	out := make([]Cell, 0, len(s.cells))
 	for _, c := range s.cells {
 		out = append(out, c)
@@ -253,5 +279,11 @@ func (s *Store) flush() error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	if err := os.Rename(tmp, s.path); err != nil {
+		return err
+	}
+	if fi, err := os.Stat(s.path); err == nil {
+		s.loadedMod, s.loadedSize = fi.ModTime(), fi.Size() // our own write: the map already matches
+	}
+	return nil
 }

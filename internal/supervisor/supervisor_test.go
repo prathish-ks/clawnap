@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,13 +33,28 @@ type fakeRunner struct {
 	cpu    map[string]string // container -> docker CPUPerc string
 	calls  []string
 	failOn string
+	// hold makes "inspect" of a container block until the channel is closed,
+	// to pin a reconcile goroutine inside its pool slot.
+	hold    map[string]chan struct{}
+	holding atomic.Int32 // goroutines currently blocked in hold
+	// thawed counts containers currently unpaused by the supervisor and the
+	// most that were unpaused at once.
+	thawed, maxThawed int
 }
 
 func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
+	name := args[len(args)-1]
+	f.mu.Lock()
+	ch := f.hold[name]
+	f.mu.Unlock()
+	if ch != nil && args[0] == "inspect" {
+		f.holding.Add(1)
+		<-ch
+		f.holding.Add(-1)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, strings.Join(args, " "))
-	name := args[len(args)-1]
 	switch args[0] {
 	case "inspect":
 		if len(args) > 2 && args[2] == "{{json .Mounts}}" {
@@ -69,6 +85,9 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		}
 		return "", nil
 	case "pause":
+		if f.state[name] == runtime.StateRunning && f.thawed > 0 {
+			f.thawed--
+		}
 		f.state[name] = runtime.StatePaused
 		return "", nil
 	case "inspect-mounts":
@@ -77,6 +96,10 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		return f.logs[args[len(args)-1]], nil // f.mu already held by Run
 	case "unpause":
 		f.state[name] = runtime.StateRunning
+		f.thawed++
+		if f.thawed > f.maxThawed {
+			f.maxThawed = f.thawed
+		}
 		return "", nil
 	}
 	return "", errors.New("unexpected " + args[0])

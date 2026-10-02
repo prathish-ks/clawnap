@@ -165,16 +165,19 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cell misconfigured", http.StatusBadGateway)
 		return
 	}
+	// Buffer the body first, for every verifier including "none": it is
+	// verified against, replayed across retries below, and an oversized one
+	// must be refused here rather than forwarded empty after a wake.
+	body, err := bufferBody(r)
+	if err != nil {
+		http.Error(w, "bad body", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if v != nil {
 		secret, err := readSecret(c.HookSecretFile)
 		if err != nil {
 			s.log().Warn("hook secret", "cell", name, "err", err)
 			http.Error(w, "cell misconfigured", http.StatusBadGateway)
-			return
-		}
-		body, err := bufferBody(r)
-		if err != nil {
-			http.Error(w, "bad body", http.StatusBadRequest)
 			return
 		}
 		if v.Challenge(w, r, body, secret) {
@@ -225,8 +228,11 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		// finishes restarting (its listener is up before its channel is).
 		// Retry the forward ourselves within a short window instead of
 		// handing the retry to the platform, which costs ~2 s per attempt.
+		// Only that answer (or a 503) is retried: a 500 from the bot's own
+		// handler is an application error, and replaying it would run the
+		// handler's side effects again.
 		ModifyResponse: func(res *http.Response) error {
-			if res.StatusCode >= 500 && res.Request != nil && res.Request.Context().Value(retryKey{}) == nil {
+			if res.StatusCode >= 500 && res.Request != nil && res.Request.Context().Value(retryKey{}) == nil && transientUnready(res) {
 				return errNotReady
 			}
 			return nil
@@ -241,9 +247,8 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cell unavailable", http.StatusBadGateway)
 		},
 	}
-	// Serve with a retry window: the body is already buffered (verifiers
-	// need it) or small, so it can be replayed.
-	body, _ := bufferBody(r)
+	// Serve with a retry window: the body is buffered above, so it can be
+	// replayed.
 	deadline := time.Now().Add(hookRetryWindow)
 	for attempt := 0; ; attempt++ {
 		rec := &retryRecorder{ResponseWriter: w, header: http.Header{}}
@@ -264,6 +269,28 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
+}
+
+// transientUnready reports whether a 5xx is the channel's own "not ready
+// yet" answer (or a plain 503) rather than an application failure. It peeks
+// at the start of the body and puts it back for the pass-through case.
+func transientUnready(res *http.Response) bool {
+	if res.StatusCode == http.StatusServiceUnavailable {
+		return true
+	}
+	if res.Body == nil {
+		return false
+	}
+	head, err := io.ReadAll(io.LimitReader(res.Body, 4096))
+	if err != nil {
+		return false
+	}
+	rest := res.Body
+	res.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(head), rest), rest}
+	return bytes.Contains(bytes.ToLower(head), []byte("not ready"))
 }
 
 // retryKey marks the final attempt, whose response is passed through as-is.

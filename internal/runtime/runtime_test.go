@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,52 @@ func TestExecRunnerSeparatesStderr(t *testing.T) {
 	_, err = r.Run(context.Background(), "-c", "echo boom >&2; exit 3")
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("stderr must reach the error: %v", err)
+	}
+}
+
+type scriptRunner struct{ out map[string]string }
+
+func (s scriptRunner) Run(_ context.Context, args ...string) (string, error) {
+	return s.out[args[0]], nil
+}
+
+func TestInfoParsesStateAndPid(t *testing.T) {
+	c := Client{R: scriptRunner{out: map[string]string{"inspect": "running 4242\n"}}}
+	i, err := c.Info(context.Background(), "x")
+	if err != nil || i.State != StateRunning || i.Pid != 4242 {
+		t.Fatalf("got %+v %v", i, err)
+	}
+	c = Client{R: scriptRunner{out: map[string]string{"inspect": "paused\n"}}} // older format: no pid
+	if i, _ := c.Info(context.Background(), "x"); i.State != StatePaused || i.Pid != 0 {
+		t.Fatalf("got %+v", i)
+	}
+}
+
+const netDev = `Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo: 9999999    1000    0    0    0     0          0         0  9999999    1000    0    0    0     0       0          0
+  eth0: 250123456  200000    0    0    0     0          0         0  180654321  150000    0    0    0     0       0          0
+`
+
+// docker stats rounds NetIO to three significant digits ("250MB"), which
+// hides a conversation's worth of traffic once a cell has moved a few
+// hundred megabytes; Stats must read the exact counters from procfs when
+// the pid is known, and fall back to the rounded figure when it is not.
+func TestStatsPrefersExactProcfsCounters(t *testing.T) {
+	proc := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(proc, "4242", "net"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proc, "4242", "net", "dev"), []byte(netDev), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := Client{R: scriptRunner{out: map[string]string{"stats": `{"NetIO":"250MB / 181MB","MemUsage":"300MiB / 4GiB","CPUPerc":"1.00%"}`}}, ProcRoot: proc}
+	st, err := c.Stats(context.Background(), "x", 4242)
+	if err != nil || !st.NetExact || st.Net.RxBytes != 250123456 || st.Net.TxBytes != 180654321 {
+		t.Fatalf("want exact counters excluding lo, got %+v %v", st, err)
+	}
+	st, err = c.Stats(context.Background(), "x", 0)
+	if err != nil || st.NetExact || st.Net.RxBytes != 250000000 {
+		t.Fatalf("without a pid the rounded figure is the fallback, got %+v %v", st, err)
 	}
 }

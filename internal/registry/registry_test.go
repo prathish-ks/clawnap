@@ -64,3 +64,23 @@ func TestTwoStoresOnOneFileDoNotClobber(t *testing.T) {
 		t.Fatalf("delete resurrected: %+v", got.List())
 	}
 }
+
+// A daemon's Get must see a cell another process just created or removed,
+// not the map it loaded at startup.
+func TestGetSeesOtherProcessWrites(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "cells.json")
+	daemon, _ := Open(p)
+	cli, _ := Open(p)
+	if err := cli.Put(Cell{Name: "n", Container: "oc-n", Port: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := daemon.Get("n"); err != nil || c.Container != "oc-n" {
+		t.Fatalf("daemon must see the CLI's new cell: %+v %v", c, err)
+	}
+	if err := cli.Delete("n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := daemon.Get("n"); err != ErrNotFound {
+		t.Fatalf("daemon must see the CLI's removal, got %v", err)
+	}
+}
