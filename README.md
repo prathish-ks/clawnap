@@ -2,7 +2,7 @@
 
 A small Go daemon that lets a host run many more stock [OpenClaw](https://github.com/openclaw/openclaw) cells than it has RAM for, by hibernating the idle ones and waking them on their first inbound message. Nothing changes inside the cells: same image, same config, same bot token, which the host never holds.
 
-Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **2026.9.6**, a real Telegram bot. Reproduced from zero on a second host from this repository alone (cloud-init, binary, the quickstart below). OpenClaw 2026.9.7 was about half a second to a second slower per wake in an A/B on the same host; pin the image tag you measure.
+Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **2026.9.6**, a real Telegram bot. Reproduced from zero on a second host from this repository alone (cloud-init, binary, the quickstart below). OpenClaw 2026.9.7 (the `latest` tag) was about half a second to a second slower per wake in an A/B on the same host; on 2026-10-02, with the review-fix build, 95 cold cells and 5 uncapped residents active, a second-wake cold burst of ten on 9.7 cells took 7.4 / 8.3 / 11.3 s, a single cold wake 2.0–2.3 s and a single warm wake 1.25–1.8 s (experiments/hetzner-measurements-2026-09-27.md). Pin the image tag you measure.
 
 | | Stock | With clawnap |
 |---|---|---|
