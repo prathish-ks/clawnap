@@ -1,4 +1,4 @@
-<img src="assets/logo.svg" alt="clawnap" width="96" align="left">
+<p align="center"><img src="assets/logo.svg" alt="clawnap" width="128"></p>
 
 # clawnap
 
