@@ -1,0 +1,7 @@
+07:14:00 policy: shipped + -reclaim-after 2m
+07:15:34 cells: bob=2026.9.6 alice=2026.9.7 
+07:19:34 both cold: 2/2
+07:20:11 2026.9.6 bob: ingress http=200 in 5.42s; outbound reply at +6.5s (60 = none seen) | 07:20:07 [health] host timing gap detected: process was frozen ~232790ms; restarting chann;07:20:07 [admission] closed: suspend phase;07:20:08 [admission] reopened: suspend phase;
+07:20:13 2026.9.7 alice: ingress http=200 in 0.57s; outbound reply at +1.7s (60 = none seen) | 
+07:20:17 policy: shipped (active)
+TURN-DONE

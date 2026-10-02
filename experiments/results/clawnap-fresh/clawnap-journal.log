@@ -1,0 +1,193 @@
+Oct 01 14:00:01 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:01 INFO warmed cell=v91 before_mib=497 after_mib=299 swap_mib=197 hot_set="283 MiB in 4 procs"
+Oct 01 14:00:01 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:01 INFO hibernated cell=v95 tier=pause took=87.300665ms
+Oct 01 14:00:02 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:02 INFO hibernated cell=v92 tier=pause took=114.104522ms
+Oct 01 14:00:04 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:04 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3206 target_mib=4096 cells=3
+Oct 01 14:00:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:05 INFO warmed cell=v95 before_mib=507 after_mib=299 swap_mib=206 hot_set="283 MiB in 4 procs"
+Oct 01 14:00:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:05 INFO warmed cell=v92 before_mib=87 after_mib=87 swap_mib=0 hot_set="82 MiB in 2 procs"
+Oct 01 14:00:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:05 INFO reclaimed cell=v91 before_mib=299 after_mib=149 swap_mib=348
+Oct 01 14:00:06 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:06 INFO hibernated cell=v93 tier=pause took=94.401328ms
+Oct 01 14:00:07 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:07 INFO hibernated cell=v94 tier=pause took=110.651387ms
+Oct 01 14:00:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:09 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3366 target_mib=4096 cells=4
+Oct 01 14:00:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:09 INFO reclaimed cell=v95 before_mib=299 after_mib=149 swap_mib=357
+Oct 01 14:00:10 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:10 INFO reclaimed cell=v92 before_mib=87 after_mib=87 swap_mib=0
+Oct 01 14:00:10 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:10 INFO warmed cell=v93 before_mib=142 after_mib=142 swap_mib=0 hot_set="134 MiB in 2 procs"
+Oct 01 14:00:10 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:10 INFO warmed cell=v94 before_mib=169 after_mib=169 swap_mib=0 hot_set="161 MiB in 2 procs"
+Oct 01 14:00:13 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:13 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3535 target_mib=4096 cells=2
+Oct 01 14:00:14 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:14 INFO reclaimed cell=v93 before_mib=142 after_mib=142 swap_mib=0
+Oct 01 14:00:14 clawnap-fresh clawnap[20901]: 2026/10/01 14:00:14 INFO reclaimed cell=v94 before_mib=169 after_mib=149 swap_mib=18
+Oct 01 14:03:00 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:00 INFO hibernated cell=v99 tier=pause took=126.56496ms
+Oct 01 14:03:03 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:03 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2760 target_mib=4096 cells=1
+Oct 01 14:03:04 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:04 INFO warmed cell=v99 before_mib=187 after_mib=187 swap_mib=0 hot_set="170 MiB in 3 procs"
+Oct 01 14:03:06 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:06 INFO hibernated cell=v96 tier=pause took=83.476415ms
+Oct 01 14:03:07 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:07 INFO hibernated cell=v98 tier=pause took=103.775584ms
+Oct 01 14:03:07 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:07 INFO hibernated cell=v97 tier=pause took=97.5121ms
+Oct 01 14:03:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:09 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2866 target_mib=4096 cells=4
+Oct 01 14:03:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:09 INFO reclaimed cell=v99 before_mib=187 after_mib=149 swap_mib=36
+Oct 01 14:03:13 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:13 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3267 target_mib=4096 cells=1
+Oct 01 14:03:57 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:57 INFO hibernated cell=v96 tier=pause took=80.880701ms
+Oct 01 14:03:58 clawnap-fresh clawnap[20901]: 2026/10/01 14:03:58 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3215 target_mib=4096 cells=1
+Oct 01 14:04:00 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:00 INFO warmed cell=v96 before_mib=27 after_mib=27 swap_mib=0 hot_set="24 MiB in 2 procs"
+Oct 01 14:04:02 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:02 INFO hibernated cell=v97 tier=pause took=71.287901ms
+Oct 01 14:04:03 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:03 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3228 target_mib=4096 cells=2
+Oct 01 14:04:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:05 INFO warmed cell=v97 before_mib=180 after_mib=180 swap_mib=0 hot_set="173 MiB in 2 procs"
+Oct 01 14:04:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:05 INFO reclaimed cell=v96 before_mib=27 after_mib=27 swap_mib=0
+Oct 01 14:04:05 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:05 INFO hibernated cell=v99 tier=pause took=87.083271ms
+Oct 01 14:04:07 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:07 INFO hibernated cell=v98 tier=pause took=66.596686ms
+Oct 01 14:04:08 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:08 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3066 target_mib=4096 cells=3
+Oct 01 14:04:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:09 INFO warmed cell=v99 before_mib=181 after_mib=181 swap_mib=0 hot_set="173 MiB in 2 procs"
+Oct 01 14:04:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:09 INFO reclaimed cell=v97 before_mib=180 after_mib=149 swap_mib=30
+Oct 01 14:04:09 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:09 INFO warmed cell=v98 before_mib=213 after_mib=213 swap_mib=0 hot_set="203 MiB in 3 procs"
+Oct 01 14:04:13 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:13 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3179 target_mib=4096 cells=2
+Oct 01 14:04:14 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:14 INFO reclaimed cell=v99 before_mib=181 after_mib=149 swap_mib=30
+Oct 01 14:04:15 clawnap-fresh clawnap[20901]: 2026/10/01 14:04:15 INFO reclaimed cell=v98 before_mib=213 after_mib=149 swap_mib=65
+Oct 01 14:06:34 clawnap-fresh systemd[1]: Stopping clawnap.service - clawnap daemon (stock OpenClaw cells: hibernate, reclaim, wake on push)...
+Oct 01 14:06:34 clawnap-fresh systemd[1]: clawnap.service: Failed to kill control group /system.slice/clawnap.service, ignoring: Invalid argument
+Oct 01 14:06:34 clawnap-fresh systemd[1]: clawnap.service: Deactivated successfully.
+Oct 01 14:06:34 clawnap-fresh systemd[1]: Stopped clawnap.service - clawnap daemon (stock OpenClaw cells: hibernate, reclaim, wake on push).
+Oct 01 14:06:34 clawnap-fresh systemd[1]: clawnap.service: Consumed 48min 14.744s CPU time, 108.7M memory peak, 0B memory swap peak.
+Oct 01 14:06:34 clawnap-fresh systemd[1]: Started clawnap.service - clawnap daemon (stock OpenClaw cells: hibernate, reclaim, wake on push).
+Oct 01 14:06:34 clawnap-fresh clawnap[544405]: 2026/10/01 14:06:34 INFO clawnap serving listen=127.0.0.1:8080
+Oct 01 14:07:39 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:39 INFO prefetched cell=v4 scope=hot mechanism=process_madvise procs=2 mappings=558 advised_mib=154 swap_before_mib=67 landed_mib=65 advise_took=202.355274ms pagein_took=206.649µs
+Oct 01 14:07:39 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:39 INFO prefetched cell=v5 scope=hot mechanism=process_madvise procs=3 mappings=710 advised_mib=194 swap_before_mib=108 landed_mib=106 advise_took=235.530793ms pagein_took=587.731µs
+Oct 01 14:07:39 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:39 INFO prefetched cell=v2 scope=hot mechanism=process_madvise procs=4 mappings=933 advised_mib=287 swap_before_mib=382 landed_mib=204 advise_took=470.378731ms pagein_took=504.584152ms
+Oct 01 14:07:41 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:41 INFO prefetched cell=v1 scope=hot mechanism=process_madvise procs=5 mappings=1049 advised_mib=287 swap_before_mib=432 landed_mib=206 advise_took=486.488218ms pagein_took=504.75755ms
+Oct 01 14:07:55 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:55 WARN wake failed cell=v3 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:23003/health\": read tcp 127.0.0.1:41922->127.0.0.1:23003: read: connection reset by peer"
+Oct 01 14:07:58 clawnap-fresh clawnap[544405]: 2026/10/01 14:07:58 WARN wake failed cell=v1 err="wake failed: container v1 is exited (exited during startup); last probe: Get \"http://127.0.0.1:23001/health\": dial tcp 127.0.0.1:23001: connect: connection refused"
+Oct 01 14:08:01 clawnap-fresh clawnap[544405]: 2026/10/01 14:08:01 INFO woke cell=v5 start=126.896602ms ready=22.074668979s
+Oct 01 14:08:01 clawnap-fresh clawnap[544405]: 2026/10/01 14:08:01 INFO woke cell=v4 start=130.674231ms ready=22.808321931s
+Oct 01 14:08:14 clawnap-fresh clawnap[544405]: 2026/10/01 14:08:14 INFO woke cell=v2 start=215.031038ms ready=35.974837432s
+Oct 01 14:10:26 clawnap-fresh clawnap[544405]: 2026/10/01 14:10:26 INFO hibernated cell=v3 tier=pause took=71.103166ms
+Oct 01 14:10:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:10:29 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2741 target_mib=4096 cells=1
+Oct 01 14:10:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:10:30 INFO warmed cell=v3 before_mib=803 after_mib=299 swap_mib=469 hot_set="259 MiB in 6 procs"
+Oct 01 14:10:34 clawnap-fresh clawnap[544405]: 2026/10/01 14:10:34 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3192 target_mib=4096 cells=1
+Oct 01 14:10:35 clawnap-fresh clawnap[544405]: 2026/10/01 14:10:35 INFO reclaimed cell=v3 before_mib=299 after_mib=149 swap_mib=619
+Oct 01 14:11:51 clawnap-fresh clawnap[544405]: 2026/10/01 14:11:51 INFO hibernated cell=v4 tier=pause took=92.94514ms
+Oct 01 14:11:54 clawnap-fresh clawnap[544405]: 2026/10/01 14:11:54 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3383 target_mib=4096 cells=1
+Oct 01 14:11:56 clawnap-fresh clawnap[544405]: 2026/10/01 14:11:56 INFO warmed cell=v4 before_mib=916 after_mib=299 swap_mib=511 hot_set="259 MiB in 6 procs"
+Oct 01 14:11:56 clawnap-fresh clawnap[544405]: 2026/10/01 14:11:56 INFO hibernated cell=v5 tier=pause took=96.969988ms
+Oct 01 14:11:59 clawnap-fresh clawnap[544405]: 2026/10/01 14:11:59 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3878 target_mib=4096 cells=1
+Oct 01 14:12:00 clawnap-fresh clawnap[544405]: 2026/10/01 14:12:00 INFO reclaimed cell=v4 before_mib=299 after_mib=149 swap_mib=664
+Oct 01 14:12:01 clawnap-fresh clawnap[544405]: 2026/10/01 14:12:01 INFO warmed cell=v5 before_mib=856 after_mib=299 swap_mib=477 hot_set="259 MiB in 6 procs"
+Oct 01 14:12:10 clawnap-fresh clawnap[544405]: 2026/10/01 14:12:10 INFO hibernated cell=v2 tier=pause took=74.066186ms
+Oct 01 14:12:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:12:16 INFO warmed cell=v2 before_mib=841 after_mib=299 swap_mib=480 hot_set="260 MiB in 6 procs"
+Oct 01 14:18:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:29 INFO prefetched cell=v4 scope=hot mechanism=process_madvise procs=6 mappings=1863 advised_mib=325 swap_before_mib=664 landed_mib=214 advise_took=716.57072ms pagein_took=504.992294ms
+Oct 01 14:18:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:29 INFO prefetched cell=v3 scope=hot mechanism=process_madvise procs=6 mappings=956 advised_mib=265 swap_before_mib=619 landed_mib=153 advise_took=348.240503ms pagein_took=505.37067ms
+Oct 01 14:18:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:31 INFO thaw recovery window: holding first forward cell=v5 hold=932.776742ms
+Oct 01 14:18:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:31 INFO thaw recovery window: holding first forward cell=v4 hold=918.05133ms
+Oct 01 14:18:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:32 INFO woke cell=v5 start=106.450958ms ready=4.150809925s
+Oct 01 14:18:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:32 INFO woke cell=v4 start=81.213561ms ready=4.675902528s
+Oct 01 14:18:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:32 INFO thaw recovery window: holding first forward cell=v2 hold=917.436606ms
+Oct 01 14:18:33 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:33 INFO woke cell=v2 start=292.371307ms ready=4.351919778s
+Oct 01 14:18:35 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:35 INFO thaw recovery window: holding first forward cell=v3 hold=830.151174ms
+Oct 01 14:18:36 clawnap-fresh clawnap[544405]: 2026/10/01 14:18:36 INFO woke cell=v3 start=97.477584ms ready=7.706743952s
+Oct 01 14:19:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:19:29 INFO woke cell=v1 start=679.250218ms ready=1m1.420264339s
+Oct 01 14:21:36 clawnap-fresh clawnap[544405]: 2026/10/01 14:21:36 INFO hibernated cell=v3 tier=pause took=86.746675ms
+Oct 01 14:21:39 clawnap-fresh clawnap[544405]: 2026/10/01 14:21:39 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2906 target_mib=4096 cells=1
+Oct 01 14:21:40 clawnap-fresh clawnap[544405]: 2026/10/01 14:21:40 INFO warmed cell=v3 before_mib=612 after_mib=299 swap_mib=622 hot_set="254 MiB in 6 procs"
+Oct 01 14:21:44 clawnap-fresh clawnap[544405]: 2026/10/01 14:21:44 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3305 target_mib=4096 cells=1
+Oct 01 14:21:45 clawnap-fresh clawnap[544405]: 2026/10/01 14:21:45 INFO reclaimed cell=v3 before_mib=299 after_mib=149 swap_mib=709
+Oct 01 14:22:20 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:20 INFO hibernated cell=v4 tier=pause took=84.831716ms
+Oct 01 14:22:21 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:21 INFO hibernated cell=v2 tier=pause took=81.594125ms
+Oct 01 14:22:21 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:21 INFO hibernated cell=v5 tier=pause took=76.192899ms
+Oct 01 14:22:24 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:24 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3436 target_mib=4096 cells=2
+Oct 01 14:22:25 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:25 INFO warmed cell=v4 before_mib=490 after_mib=299 swap_mib=557 hot_set="235 MiB in 6 procs"
+Oct 01 14:22:25 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:25 INFO warmed cell=v2 before_mib=523 after_mib=299 swap_mib=589 hot_set="238 MiB in 6 procs"
+Oct 01 14:22:26 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:26 INFO warmed cell=v5 before_mib=506 after_mib=299 swap_mib=595 hot_set="239 MiB in 6 procs"
+Oct 01 14:22:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:29 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3998 target_mib=4096 cells=1
+Oct 01 14:22:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:30 INFO reclaimed cell=v4 before_mib=299 after_mib=149 swap_mib=682
+Oct 01 14:22:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:31 INFO hibernated cell=v1 tier=pause took=82.689989ms
+Oct 01 14:22:35 clawnap-fresh clawnap[544405]: 2026/10/01 14:22:35 INFO warmed cell=v1 before_mib=789 after_mib=299 swap_mib=481 hot_set="251 MiB in 6 procs"
+Oct 01 14:23:28 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:28 INFO prefetched cell=v21 scope=hot mechanism=process_madvise procs=2 mappings=565 advised_mib=147 swap_before_mib=146 landed_mib=145 advise_took=494.435815ms pagein_took=199.271µs
+Oct 01 14:23:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:29 INFO prefetched cell=v22 scope=hot mechanism=process_madvise procs=4 mappings=1082 advised_mib=286 swap_before_mib=466 landed_mib=280 advise_took=1.466872455s pagein_took=105.934µs
+Oct 01 14:23:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:30 INFO prefetched cell=v25 scope=hot mechanism=process_madvise procs=2 mappings=638 advised_mib=174 swap_before_mib=173 landed_mib=172 advise_took=614.520622ms pagein_took=116.309µs
+Oct 01 14:23:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:30 INFO prefetched cell=v26 scope=hot mechanism=process_madvise procs=4 mappings=1073 advised_mib=288 swap_before_mib=397 landed_mib=211 advise_took=1.432140301s pagein_took=506.132258ms
+Oct 01 14:23:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:30 INFO prefetched cell=v27 scope=hot mechanism=process_madvise procs=3 mappings=821 advised_mib=221 swap_before_mib=104 landed_mib=103 advise_took=230.811128ms pagein_took=117.185µs
+Oct 01 14:23:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:31 INFO prefetched cell=v24 scope=hot mechanism=process_madvise procs=2 mappings=637 advised_mib=174 swap_before_mib=173 landed_mib=172 advise_took=402.515423ms pagein_took=376.509µs
+Oct 01 14:23:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:50 INFO woke cell=v21 start=161.369724ms ready=22.312945579s
+Oct 01 14:23:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:50 INFO woke cell=v25 start=166.12814ms ready=20.713370573s
+Oct 01 14:23:52 clawnap-fresh clawnap[544405]: 2026/10/01 14:23:52 INFO prefetched cell=v28 scope=hot mechanism=process_madvise procs=2 mappings=641 advised_mib=176 swap_before_mib=115 landed_mib=114 advise_took=1.070632319s pagein_took=143.122µs
+Oct 01 14:24:12 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:12 INFO woke cell=v22 start=91.601949ms ready=44.44999132s
+Oct 01 14:24:12 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:12 INFO woke cell=v26 start=114.596879ms ready=43.727684608s
+Oct 01 14:24:13 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:13 INFO prefetched cell=v30 scope=hot mechanism=process_madvise procs=2 mappings=614 advised_mib=167 swap_before_mib=66 landed_mib=65 advise_took=225.888805ms pagein_took=107.871µs
+Oct 01 14:24:17 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:17 INFO woke cell=v27 start=241.785553ms ready=47.15938745s
+Oct 01 14:24:20 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:20 INFO woke cell=v24 start=360.569698ms ready=49.650382317s
+Oct 01 14:24:27 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:27 WARN wake failed cell=v29 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:23029/health\": read tcp 127.0.0.1:39070->127.0.0.1:23029: read: connection reset by peer"
+Oct 01 14:24:33 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:33 WARN wake failed cell=v23 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:23023/health\": EOF"
+Oct 01 14:24:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:50 INFO woke cell=v28 start=151.034248ms ready=59.430903579s
+Oct 01 14:24:58 clawnap-fresh clawnap[544405]: 2026/10/01 14:24:58 INFO woke cell=v30 start=446.140748ms ready=45.845074243s
+Oct 01 14:25:05 clawnap-fresh clawnap[544405]: 2026/10/01 14:25:05 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2252 target_mib=4096 cells=3
+Oct 01 14:25:06 clawnap-fresh clawnap[544405]: 2026/10/01 14:25:06 INFO reclaimed cell=v1 before_mib=50 after_mib=50 swap_mib=704
+Oct 01 14:25:07 clawnap-fresh clawnap[544405]: 2026/10/01 14:25:07 INFO reclaimed cell=v2 before_mib=153 after_mib=149 swap_mib=701
+Oct 01 14:25:10 clawnap-fresh clawnap[544405]: 2026/10/01 14:25:10 INFO reclaimed cell=v5 before_mib=232 after_mib=149 swap_mib=710
+Oct 01 14:26:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:26:16 INFO hibernated cell=v23 tier=pause took=154.149208ms
+Oct 01 14:26:19 clawnap-fresh clawnap[544405]: 2026/10/01 14:26:19 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3045 target_mib=4096 cells=1
+Oct 01 14:26:21 clawnap-fresh clawnap[544405]: 2026/10/01 14:26:21 INFO warmed cell=v23 before_mib=982 after_mib=299 swap_mib=592 hot_set="256 MiB in 6 procs"
+Oct 01 14:26:24 clawnap-fresh clawnap[544405]: 2026/10/01 14:26:24 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3691 target_mib=4096 cells=1
+Oct 01 14:26:27 clawnap-fresh clawnap[544405]: 2026/10/01 14:26:27 INFO reclaimed cell=v23 before_mib=299 after_mib=149 swap_mib=743
+Oct 01 14:27:12 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:12 INFO hibernated cell=v29 tier=pause took=66.771937ms
+Oct 01 14:27:14 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:14 INFO memory headroom below target: reclaiming longest-paused cells available_mib=3944 target_mib=4096 cells=1
+Oct 01 14:27:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:16 INFO warmed cell=v29 before_mib=842 after_mib=299 swap_mib=463 hot_set="260 MiB in 6 procs"
+Oct 01 14:27:17 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:17 INFO hibernated cell=v25 tier=pause took=64.0412ms
+Oct 01 14:27:18 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:18 INFO hibernated cell=v22 tier=pause took=76.86611ms
+Oct 01 14:27:21 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:21 INFO warmed cell=v22 before_mib=875 after_mib=299 swap_mib=483 hot_set="253 MiB in 6 procs"
+Oct 01 14:27:21 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:21 INFO warmed cell=v25 before_mib=770 after_mib=299 swap_mib=549 hot_set="258 MiB in 6 procs"
+Oct 01 14:27:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:30 INFO hibernated cell=v21 tier=pause took=79.427179ms
+Oct 01 14:27:36 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:36 INFO warmed cell=v21 before_mib=799 after_mib=299 swap_mib=523 hot_set="258 MiB in 6 procs"
+Oct 01 14:27:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:50 INFO hibernated cell=v28 tier=pause took=67.57028ms
+Oct 01 14:27:56 clawnap-fresh clawnap[544405]: 2026/10/01 14:27:56 INFO warmed cell=v28 before_mib=810 after_mib=299 swap_mib=470 hot_set="260 MiB in 6 procs"
+Oct 01 14:28:15 clawnap-fresh clawnap[544405]: 2026/10/01 14:28:15 INFO hibernated cell=v24 tier=pause took=76.89819ms
+Oct 01 14:28:20 clawnap-fresh clawnap[544405]: 2026/10/01 14:28:20 INFO warmed cell=v24 before_mib=759 after_mib=299 swap_mib=467 hot_set="260 MiB in 6 procs"
+Oct 01 14:28:47 clawnap-fresh clawnap[544405]: 2026/10/01 14:28:47 INFO hibernated cell=v30 tier=pause took=63.769613ms
+Oct 01 14:28:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:28:50 INFO warmed cell=v30 before_mib=846 after_mib=299 swap_mib=463 hot_set="259 MiB in 6 procs"
+Oct 01 14:29:01 clawnap-fresh clawnap[544405]: 2026/10/01 14:29:01 INFO hibernated cell=v27 tier=pause took=94.718938ms
+Oct 01 14:29:02 clawnap-fresh clawnap[544405]: 2026/10/01 14:29:02 INFO hibernated cell=v26 tier=pause took=84.821685ms
+Oct 01 14:29:05 clawnap-fresh clawnap[544405]: 2026/10/01 14:29:05 INFO warmed cell=v27 before_mib=792 after_mib=299 swap_mib=498 hot_set="257 MiB in 6 procs"
+Oct 01 14:29:06 clawnap-fresh clawnap[544405]: 2026/10/01 14:29:06 INFO warmed cell=v26 before_mib=861 after_mib=299 swap_mib=489 hot_set="258 MiB in 6 procs"
+Oct 01 14:30:00 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:00 INFO prefetched cell=v39 scope=hot mechanism=process_madvise procs=3 mappings=660 advised_mib=186 swap_before_mib=185 landed_mib=185 advise_took=1.694066998s pagein_took=80.456µs
+Oct 01 14:30:01 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:01 INFO prefetched cell=v31 scope=hot mechanism=process_madvise procs=4 mappings=923 advised_mib=288 swap_before_mib=454 landed_mib=288 advise_took=2.059826663s pagein_took=130.795µs
+Oct 01 14:30:03 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:03 INFO prefetched cell=v35 scope=hot mechanism=process_madvise procs=2 mappings=638 advised_mib=174 swap_before_mib=174 landed_mib=174 advise_took=2.273842921s pagein_took=119.206µs
+Oct 01 14:30:04 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:04 INFO prefetched cell=v34 scope=hot mechanism=process_madvise procs=3 mappings=916 advised_mib=236 swap_before_mib=235 landed_mib=235 advise_took=2.438350721s pagein_took=119.587µs
+Oct 01 14:30:07 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:07 INFO prefetched cell=v33 scope=hot mechanism=process_madvise procs=4 mappings=1136 advised_mib=287 swap_before_mib=470 landed_mib=282 advise_took=2.696159796s pagein_took=123.441µs
+Oct 01 14:30:07 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:07 INFO prefetched cell=v37 scope=hot mechanism=process_madvise procs=4 mappings=1383 advised_mib=316 swap_before_mib=451 landed_mib=302 advise_took=2.889637783s pagein_took=116.973µs
+Oct 01 14:30:27 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:27 INFO woke cell=v39 start=371.561662ms ready=27.893338684s
+Oct 01 14:30:27 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:27 INFO woke cell=v34 start=184.159009ms ready=26.156720472s
+Oct 01 14:30:29 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:29 INFO prefetched cell=v36 scope=hot mechanism=process_madvise procs=5 mappings=1527 advised_mib=330 swap_before_mib=469 landed_mib=314 advise_took=1.452567529s pagein_took=131.437µs
+Oct 01 14:30:30 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:30 INFO woke cell=v35 start=477.482555ms ready=29.178492205s
+Oct 01 14:30:45 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:45 WARN wake failed cell=v32 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:23032/health\": EOF"
+Oct 01 14:30:46 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:46 INFO woke cell=v31 start=268.220433ms ready=47.551608178s
+Oct 01 14:30:49 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:49 INFO prefetched cell=v40 scope=hot mechanism=process_madvise procs=3 mappings=768 advised_mib=200 swap_before_mib=200 landed_mib=199 advise_took=1.89499179s pagein_took=5.308177ms
+Oct 01 14:30:50 clawnap-fresh clawnap[544405]: 2026/10/01 14:30:50 WARN wake failed cell=v36 err="wake failed: container v36 is exited (exited during startup); last probe: Get \"http://127.0.0.1:23036/health\": dial tcp 127.0.0.1:23036: connect: connection refused"
+Oct 01 14:31:03 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:03 WARN wake failed cell=v38 err="wake timeout: gateway never became ready: Get \"http://127.0.0.1:23038/health\": EOF"
+Oct 01 14:31:14 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:14 INFO woke cell=v37 start=111.153449ms ready=1m10.252666546s
+Oct 01 14:31:23 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:23 INFO woke cell=v33 start=128.704194ms ready=1m19.516839517s
+Oct 01 14:31:24 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:24 INFO woke cell=v40 start=164.09078ms ready=37.613004566s
+Oct 01 14:31:26 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:26 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2082 target_mib=4096 cells=7
+Oct 01 14:31:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:32 INFO reclaimed cell=v22 before_mib=294 after_mib=149 swap_mib=629
+Oct 01 14:31:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:32 INFO reclaimed cell=v24 before_mib=296 after_mib=150 swap_mib=615
+Oct 01 14:31:32 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:32 INFO reclaimed cell=v21 before_mib=296 after_mib=149 swap_mib=669
+Oct 01 14:31:34 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:34 INFO reclaimed cell=v25 before_mib=296 after_mib=149 swap_mib=692
+Oct 01 14:31:34 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:34 INFO reclaimed cell=v28 before_mib=264 after_mib=149 swap_mib=617
+Oct 01 14:31:35 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:35 INFO reclaimed cell=v29 before_mib=295 after_mib=149 swap_mib=613
+Oct 01 14:31:37 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:37 INFO reclaimed cell=v30 before_mib=296 after_mib=149 swap_mib=611
+Oct 01 14:31:38 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:38 INFO memory headroom below target: reclaiming longest-paused cells available_mib=2976 target_mib=4096 cells=2
+Oct 01 14:31:41 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:41 INFO reclaimed cell=v27 before_mib=295 after_mib=149 swap_mib=630
+Oct 01 14:31:41 clawnap-fresh clawnap[544405]: 2026/10/01 14:31:41 INFO reclaimed cell=v26 before_mib=296 after_mib=149 swap_mib=638
+Oct 01 14:33:07 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:07 INFO hibernated cell=v32 tier=pause took=65.685805ms
+Oct 01 14:33:09 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:09 INFO memory headroom below target: reclaiming longest-paused cells available_mib=4030 target_mib=4096 cells=1
+Oct 01 14:33:10 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:10 INFO warmed cell=v32 before_mib=799 after_mib=299 swap_mib=440 hot_set="260 MiB in 6 procs"
+Oct 01 14:33:51 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:51 INFO hibernated cell=v35 tier=pause took=85.212816ms
+Oct 01 14:33:52 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:52 INFO hibernated cell=v38 tier=pause took=75.619226ms
+Oct 01 14:33:56 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:56 INFO warmed cell=v38 before_mib=789 after_mib=300 swap_mib=533 hot_set="257 MiB in 6 procs"
+Oct 01 14:33:56 clawnap-fresh clawnap[544405]: 2026/10/01 14:33:56 INFO warmed cell=v35 before_mib=784 after_mib=299 swap_mib=466 hot_set="260 MiB in 6 procs"
+Oct 01 14:34:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:16 INFO hibernated cell=v37 tier=pause took=65.594338ms
+Oct 01 14:34:20 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:20 INFO warmed cell=v37 before_mib=876 after_mib=299 swap_mib=505 hot_set="259 MiB in 6 procs"
+Oct 01 14:34:26 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:26 INFO hibernated cell=v31 tier=pause took=83.457406ms
+Oct 01 14:34:26 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:26 INFO hibernated cell=v34 tier=pause took=82.428601ms
+Oct 01 14:34:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:31 INFO warmed cell=v31 before_mib=847 after_mib=299 swap_mib=462 hot_set="257 MiB in 6 procs"
+Oct 01 14:34:31 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:31 INFO warmed cell=v34 before_mib=759 after_mib=299 swap_mib=473 hot_set="258 MiB in 6 procs"
+Oct 01 14:34:37 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:37 INFO hibernated cell=v40 tier=pause took=77.438774ms
+Oct 01 14:34:41 clawnap-fresh clawnap[544405]: 2026/10/01 14:34:41 INFO warmed cell=v40 before_mib=831 after_mib=299 swap_mib=525 hot_set="254 MiB in 6 procs"
+Oct 01 14:35:11 clawnap-fresh clawnap[544405]: 2026/10/01 14:35:11 INFO hibernated cell=v39 tier=pause took=81.257784ms
+Oct 01 14:35:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:35:16 INFO warmed cell=v39 before_mib=773 after_mib=299 swap_mib=497 hot_set="257 MiB in 6 procs"
+Oct 01 14:35:16 clawnap-fresh clawnap[544405]: 2026/10/01 14:35:16 INFO hibernated cell=v33 tier=pause took=74.55557ms
+Oct 01 14:35:20 clawnap-fresh clawnap[544405]: 2026/10/01 14:35:20 INFO warmed cell=v33 before_mib=858 after_mib=299 swap_mib=483 hot_set="260 MiB in 6 procs"

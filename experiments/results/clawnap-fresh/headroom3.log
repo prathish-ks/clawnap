@@ -1,0 +1,8 @@
+11:55:50 policy: shipped (active) build=clawnap snapshot-3a85437
+11:55:50 STATE start: paused=100 running=0 warm=12 cold=90 active=0 avail=4434MB used=11178MB load=0.96
+11:55:54 idle=3h for v1 v2 v3 v4 (active)
+11:55:55 residents awake; settling (120 s)
+11:57:56 STATE 6 residents, host under target?: paused=96 running=4 warm=8 cold=90 active=4 avail=4245MB used=11368MB load=0.30
+11:57:59 build: clawnap review-fixes-20261002 (active)
+11:59:30 candidates v41..v50 paused: warm=0 cold=98 active=4 avail=4144MB
+11:59:31 STATE A3-no-fix start: paused=96 running=4 warm=0 cold=98 active=4 avail=4156MB used=11457MB load=2.98

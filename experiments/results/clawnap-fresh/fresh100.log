@@ -1,0 +1,41 @@
+13:14:08 STATE start: cells=1 paused=1 warm=1 cold=0 active=0 warm:[alice] avail=14550MB used=1063MB swap_used=534MB
+13:14:11 policy: shipped + -min-awake -1s -idle-cpu-pct -1
+13:16:11 batch v1-v5 up: cells=6 avail=13329MB load=6.28 exited=0
+13:18:08 batch v6-v10 up: cells=11 avail=12947MB load=7.57 exited=0
+13:20:02 batch v11-v15 up: cells=16 avail=11030MB load=7.23 exited=0
+13:22:02 batch v16-v20 up: cells=21 avail=10646MB load=7.54 exited=0
+13:24:02 batch v21-v25 up: cells=26 avail=9697MB load=7.39 exited=0
+13:26:03 batch v26-v30 up: cells=31 avail=8630MB load=8.59 exited=0
+13:28:02 batch v31-v35 up: cells=36 avail=7579MB load=7.56 exited=0
+13:30:03 batch v36-v40 up: cells=41 avail=5964MB load=10.14 exited=0
+13:32:02 batch v41-v45 up: cells=46 avail=5286MB load=10.17 exited=0
+13:34:03 batch v46-v50 up: cells=51 avail=5563MB load=9.71 exited=0
+13:36:03 batch v51-v55 up: cells=56 avail=5719MB load=10.84 exited=0
+13:38:04 batch v56-v60 up: cells=61 avail=5564MB load=11.31 exited=0
+13:39:59 batch v61-v65 up: cells=66 avail=5429MB load=12.07 exited=0
+13:41:56 batch v66-v70 up: cells=71 avail=4606MB load=12.45 exited=0
+13:46:00 batch v71-v75 up: cells=76 avail=4363MB load=1.94 exited=0
+13:50:05 batch v76-v80 up: cells=81 avail=3874MB load=1.92 exited=0
+13:54:10 batch v81-v85 up: cells=86 avail=3573MB load=2.05 exited=0
+13:58:09 batch v86-v90 up: cells=91 avail=3417MB load=2.25 exited=0
+14:02:08 batch v91-v95 up: cells=96 avail=3516MB load=2.27 exited=0
+14:06:10 batch v96-v99 up: cells=100 avail=3268MB load=1.03 exited=0
+14:06:10 fill done in 3119s
+14:06:32 STATE 100-cells-filled: cells=100 paused=100 warm=0 cold=100 active=0 warm:[] avail=3270MB used=12343MB swap_used=19340MB
+14:06:37 policy: shipped (active)
+14:07:38 STATE shipped-policy: cells=100 paused=100 warm=0 cold=100 active=0 warm:[] avail=3273MB used=12340MB swap_used=19340MB
+14:18:27 STATE 5-warm: cells=100 paused=99 warm=2 cold=98 active=0 warm:[v2 v5] avail=4933MB used=10679MB swap_used=22525MB
+14:19:31 BURST warm-5: codes= 5 200; min=4.23s p50=5.81s max=61.65s | times: 4.23 4.77 5.81 8.62 61.65 | psi(ms) mem_full=488 cpu_some=9998 io_full=1059 | avail before=4933MB after=2860MB
+cell=v4 scope=hot advised_mib=325;cell=v3 scope=hot advised_mib=265;
+
+14:23:27 STATE after-warm: cells=100 paused=100 warm=3 cold=97 active=0 warm:[v1 v2 v5] avail=4610MB used=11003MB swap_used=23341MB
+14:25:00 BURST cold-10 (v21..v30): codes= 8 200; 2 502; min=22.44s p50=49.89s max=90.63s | times: 22.44 22.51 44.59 44.59 49.89 52.67 59.83 65.73 82.4 90.63 | psi(ms) mem_full=1156 cpu_some=67227 io_full=912 | avail before=4609MB after=2038MB
+cell=v21 scope=hot advised_mib=147;cell=v22 scope=hot advised_mib=286;cell=v25 scope=hot advised_mib=174;cell=v26 scope=hot advised_mib=288;cell=v27 scope=hot advised_mib=221;cell=v24 scope=hot advised_mib=174;cell=v28 scope=hot advised_mib=176;cell=v30 scope=hot advised_mib=167;
+
+14:29:58 STATE after-cold-1: cells=100 paused=100 warm=9 cold=91 active=0 warm:[v21 v22 v24 v25 v26 v27 v28 v29 v30] avail=8086MB used=7527MB swap_used=32302MB
+14:31:26 BURST cold-10 (v31..v40): codes= 7 200; 3 502; min=28.05s p50=47.8s max=85.09s | times: 28.05 28.71 31.47 46.96 47.8 51.2 64.06 75.46 84.92 85.09 | psi(ms) mem_full=295 cpu_some=61349 io_full=2674 | avail before=8087MB after=2086MB
+cell=v39 scope=hot advised_mib=186;cell=v31 scope=hot advised_mib=288;cell=v35 scope=hot advised_mib=174;cell=v34 scope=hot advised_mib=236;cell=v33 scope=hot advised_mib=287;cell=v37 scope=hot advised_mib=316;cell=v36 scope=hot advised_mib=330;cell=v40 scope=hot advised_mib=200;
+
+14:40:46 STATE after-cold-2: cells=100 paused=99 warm=9 cold=91 active=0 warm:[v31 v32 v33 v34 v35 v37 v38 v39 v40] avail=8001MB used=7612MB swap_used=36231MB
+14:40:46 wake_failures=7 exited=1
+F100-DONE

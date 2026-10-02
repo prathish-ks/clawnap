@@ -1,0 +1,15 @@
+05:11:08 STATE round2-start: cells=100 paused=100 warm=7 cold=93 active=0 warm:[v32 v33 v34 v36 v37 v38 v39] avail=5852MB used=9754MB swap_used=75375MB
+05:11:25 BURST cold-10 round 2 (v21..v30): codes= 10 200; min=4.78s p50=10.89s max=14.92s | times: 4.78 6.83 9.36 10.47 10.89 11.38 12.06 12.92 13.7 14.92 | psi(ms) mem_full=47 cpu_some=4613 io_full=3418 | avail before=5863MB after=2729MB
+cell=v22 scope=hot advised_mib=377;cell=v24 scope=hot advised_mib=355;cell=v21 scope=hot advised_mib=282;cell=v28 scope=hot advised_mib=281;cell=v26 scope=hot advised_mib=296;cell=v23 scope=hot advised_mib=387;cell=v25 scope=hot advised_mib=371;cell=v27 scope=hot advised_mib=371;cell=v29 scope=hot advised_mib=295;cell=v30 scope=hot advised_mib=388;
+
+05:16:15 STATE after-r2-1: cells=100 paused=100 warm=9 cold=91 active=0 warm:[v21 v23 v24 v25 v26 v27 v28 v29 v30] avail=5548MB used=10065MB swap_used=75501MB
+05:16:31 BURST cold-10 round 2 (v31..v40): codes= 10 200; min=6.38s p50=10.95s max=13.93s | times: 6.38 6.41 6.79 7.56 10.95 11.29 11.33 11.61 13.76 13.93 | psi(ms) mem_full=487 cpu_some=3329 io_full=3415 | avail before=5548MB after=2670MB
+cell=v38 scope=hot advised_mib=331;cell=v36 scope=hot advised_mib=329;cell=v33 scope=hot advised_mib=295;cell=v31 scope=hot advised_mib=335;cell=v32 scope=hot advised_mib=305;cell=v34 scope=hot advised_mib=316;cell=v39 scope=hot advised_mib=319;cell=v37 scope=hot advised_mib=366;cell=v35 scope=hot advised_mib=319;cell=v40 scope=hot advised_mib=330;
+
+05:20:44 STATE after-r2-2: cells=100 paused=100 warm=8 cold=92 active=0 warm:[v31 v32 v33 v34 v36 v37 v38 v39] avail=5740MB used=9873MB swap_used=75646MB
+05:20:54 BURST warm-5 round 2: codes= 5 200; min=3.84s p50=6.76s max=7.78s | times: 3.84 5.42 6.76 7.1 7.78 | psi(ms) mem_full=64 cpu_some=3174 io_full=1877 | avail before=5740MB after=3915MB
+cell=v4 scope=hot advised_mib=346;cell=v1 scope=hot advised_mib=356;cell=v5 scope=hot advised_mib=367;cell=v3 scope=hot advised_mib=362;cell=v2 scope=hot advised_mib=371;
+
+05:25:33 STATE after-r2-warm: cells=102 paused=100 warm=12 cold=88 active=2 warm:[v1 v2 v3 v31 v32 v33 v34 v37 v38 v39 v4 v5] avail=5092MB used=10521MB swap_used=76094MB
+05:25:33 wake_failures=0 exited=0
+R2-DONE

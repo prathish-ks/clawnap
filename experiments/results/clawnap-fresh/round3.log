@@ -1,0 +1,12 @@
+05:47:17 STATE round3-start: cells=102 paused=100 warm=0 cold=100 active=2 warm:[] avail=6980MB used=8633MB swap_used=78369MB
+05:47:36 BURST cold-10 round 3 (v21..v30): codes= 10 200; min=3.38s p50=9.72s max=16.39s | times: 3.38 5.89 7.88 8.49 9.72 10.59 11.89 11.94 15.33 16.39 | psi(ms) mem_full=492 cpu_some=11731 io_full=2221 | avail before=6980MB after=3960MB
+cell=v22 scope=hot advised_mib=336;cell=v28 scope=hot advised_mib=363;cell=v26 scope=hot advised_mib=365;cell=v21 scope=hot advised_mib=352;cell=v25 scope=hot advised_mib=315;cell=v23 scope=hot advised_mib=361;cell=v29 scope=hot advised_mib=391;cell=v24 scope=hot advised_mib=309;cell=v27 scope=hot advised_mib=365;cell=v30 scope=hot advised_mib=298;
+
+05:52:12 STATE after-r3-1: cells=102 paused=101 warm=10 cold=91 active=1 warm:[p202697 v21 v22 v23 v24 v25 v26 v27 v29 v30] avail=5703MB used=9910MB swap_used=76511MB
+05:52:33 BURST cold-10 round 3 (v31..v40): codes= 10 200; min=3.85s p50=9.65s max=17.97s | times: 3.85 4.06 6.62 8.77 9.65 9.94 13.83 14.23 17.12 17.97 | psi(ms) mem_full=345 cpu_some=12474 io_full=2446 | avail before=5703MB after=2971MB
+cell=v31 scope=hot advised_mib=355;cell=v39 scope=hot advised_mib=355;cell=v34 scope=hot advised_mib=363;cell=v33 scope=hot advised_mib=387;cell=v37 scope=hot advised_mib=358;cell=v40 scope=hot advised_mib=360;cell=v36 scope=hot advised_mib=283;cell=v32 scope=hot advised_mib=360;cell=v38 scope=hot advised_mib=356;cell=v35 scope=hot advised_mib=376;
+
+05:57:23 STATE after-r3-2: cells=102 paused=102 warm=10 cold=92 active=0 warm:[v31 v32 v33 v34 v35 v36 v37 v38 v39 v40] avail=6101MB used=9512MB swap_used=76719MB
+05:57:33 BURST warm-5 round 3: codes= 5 200; min=4.19s p50=5.75s max=7.69s | times: 4.19 4.55 5.75 6.24 7.69 | psi(ms) mem_full=15 cpu_some=5360 io_full=1563 | avail before=6101MB after=4209MB
+cell=v2 scope=hot advised_mib=393;cell=v1 scope=hot advised_mib=375;cell=v3 scope=hot advised_mib=361;cell=v4 scope=hot advised_mib=402;cell=v5 scope=hot advised_mib=364;
+

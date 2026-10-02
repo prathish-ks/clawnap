@@ -1,0 +1,13 @@
+05:21:53 policy: shipped (active)
+05:26:09 cells up: p202696=2026.9.6 p202697=2026.9.7 
+05:29:52 2026.9.6 warm wake 1: p202696 api=2.04s ready=1.916531515s  reopened_after=29:50
+05:31:59 2026.9.6 warm wake 2: p202696 api=1.04s  reopened_after=
+05:34:04 2026.9.6 warm wake 3: p202696 api=0.95s  reopened_after=
+05:34:29 2026.9.7 warm wake 1: p202697 api=4.16s ready=4.034554016s  reopened_after=
+05:36:38 2026.9.7 warm wake 2: p202697 api=2.59s ready=2.481369151s  reopened_after=
+05:38:46 2026.9.7 warm wake 3: p202697 api=1.59s ready=1.471969513s  reopened_after=
+05:38:51 policy: shipped + -reclaim-after 2m
+05:45:24 2026.9.6 cold wake: p202696 api=2.91s scope=hot advised_mib=365 landed_mib=253 ready=2.780046989s  reopened_after=45:23
+05:45:28 2026.9.7 cold wake: p202697 api=3.51s scope=hot advised_mib=377 landed_mib=266 ready=3.394714185s  reopened_after=
+05:45:32 policy: shipped (active)
+AB-DONE

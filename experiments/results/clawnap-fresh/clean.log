@@ -1,0 +1,45 @@
+09:36:37 policy: shipped (active): serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 30m -headroom-mib 4096 -warm-keep-mib 300 -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s 
+09:36:37 build=clawnap review-fixes-20261002 kernel=6.8.0-146-generic image(v21)=ghcr.io/openclaw/openclaw:latest 2026.9.7
+09:36:38 STATE start (all exited): cells=103 paused=0 running=0 warm=11 cold=75 active=0 warm:[v31 v32 v34 v35 v36 v37 v38 v39 v40 v54 v58] active:[] avail=14801MB used=811MB swap_used=0MB load=15.37
+09:40:21 booted v1-v10: avail=5057MB load=63.04 running=11 exited=92
+09:48:11 booted v11-v20: avail=4611MB load=20.67 running=10 exited=82
+09:54:52 booted v21-v30: avail=4787MB load=10.08 running=6 exited=72
+10:01:42 booted v31-v40: avail=4821MB load=10.03 running=7 exited=62
+10:07:55 booted v41-v50: avail=4670MB load=12.53 running=5 exited=52
+10:13:28 booted v51-v60: avail=4672MB load=19.96 running=7 exited=42
+10:18:53 booted v61-v70: avail=4511MB load=27.32 running=7 exited=32
+10:24:51 booted v71-v80: avail=4813MB load=19.01 running=7 exited=22
+10:30:18 booted v81-v90: avail=4862MB load=26.21 running=6 exited=12
+10:35:20 booted v91-v99: avail=4580MB load=21.21 running=6 exited=3
+10:35:20 boot-all done in 3522s
+10:41:03 STATE all-booted-and-paused (warm): cells=103 paused=100 running=0 warm=8 cold=94 active=0 warm:[v91 v92 v93 v94 v95 v96 v98 v99] active:[] avail=7317MB used=8296MB swap_used=67742MB load=0.66
+10:41:08 policy: shipped + -reclaim-after 2m (active)
+10:41:08 cold=101 (wanted 100)
+10:41:30 STATE all-cold: cells=103 paused=100 running=0 warm=1 cold=101 active=0 warm:[v91] active:[] avail=8411MB used=7201MB swap_used=68801MB load=0.44
+10:41:33 idle=3h for v1 v2 v3 v4 v5 (active)
+10:41:49 BURST resident-5 first wake (v1..v5, cold): codes= 5 200; min=7.49s p50=9.36s max=13.48s | times: 7.49 9.19 9.36 11.8 13.48 | psi(ms) mem_full=0 cpu_some=10877 io_full=1483 | avail before=8376MB after=5481MB
+cell=v3 scope=hot advised_mib=314 swap_before_mib=701 landed_mib=313 advise_took=3.58690103s pagein_took=217.378µs;cell=v5 scope=hot advised_mib=332 swap_before_mib=775 landed_mib=330 advise_took=4.599194977s pagein_took=324.485µs;cell=v1 scope=hot advised_mib=348 swap_before_mib=711 landed_mib=346 advise_took=4.574989834s pagein_took=109.586µs;cell=v2 scope=hot advised_mib=340 swap_before_mib=743 landed_mib=337 advise_took=4.663477737s pagein_took=293.325µs;cell=v4 scope=hot advised_mib=278 swap_before_mib=844 landed_mib=278 advise_took=710.42784ms pagein_took=185.144µs;
+
+10:42:22 STATE 5-resident-95-cold: cells=103 paused=95 running=5 warm=0 cold=97 active=5 warm:[] active:[v1 v2 v3 v4 v5] avail=5862MB used=9751MB swap_used=67169MB load=6.54
+10:42:52 BURST cold-10 round 1 (v21..v30): codes= 10 200; min=17.32s p50=19.77s max=28.34s | times: 17.32 17.64 18.22 18.45 19.77 20.01 24.67 24.76 27.77 28.34 | psi(ms) mem_full=203 cpu_some=22430 io_full=3833 | avail before=5862MB after=992MB
+cell=v3 scope=hot advised_mib=314 swap_before_mib=701 landed_mib=313 advise_took=3.58690103s pagein_took=217.378µs;cell=v5 scope=hot advised_mib=332 swap_before_mib=775 landed_mib=330 advise_took=4.599194977s pagein_took=324.485µs;cell=v1 scope=hot advised_mib=348 swap_before_mib=711 landed_mib=346 advise_took=4.574989834s pagein_took=109.586µs;cell=v2 scope=hot advised_mib=340 swap_before_mib=743 landed_mib=337 advise_took=4.663477737s pagein_took=293.325µs;cell=v4 scope=hot advised_mib=278 swap_before_mib=844 landed_mib=278 advise_took=710.42784ms pagein_took=185.144µs;cell=v29 scope=ho
+
+10:49:40 cold=96 (wanted 95)
+10:50:03 STATE after-round1 (cold again): cells=103 paused=95 running=5 warm=0 cold=97 active=5 warm:[] active:[v1 v2 v3 v4 v5] avail=5199MB used=10415MB swap_used=66757MB load=1.28
+10:50:08 policy: shipped (active): serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 30m -headroom-mib 4096 -warm-keep-mib 300 -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s 
+10:50:40 STATE measured-start: cells=103 paused=95 running=5 warm=0 cold=97 active=5 warm:[] active:[v1 v2 v3 v4 v5] avail=5190MB used=10423MB swap_used=66741MB load=0.71
+10:50:53 BURST cold-10 round 2 (v21..v30) SECOND WAKE: codes= 10 200; min=7.36s p50=8.29s max=11.32s | times: 7.36 8.01 8.16 8.23 8.29 8.59 9.33 10.56 10.84 11.32 | psi(ms) mem_full=266 cpu_some=6145 io_full=1501 | avail before=5190MB after=2318MB
+cell=v27 scope=hot advised_mib=331 swap_before_mib=531 landed_mib=205 advise_took=2.190730569s pagein_took=133.177µs;cell=v30 scope=hot advised_mib=325 swap_before_mib=522 landed_mib=198 advise_took=2.289750977s pagein_took=139.668µs;cell=v25 scope=hot advised_mib=377 swap_before_mib=701 landed_mib=254 advise_took=2.750405462s pagein_took=591.998µs;cell=v28 scope=hot advised_mib=379 swap_before_mib=570 landed_mib=253 advise_took=2.89887339s pagein_took=218.112µs;cell=v26 scope=hot advised_mib=378 swap_before_mib=687 landed_mib=256 advise_took=2.558902814s pagein_took=111.789µs;cell=v24 sc
+
+10:55:35 STATE after-round2 (burst cells warm): cells=103 paused=95 running=5 warm=5 cold=92 active=5 warm:[v22 v25 v26 v28 v29] active:[v1 v2 v3 v4 v5] avail=4409MB used=11209MB swap_used=66355MB load=1.38
+10:55:47 STAGGERED warm-10 (v21..v30) (1/s): codes= 10 200; min=1.25s p50=1.81s max=2.34s | per cell: v21=2.34s v22=1.81s v23=1.98s v24=1.99s v25=1.32s v26=1.49s v27=1.99s v28=1.25s v29=1.3s v30=2.19s 
+11:01:20 STATE after-warm-staggered: cells=103 paused=95 running=5 warm=4 cold=93 active=5 warm:[v26 v27 v28 v30] active:[v1 v2 v3 v4 v5] avail=4611MB used=11002MB swap_used=66487MB load=0.96
+11:01:28 BURST warm-10 all at once (v21..v30): codes= 10 200; min=3.93s p50=4.41s max=5.92s | times: 3.93 4.14 4.18 4.2 4.41 4.47 4.64 5.71 5.9 5.92 | psi(ms) mem_full=608 cpu_some=3449 io_full=1184 | avail before=4611MB after=2854MB
+cell=v21 scope=hot advised_mib=360 swap_before_mib=561 landed_mib=231 advise_took=2.142303781s pagein_took=191.588µs;cell=v24 scope=hot advised_mib=357 swap_before_mib=707 landed_mib=232 advise_took=2.374176175s pagein_took=156.679µs;cell=v23 scope=hot advised_mib=357 swap_before_mib=696 landed_mib=231 advise_took=2.316580213s pagein_took=130.786µs;cell=v25 scope=hot advised_mib=367 swap_before_mib=711 landed_mib=244 advise_took=2.398286564s pagein_took=176.094µs;cell=v22 scope=hot advised_mib=377 swap_before_mib=719 landed_mib=258 advise_took=1.419839851s pagein_took=138.361µs;cell=v29 s
+
+11:05:43 STATE after-warm-burst: cells=103 paused=95 running=5 warm=5 cold=92 active=5 warm:[v22 v24 v26 v28 v29] active:[v1 v2 v3 v4 v5] avail=4373MB used=11240MB swap_used=66396MB load=1.57
+11:05:43 wake_failures=0 exited=3 daemon_restarts=0
+-- No entries --
+11:05:46 idle=45s for v1 v2 v3 v4 v5 (active)
+11:05:51 policy: shipped (active): serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 30m -headroom-mib 4096 -warm-keep-mib 300 -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s 
+CLEAN-DONE

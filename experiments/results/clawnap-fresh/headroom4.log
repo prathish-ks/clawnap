@@ -1,0 +1,19 @@
+12:01:52 policy: shipped (active) build=clawnap review-fixes-20261002
+12:01:53 STATE start: paused=93 running=7 warm=3 cold=92 active=7 avail=3294MB used=12319MB load=7.25
+12:01:56 idle=3h for v1 v2 v3 v4 (active)
+12:01:56 residents awake; settling (120 s)
+12:03:57 STATE 6 residents, host under target?: paused=93 running=7 warm=0 cold=95 active=7 avail=3658MB used=11955MB load=26.42
+12:04:02 build: clawnap review-fixes-20261002 (active) headroom target 2048 MiB for this test
+12:05:11 candidates v41..v48 paused: warm=8 cold=87 active=7 avail=2348MB
+12:05:12 STATE A4-no-fix-2GB-target start: paused=93 running=7 warm=8 cold=87 active=7 avail=2426MB used=13187MB load=9.78
+12:09:23 STATE A4-no-fix-2GB-target end: paused=96 running=4 warm=17 cold=81 active=4 avail=2270MB used=13343MB load=3.07
+RESULT A4-no-fix-2GB-target: wakes=661 codes={'200': 661} min/p50/p90/max=0.2/0.8/1.0/4.8 s slow(>10s)=0 | avail MB min/median/last=1075/1993/2009 samples_below_target=40/49 | pressure_passes=4 candidates_reclaimed=6 (all reclaims 6) first_below->first_candidate_reclaim=29s | psi_mem_full_ms=1669
+12:09:57 build: clawnap snapshot-3a85437 (active) headroom target 2048 MiB for this test
+12:10:54 candidates v41..v48 paused: warm=19 cold=79 active=4 avail=2138MB
+12:10:55 STATE B4-bounded-deferral-2GB-target start: paused=96 running=4 warm=19 cold=79 active=4 avail=2118MB used=13496MB load=1.76
+12:15:06 STATE B4-bounded-deferral-2GB-target end: paused=96 running=4 warm=15 cold=80 active=4 avail=2218MB used=13395MB load=3.04
+RESULT B4-bounded-deferral-2GB-target: wakes=770 codes={'200': 770} min/p50/p90/max=0.7/0.7/0.8/2.1 s slow(>10s)=0 | avail MB min/median/last=1508/2139/2179 samples_below_target=12/49 | pressure_passes=2 candidates_reclaimed=2 (all reclaims 2) first_below->first_candidate_reclaim=26s | psi_mem_full_ms=579
+12:15:09 idle=45s for v1 v2 v3 v4 (active)
+12:15:14 policy: shipped (active) build=clawnap snapshot-3a85437
+12:15:15 STATE end: paused=100 running=0 warm=14 cold=88 active=0 avail=3649MB used=11964MB load=2.89
+HEADROOM4-DONE

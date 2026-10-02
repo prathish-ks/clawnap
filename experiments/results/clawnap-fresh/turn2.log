@@ -1,0 +1,7 @@
+07:21:19 policy: shipped + -reclaim-after 2m
+07:24:01 bob paused=true before push
+07:24:06 2026.9.6 bob: ingress http=200 in 3.76s; outbound reply at +4.9s (70 = none) | 07:24:03 [health] host timing gap detected: process was frozen ~146388ms; restar;07:24:03 [admission] closed: suspend phase;07:24:03 [admission] reopened: suspend phase;
+07:24:06 alice paused=true before push
+07:24:13 2026.9.7 alice: ingress http=200 in 5.58s; outbound reply at +6.7s (70 = none) | 07:24:09 [health] host timing gap detected: process was frozen ~149233ms; restar;07:24:09 [health] host thaw channel restart deferred: gateway still has active w;
+07:24:16 policy: shipped (active)
+TURN2-DONE

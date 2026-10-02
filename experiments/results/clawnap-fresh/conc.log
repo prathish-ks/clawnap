@@ -1,0 +1,17 @@
+07:45:12 policy: shipped + -reclaim-after 2m
+07:51:33 v41..v60 cold: 20/20
+07:52:05 STATE before sweep: cells=103 paused=20 warm=9 cold=87 active=0 warm:[v31 v32 v34 v35 v36 v37 v38 v39 v40] avail=11862MB used=3739MB swap_used=13030MB
+07:52:09 policy: shipped + -reclaim-after 2m -wake-concurrency 2 -max-recovering 4
+07:52:31 BURST cold-10 pagein2/recov4 (v41..v50): codes= 10 200; min=7.41s p50=14.67s max=19.88s | times: 7.41 7.83 8.01 8.17 14.67 15.36 17.71 18.88 19.29 19.88 | psi(ms) mem_full=7 cpu_some=10935 io_full=2625 | avail before=11806MB after=7614MB
+cell=v42 scope=hot advised_mib=301;cell=v47 scope=hot advised_mib=341;cell=v41 scope=hot advised_mib=334;cell=v43 scope=hot advised_mib=349;cell=v44 scope=hot advised_mib=287;cell=v50 scope=hot advised_mib=358;cell=v48 scope=hot advised_mib=303;cell=v49 scope=hot advised_mib=372;cell=v46 scope=hot advised_mib=333;cell=v45 scope=hot advised_mib=358;
+
+07:53:36 policy: shipped + -reclaim-after 2m -wake-concurrency 4 -max-recovering 8
+07:53:54 BURST cold-10 pagein4/recov8 (v51..v60): codes= 10 200; min=7.34s p50=11.59s max=16.11s | times: 7.34 9.27 9.58 10.71 11.59 11.71 13.54 14.25 14.55 16.11 | psi(ms) mem_full=178 cpu_some=13219 io_full=780 | avail before=7805MB after=3630MB
+cell=v42 scope=hot advised_mib=301;cell=v47 scope=hot advised_mib=341;cell=v41 scope=hot advised_mib=334;cell=v43 scope=hot advised_mib=349;cell=v44 scope=hot advised_mib=287;cell=v50 scope=hot advised_mib=358;cell=v48 scope=hot advised_mib=303;cell=v49 scope=hot advised_mib=372;cell=v46 scope=hot advised_mib=333;cell=v45 scope=hot advised_mib=358;cell=v54 scope=hot advised_mib=283;cell=v56 scope=
+
+07:59:29 policy: shipped + -reclaim-after 2m -wake-concurrency 4 -max-recovering 8
+07:59:43 BURST cold-10 pagein4/recov8 again (v41..v50): codes= 10 200; min=4.96s p50=9.87s max=11.49s | times: 4.96 6.76 8.81 9.16 9.87 10.01 10.71 10.97 11.06 11.49 | psi(ms) mem_full=1534 cpu_some=4651 io_full=3357 | avail before=10692MB after=8643MB
+cell=v45 scope=hot advised_mib=321;cell=v44 scope=hot advised_mib=318;cell=v43 scope=hot advised_mib=351;cell=v41 scope=hot advised_mib=360;cell=v50 scope=hot advised_mib=337;cell=v42 scope=hot advised_mib=338;cell=v47 scope=hot advised_mib=336;cell=v49 scope=hot advised_mib=320;cell=v46 scope=hot advised_mib=325;cell=v48 scope=hot advised_mib=324;
+
+07:59:47 policy: shipped (active)
+CONC-DONE

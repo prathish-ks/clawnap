@@ -1,0 +1,55 @@
+│
+◇  Gateway ─────────────────────────────────────────────╮
+│                                                       │
+│  Gateway health will be checked after Doctor repair.  │
+│                                                       │
+├───────────────────────────────────────────────────────╯
+│
+◇  Memory search ───────────────────────────────────────────────────────╮
+│                                                                       │
+│  Memory search provider is set to "openai" but no API key was found.  │
+│  Semantic recall will not work without a valid API key.               │
+│                                                                       │
+│                                                                       │
+│  Fix (pick one):                                                      │
+│  - Set OPENAI_API_KEY in your environment                             │
+│  - Configure credentials: openclaw configure --section model          │
+│  - To disable: openclaw config set memory.search.enabled false        │
+│                                                                       │
+│  Verify: openclaw memory status --deep                                │
+│                                                                       │
+├───────────────────────────────────────────────────────────────────────╯
+│
+◇  Workspace ────────────────────────────────────────────────────────────────────────────╮
+│                                                                                        │
+│  Memory system not found in workspace.                                                 │
+│  Paste this into your agent:                                                           │
+│                                                                                        │
+│  Install the memory system by applying:                                                │
+│  https://github.com/openclaw/openclaw/commit/9ffea23f31ca1df5183b25668f8f814bee0fb34e  │
+│  https://github.com/openclaw/openclaw/commit/7d1fee70e76f2f634f1b41fca927ee663914183a  │
+│                                                                                        │
+├────────────────────────────────────────────────────────────────────────────────────────╯
+│
+└  Doctor complete.
+
+2026-10-01T14:30:29.048+00:00 [gateway] loading configuration…
+2026-10-01T14:30:30.120+00:00 [gateway] resolving authentication…
+2026-10-01T14:30:30.142+00:00 [gateway] starting...
+2026-10-01T14:30:31.618+00:00 [gateway] shutdown budget at startup: drain=315000ms shutdown=325000ms reserve=10000ms exitMargin=5000ms; source=Gateway stop policy=330000ms
+2026-10-01T14:30:32.121+00:00 [gateway] spawn broker ready pid=275
+2026-10-01T14:30:41.125+00:00 [gateway] starting HTTP server...
+2026-10-01T14:30:41.632+00:00 [health-monitor] started (interval: 300s, startup-grace: 60s, channel-connect-grace: 120s)
+2026-10-01T14:30:42.177+00:00 [gateway] ⚠️  Gateway is binding to a non-loopback address. Ensure authentication is configured before exposing to public networks.
+2026-10-01T14:30:45.358+00:00 [gateway] agent model: openai/gpt-6-astra (thinking=medium, fast=off)
+2026-10-01T14:30:45.362+00:00 [gateway] http server listening (14 plugins: anthropic, browser, canvas, cua-computer, device-pair, file-transfer, geolocation, github, linux-node, memory-core, ollama, openai, talk-voice, xai; 13.7s)
+2026-10-01T14:30:45.371+00:00 [gateway] log file: /tmp/openclaw/openclaw-2026-10-01.log
+2026-10-01T14:30:45.376+00:00 [gateway] native runtime: {"pid":7,"platform":"linux","arch":"x64","node":"24.21.0","v8":"13.6.233.17-node.53","uv":"1.52.1","openssl":"3.5.8","sqlite":"3.53.4"}
+2026-10-01T14:30:45.379+00:00 [gateway] worker startup state: {"workerCount":3,"workerLifecycle":[{"script":"other","started":1,"retired":[{"reason":"exit","count":1}]},{"script":"sqlite-store.worker.js","started":1,"retired":[]},{"script":"openclaw-state-lease-heartbeat.worker.js","started":1,"retired":[]},{"script":"openclaw-state-read.worker.js","started":1,"retired":[]}],"compute":{"limit":7,"active":0,"waitingPools":0,"pendingTasks":0,"pendingBytes":0}}
+2026-10-01T14:30:45.509+00:00 [gateway] starting channels and sidecars...
+2026-10-01T14:30:50.807+00:00 [plugins] memory-core: created managed dreaming cron job.
+2026-10-01T14:30:50.818+00:00 [gateway] startup outcomes: internal-hooks=skipped (not-configured); internal-startup-hook=skipped (no-handlers-loaded); gateway-start-hooks=scheduled; gmail-watcher=skipped (hooks-disabled); gmail-model=skipped (not-configured)
+2026-10-01T14:30:50.834+00:00 [gateway] ready
+2026-10-01T14:30:51.000+00:00 [heartbeat] started
+2026-10-01T14:31:11.561+00:00 [diagnostics/memory] memory pressure: level=critical reason=rss_threshold rss=850.5 MiB heap=222.5 MiB threshold=768 MiB thresholdRatio=110.7% rssBytes=891822080 heapUsedBytes=233271200 externalBytes=13484962 arrayBuffersBytes=7387868 workerHeapTotalBytes=301645824 workerHeapUsedBytes=184973024 workerExternalBytes=34501755 workerArrayBuffersBytes=2720645 workerCount=6 workerHeapSampledCount=4 workerArrayBuffersSampledCount=4 workerMemoryCoverage=partial workerMemoryScope=direct workerMemoryMissing=[{"script":"sqlite-store.worker.js","threadId":3,"reason":"pending"},{"script":"openclaw-state-lease-heartbeat.worker.js","threadId":4,"reason":"pending"}] workerHeaps=[{"script":"prepared-model-catalog.worker.js","threadId":8,"heapUsed":84023160,"heapTotal":109232128,"external":6797168,"arrayBuffers":1163271,"sampleAgeMs":4408},{"script":"openclaw-state-read.worker.js","threadId":6,"heapUsed":42728240,"heapTotal":71921664,"external":11505597,"arrayBuffers":446919,"sampleAgeMs":20916},{"script":"openclaw-state-read.worker.js","threadId":5,"heapUsed":39169544,"heapTotal":69824512,"external":11401133,"arrayBuffers":342455,"sampleAgeMs":33088},{"script":"session-transcript.worker.js","threadId":7,"heapUsed":19052080,"heapTotal":50667520,"external":4797857,"arrayBuffers":768000,"sampleAgeMs":14626}] thresholdBytes=805306368 workerLimitScope=js-heap-only; external/ArrayBuffers are not capped; nested workers are not included. nextStep=run openclaw gateway diagnostics export, inspect an existing bundle with openclaw gateway stability --bundle latest, or on Node sample allocations with openclaw gateway call diagnostics.heapProfile --timeout 30000.
+2026-10-01T14:32:11.576+00:00 [diagnostics/memory] memory pressure: level=warning reason=rss_threshold rss=749.1 MiB heap=210.1 MiB threshold=512 MiB thresholdRatio=146.3% rssBytes=785522688 heapUsedBytes=220342960 externalBytes=7561788 arrayBuffersBytes=3110467 workerHeapTotalBytes=296329216 workerHeapUsedBytes=198970152 workerExternalBytes=27943433 workerArrayBuffersBytes=2448933 workerCount=5 workerHeapSampledCount=4 workerArrayBuffersSampledCount=3 workerMemoryCoverage=partial workerMemoryScope=direct workerMemoryMissing=[{"script":"sqlite-store.worker.js","threadId":13,"reason":"pending"}] workerHeaps=[{"script":"prepared-model-catalog.worker.js","threadId":8,"heapUsed":115894456,"heapTotal":119869440,"external":6854522,"arrayBuffers":1168478,"sampleAgeMs":29994},{"script":"openclaw-state-read.worker.js","threadId":12,"heapUsed":42437920,"heapTotal":71397376,"external":11505597,"arrayBuffers":446919,"sampleAgeMs":26328},{"script":"openclaw-state-lease-heartbeat.worker.js","threadId":4,"heapUsed":21533504,"heapTotal":53608448,"external":4719921,"sampleAgeMs":29994},{"script":"session-transcript.worker.js","threadId":14,"heapUsed":19104272,"heapTotal":51453952,"external":4863393,"arrayBuffers":833536,"sampleAgeMs":15067}] thresholdBytes=536870912 workerLimitScope=js-heap-only; external/ArrayBuffers are not capped; nested workers are not included. nextStep=run openclaw gateway status --deep and openclaw gateway diagnostics export; restart gateway if pressure persists

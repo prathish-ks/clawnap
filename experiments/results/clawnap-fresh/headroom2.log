@@ -1,0 +1,17 @@
+11:42:31 policy: shipped (active) build=clawnap snapshot-3a85437
+11:42:32 STATE start: paused=100 running=0 warm=7 cold=95 active=0 avail=5104MB used=10508MB load=1.48
+11:42:35 idle=3h for v1 v2 v3 v4 v5 v6 (active)
+11:42:38 residents awake; settling (120 s)
+11:44:39 STATE 6 residents, host under target?: paused=94 running=6 warm=1 cold=95 active=6 avail=4772MB used=10840MB load=1.97
+11:44:42 build: clawnap review-fixes-20261002 (active)
+11:44:58 STATE A2-no-fix-4loops start: paused=94 running=6 warm=1 cold=95 active=6 avail=4664MB used=10948MB load=2.04
+11:49:09 STATE A2-no-fix-4loops end: paused=94 running=6 warm=11 cold=85 active=6 avail=3347MB used=12266MB load=5.11
+RESULT A2-no-fix-4loops: wakes=873 codes={'200': 873} min/p50/p90/max=0.7/0.8/1.1/3.3 s slow(>10s)=0 | avail MB min/median/last=1999/2171/2435 samples_below_target=48/49 | pressure_passes=8 cells_reclaimed=9 first_below->first_reclaim=237s | psi_mem_full_ms=535
+11:49:43 build: clawnap snapshot-3a85437 (active)
+11:49:59 STATE B2-bounded-deferral-4loops start: paused=94 running=6 warm=4 cold=92 active=6 avail=4255MB used=11358MB load=3.13
+11:54:10 STATE B2-bounded-deferral-4loops end: paused=94 running=6 warm=9 cold=85 active=6 avail=3212MB used=12401MB load=4.42
+RESULT B2-bounded-deferral-4loops: wakes=982 codes={'200': 982} min/p50/p90/max=0.7/0.8/0.9/2.8 s slow(>10s)=0 | avail MB min/median/last=1678/1834/2285 samples_below_target=48/49 | pressure_passes=8 cells_reclaimed=9 first_below->first_reclaim=238s | psi_mem_full_ms=614
+11:54:13 idle=45s for v1 v2 v3 v4 v5 v6 (active)
+11:54:17 policy: shipped (active) build=clawnap snapshot-3a85437
+11:54:18 STATE end: paused=98 running=2 warm=11 cold=89 active=2 avail=4013MB used=11600MB load=4.04
+HEADROOM2-DONE
