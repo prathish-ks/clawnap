@@ -8,7 +8,9 @@
     <circle cx="392" cy="272" r="50" fill="#FDE68A"/>
     <circle cx="412" cy="254" r="44" fill="#111B33"/>
   </g>
-  <text x="540" y="300" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="128" font-weight="700" fill="#F8FAFC">clawnap</text>
-  <text x="540" y="372" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="40" fill="#CBD5E1">Hibernate idle OpenClaw cells. Wake them on their first message.</text>
-  <text x="540" y="432" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="34" fill="#F97316">100 stock cells per 16 GB host, measured. Apache-2.0.</text>
+  <text x="540" y="268" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="120" font-weight="700" fill="#F8FAFC">clawnap</text>
+  <text x="540" y="340" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="38" fill="#CBD5E1">Hibernate idle OpenClaw cells.</text>
+  <text x="540" y="390" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="38" fill="#CBD5E1">Wake them on their first message.</text>
+  <text x="540" y="456" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="32" fill="#F97316">100 stock cells per 16 GB host, measured.</text>
+  <text x="540" y="500" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="26" fill="#64748B">github.com/prathish-ks/clawnap · Apache-2.0</text>
 </svg>
