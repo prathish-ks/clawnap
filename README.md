@@ -39,6 +39,8 @@ A cell is a stock OpenClaw container with a label. clawnap watches its traffic a
 
 Cells go warm as soon as they pause and cold only when the host's available memory falls below a target, longest-paused first, or after a timed limit; the target is kept under continuous traffic (measured: the pressure pass yields to wakes in flight for at most 30 s). Only idle cells can be reclaimed; what active cells hold is theirs. A woken cell stays awake at least three minutes so OpenClaw can finish its post-thaw housekeeping.
 
+**Scheduled jobs** wake a sleeping cell too. Register the cell's next due time (`clawnap cells add ... -next-due <RFC3339> -next-due-every 1h`): the cell is woken two minutes before it, is not put to sleep when a job is due within its idle window, and a recurring schedule advances only after a successful wake, so a missed run is not skipped. Reading the schedule from the cell's own cron is on the backlog; today the operator sets it.
+
 The **ingress** is a small HTTP front door. Each cell's webhook URL points at `/hook/<cell>/...`; clawnap verifies the platform's signature (Telegram header secret, Slack and GitHub/Meta HMAC, bearer) with a verify-only secret, wakes the cell, waits until its gateway answers, and proxies the request. Bot tokens stay inside the cell. Unsigned requests are refused without a wake.
 
 ## Quickstart on a Linux host (Docker, cgroup v2)
