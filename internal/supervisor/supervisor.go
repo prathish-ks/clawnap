@@ -59,6 +59,18 @@ type Options struct {
 	// budget bounds crash loops, not a cell's lifetime.
 	MaxRestarts int
 	PreWake     time.Duration // wake a hibernated cell this long before NextDueAt
+	// MaintainEvery, when > 0, turns on the maintenance rotation: the
+	// longest-unwoken hibernated cell is woken on a pace derived from the
+	// fleet (MaintainEvery / candidates), so every cell is reached at least
+	// this often even when nothing is ever sent to it. Without it a cell
+	// nobody messages never runs its own internal schedule at all. OpenClaw
+	// coalesces the ticks a cell missed into one catch-up run on its next
+	// wake, so one wake per interval is enough for memory consolidation,
+	// skill review and a heartbeat turn; it does not make timed user-facing
+	// work land on time, which is what NextDueAt and PreWake are for.
+	// Lowest-priority work on the host: it stands aside for wakes in flight
+	// and for the headroom policy. 0 = off.
+	MaintainEvery time.Duration
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -233,8 +245,14 @@ type Supervisor struct {
 	// stood aside for wakes in flight; bounded, so steady inbound traffic
 	// cannot starve the headroom policy.
 	pressureDeferred atomic.Int32
-	active           sync.WaitGroup // wakes and reconcile passes in flight, for Drain
-	m                *Metrics
+	// lastMaintain is when the maintenance rotation last started a wake, and
+	// maintainSkip holds cells whose maintenance wake failed, so one broken
+	// cell cannot sit at the head of the rotation and block it. Both are
+	// in-memory: a restart costs at most one extra rotation wake.
+	lastMaintain time.Time
+	maintainSkip map[string]time.Time
+	active       sync.WaitGroup // wakes and reconcile passes in flight, for Drain
+	m            *Metrics
 }
 
 // maxPressureDefer is how many consecutive passes pressure reclaim may
@@ -285,7 +303,9 @@ func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 	opt.defaults()
 	return &Supervisor{opt: opt, reg: reg, rt: rt, sem: make(chan struct{}, opt.MaxConcurrent), recov: make(chan struct{}, opt.MaxRecovering),
 		recon: make(chan struct{}, opt.MaxConcurrent*4),
-		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{}, m: newMetrics()}
+		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{},
+		// start the rotation one pace in, not at boot, when the host is busiest
+		lastMaintain: opt.Now(), maintainSkip: map[string]time.Time{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done. A pass is bounded by its slowest action (a
@@ -407,6 +427,7 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
+	s.maintenanceWake(ctx, s.reg.List())
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info runtime.Info) error {
@@ -592,6 +613,103 @@ func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell)
 	}
 	s.opt.Logger.Info("memory headroom below target: reclaiming longest-paused cells", "available_mib", avail>>20, "target_mib", s.opt.Headroom>>20, "cells", len(victims))
 	return victims
+}
+
+// maintenanceWake is the rotation: it wakes the longest-unwoken hibernated
+// cell so that a cell nobody ever messages still runs its own internal
+// schedule. OpenClaw coalesces the ticks a cell missed into a single catch-up
+// run on its next wake, so one wake per MaintainEvery is enough to keep memory
+// consolidation, the weekly skill review and one heartbeat turn happening.
+// What it deliberately does not do is make timed user-facing work land on
+// time: a reminder reached only by the rotation could be most of a day late,
+// which is what NextDueAt and PreWake exist for.
+//
+// It is the lowest-priority work on the host. Maintenance that is a few hours
+// late costs nothing, so it stands aside for any wake in flight and for the
+// headroom policy instead of competing with them for memory and page-in
+// bandwidth.
+func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell) {
+	if s.opt.MaintainEvery <= 0 {
+		return
+	}
+	if s.anyWakeInFlight() {
+		return
+	}
+	if s.opt.Headroom > 0 {
+		if avail, ok := s.opt.MemAvailable(); ok && avail < s.opt.Headroom {
+			return
+		}
+	}
+	now := s.opt.Now()
+	s.mu.Lock()
+	var cand []registry.Cell
+	for _, c := range cells {
+		if c.Class == registry.ClassAlwaysOn || c.Phase != registry.PhaseHibernated {
+			continue
+		}
+		if until, ok := s.maintainSkip[c.Name]; ok && now.Before(until) {
+			continue // its last maintenance wake failed; let it rest
+		}
+		if s.dueSoon(c) {
+			continue // about to wake for its own schedule anyway
+		}
+		cand = append(cand, c)
+	}
+	if len(cand) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	// Pace from the fleet, so the target interval holds at any cell count.
+	// Floored at MinAwake because a wake keeps its cell awake at least that
+	// long and rotation wakes must not stack up; on a fleet large enough to
+	// reach the floor the effective interval is longer than MaintainEvery,
+	// which is the safe direction to be wrong in.
+	pace := s.opt.MaintainEvery / time.Duration(len(cand))
+	if s.opt.MinAwake > 0 && pace < s.opt.MinAwake {
+		pace = s.opt.MinAwake
+	}
+	if now.Sub(s.lastMaintain) < pace {
+		s.mu.Unlock()
+		return
+	}
+	s.lastMaintain = now
+	s.mu.Unlock()
+	sort.Slice(cand, func(i, j int) bool { return maintainAge(cand[i]).Before(maintainAge(cand[j])) })
+	c := cand[0]
+	s.active.Add(1)
+	go func() {
+		defer s.active.Done()
+		s.opt.Logger.Info("maintenance wake", "cell", c.Name,
+			"asleep_for", now.Sub(maintainAge(c)).Round(time.Second), "pace", pace.Round(time.Second), "candidates", len(cand))
+		if _, err := s.Wake(ctx, c.Name); err != nil {
+			// Hold this cell out of the rotation for one full interval, so a
+			// cell that cannot wake does not sit at the head of the queue and
+			// starve every other cell of its maintenance.
+			s.mu.Lock()
+			s.maintainSkip[c.Name] = s.opt.Now().Add(s.opt.MaintainEvery)
+			s.mu.Unlock()
+			s.opt.Logger.Warn("maintenance wake", "cell", c.Name, "err", err)
+			return
+		}
+		s.mu.Lock()
+		delete(s.maintainSkip, c.Name)
+		s.mu.Unlock()
+		s.m.maintain()
+	}()
+}
+
+// maintainAge is when a cell was last awake, for the rotation's ordering: its
+// last successful wake, else when its current pause began, else when its row
+// was last written. A cell woken by real traffic sorts last and so never
+// consumes a rotation slot.
+func maintainAge(c registry.Cell) time.Time {
+	if !c.WokeAt.IsZero() {
+		return c.WokeAt
+	}
+	if !c.PausedAt.IsZero() {
+		return c.PausedAt
+	}
+	return c.UpdatedAt
 }
 
 func (s *Supervisor) anyWakeInFlight() bool {
