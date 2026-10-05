@@ -88,9 +88,11 @@ func TestMaintenanceRotationOffByDefault(t *testing.T) {
 func TestMaintenanceRotationYieldsUnderMemoryPressure(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	avail := int64(500 << 20)
-	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 3 * time.Hour, MinAwake: time.Minute,
+	// 24 h target against a 9 h oldest candidate: ahead of schedule, so the
+	// rotation is free to stand aside. Pace is 24h/3 = 8 h.
+	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 24 * time.Hour, MinAwake: time.Minute,
 		Headroom: 1 << 30, MemAvailable: func() (int64, bool) { return avail, true }})
-	s.lastMaintain = now.Add(-2 * time.Hour)
+	s.lastMaintain = now.Add(-9 * time.Hour)
 
 	s.ReconcileOnce(context.Background())
 	s.Drain(context.Background())
@@ -134,5 +136,88 @@ func TestMaintenanceRotationSkipsACellThatFailedToWake(t *testing.T) {
 	s.Drain(context.Background())
 	if fr.state["oc-m2"] != runtime.StateRunning {
 		t.Fatal("rotation did not move on to the next cell after a failure")
+	}
+}
+
+// Starvation guard: a host that is always busy, or always at its headroom
+// target, must still maintain a cell once that cell is actually overdue.
+// Yielding without a bound is how the pressure path once starved (maxPressureDefer).
+func TestMaintenanceRotationStopsYieldingOnceACellIsOverdue(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	// Oldest candidate is 9 h asleep against a 3 h target: overdue.
+	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 3 * time.Hour, MinAwake: time.Minute,
+		Headroom: 1 << 30, MemAvailable: func() (int64, bool) { return 100 << 20, true }})
+	s.lastMaintain = now.Add(-2 * time.Hour)
+
+	// Below the headroom target and with a wake registered in flight: both
+	// yield conditions hold, and the rotation must proceed anyway.
+	s.mu.Lock()
+	s.inflt["someone-else"] = &wakeShare{done: make(chan struct{})}
+	s.mu.Unlock()
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	if fr.state["oc-m1"] != runtime.StateRunning {
+		t.Fatal("rotation starved: an overdue cell was never maintained on a busy, memory-tight host")
+	}
+}
+
+// A maintenance wake has no tenant waiting on it, so it must not start once
+// shutdown has begun and hold up the drain.
+func TestMaintenanceRotationDoesNotStartDuringShutdown(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 3 * time.Hour, MinAwake: time.Minute})
+	s.lastMaintain = now.Add(-2 * time.Hour)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.maintenanceWake(ctx, s.reg.List())
+	s.Drain(context.Background())
+	if fr.state["oc-m1"] != runtime.StatePaused {
+		t.Fatal("rotation started a wake after the context was cancelled")
+	}
+}
+
+// With -min-awake disabled the pace floor must not vanish, or rotation wakes
+// stack up on a large fleet.
+func TestMaintenanceRotationFloorsThePaceWithMinAwakeOff(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	// MinAwake negative is normalised to 0 by defaults(); pace would be
+	// 30s/3 = 10 s without a floor, so 30 s since the last wake must not be
+	// enough to fire another.
+	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 30 * time.Second, MinAwake: -1})
+	s.lastMaintain = now.Add(-30 * time.Second)
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	if fr.state["oc-m1"] == runtime.StateRunning {
+		t.Fatalf("pace floor did not apply with MinAwake off (floor is %v)", minMaintainPace)
+	}
+}
+
+// Holds are dropped once they expire or once the cell they name is gone, so
+// the map tracks the fleet instead of growing with it.
+func TestMaintenanceRotationPrunesStaleHolds(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	s, _, _ := maintainFixture(t, &now, Options{MaintainEvery: 3 * time.Hour, MinAwake: time.Minute})
+	s.mu.Lock()
+	s.maintainSkip["removed-cell"] = now.Add(time.Hour) // names a cell that no longer exists
+	s.maintainSkip["m2"] = now.Add(-time.Minute)        // hold that has expired
+	s.maintainSkip["m3"] = now.Add(time.Hour)           // live hold, must survive
+	s.mu.Unlock()
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.maintainSkip["removed-cell"]; ok {
+		t.Error("hold for a removed cell was not pruned")
+	}
+	if _, ok := s.maintainSkip["m2"]; ok {
+		t.Error("expired hold was not pruned")
+	}
+	if _, ok := s.maintainSkip["m3"]; !ok {
+		t.Error("live hold was pruned")
 	}
 }

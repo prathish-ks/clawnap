@@ -1,0 +1,33 @@
+11:10:04 build=clawnap maintain-fixed
+11:10:09 policy: -reclaim-after 2m -maintain-every 0 -headroom-mib 0
+11:15:15 STATE 20 cells paused and cold: paused=20 running=0 avail=11976MB headroom_target=14000MB load=7.12
+11:15:15 candidate order the rotation should follow (oldest first):
+   v10   last awake 0001-01-01T00:00:00
+   v12   last awake 0001-01-01T00:00:00
+   v14   last awake 0001-01-01T00:00:00
+   v19   last awake 0001-01-01T00:00:00
+   v20   last awake 0001-01-01T00:00:00
+   v7    last awake 0001-01-01T00:00:00
+11:15:20 policy: -reclaim-after 30m -maintain-every 240h -headroom-mib 14000
+11:15:20 STATE B start (not overdue, host tight): paused=20 running=0 avail=11973MB headroom_target=14000MB load=6.87
+11:21:20 B result: maintenance wakes in 6 min = 0 (expect 0: ahead of schedule, so it yields)
+11:21:25 policy: -reclaim-after 30m -maintain-every 1h -headroom-mib 14000
+11:21:25 STATE C start (overdue, host still tight): paused=20 running=0 avail=11975MB headroom_target=14000MB load=0.09
+11:24:26   t+3m wakes=0 paused=19 avail=11690MB
+11:27:26   t+6m wakes=1 paused=18 avail=11098MB
+11:30:26   t+9m wakes=2 paused=18 avail=10849MB
+11:33:27   t+12m wakes=3 paused=18 avail=10904MB
+11:36:27   t+15m wakes=4 paused=19 avail=11363MB
+11:36:27 C result: maintenance wakes in 15 min = 4 (expect >0: overdue beats the yield)
+11:36:27 === picks, in order ===
+  2026/10/05 11:24:22 INFO maintenance wake cell=v18 asleep_for=92h37m25s pace=3m0s candidates=103
+  2026/10/05 11:27:23 INFO maintenance wake cell=v15 asleep_for=92h40m19s pace=3m0s candidates=102
+  2026/10/05 11:30:23 INFO maintenance wake cell=v16 asleep_for=92h43m16s pace=3m0s candidates=102
+  2026/10/05 11:33:23 INFO maintenance wake cell=v17 asleep_for=92h46m15s pace=3m0s candidates=102
+11:36:27 === awake cost per maintenance wake ===
+  v18: woke 2026-10-05T11:24:22+00:00 hibernated 2026-10-05T11:28:13+00:00
+  v15: woke 2026-10-05T11:27:23+00:00 hibernated 2026-10-05T11:30:29+00:00
+  v16: woke 2026-10-05T11:30:23+00:00 hibernated 2026-10-05T11:33:28+00:00
+11:36:27 final: maintenance_wakes=4 wake_failures=0
+11:36:28 STATE end: paused=19 running=1 avail=11377MB headroom_target=14000MB load=0.10
+MAINTAIN2-DONE

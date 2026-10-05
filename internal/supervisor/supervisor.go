@@ -262,6 +262,10 @@ type Supervisor struct {
 // host run out of headroom, which is worse (20 s+ cold wakes).
 const maxPressureDefer = 6
 
+// minMaintainPace floors the maintenance rotation's pace when MinAwake is
+// disabled, so rotation wakes still cannot stack up on a large fleet.
+const minMaintainPace = time.Minute
+
 // restartForgiveAfter is how long an always-on cell must stay up before its
 // self-heal restarts stop counting against MaxRestarts.
 const restartForgiveAfter = 10 * time.Minute
@@ -427,7 +431,9 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
-	s.maintenanceWake(ctx, s.reg.List())
+	if s.opt.MaintainEvery > 0 { // guard before List: a registry copy per pass is not free
+		s.maintenanceWake(ctx, s.reg.List())
+	}
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info runtime.Info) error {
@@ -629,21 +635,26 @@ func (s *Supervisor) pressureVictims(ctx context.Context, cells []registry.Cell)
 // headroom policy instead of competing with them for memory and page-in
 // bandwidth.
 func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell) {
-	if s.opt.MaintainEvery <= 0 {
-		return
-	}
-	if s.anyWakeInFlight() {
-		return
-	}
-	if s.opt.Headroom > 0 {
-		if avail, ok := s.opt.MemAvailable(); ok && avail < s.opt.Headroom {
-			return
-		}
+	if s.opt.MaintainEvery <= 0 || ctx.Err() != nil {
+		return // shutting down: a maintenance wake has no tenant waiting on it
 	}
 	now := s.opt.Now()
+	// Both sampled before the lock: anyWakeInFlight takes s.mu itself (it is
+	// not reentrant), and MemAvailable reads /proc, which has no business
+	// inside the critical section. A slightly stale read is harmless for
+	// best-effort work.
+	busy := s.anyWakeInFlight()
+	tight := false
+	if s.opt.Headroom > 0 {
+		if avail, ok := s.opt.MemAvailable(); ok && avail < s.opt.Headroom {
+			tight = true
+		}
+	}
 	s.mu.Lock()
 	var cand []registry.Cell
+	seen := make(map[string]bool, len(cells))
 	for _, c := range cells {
+		seen[c.Name] = true
 		if c.Class == registry.ClassAlwaysOn || c.Phase != registry.PhaseHibernated {
 			continue
 		}
@@ -655,18 +666,43 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 		}
 		cand = append(cand, c)
 	}
+	// Drop holds that have expired or that name a cell the operator removed,
+	// so the map tracks the fleet rather than growing with it.
+	for n, until := range s.maintainSkip {
+		if !seen[n] || !now.Before(until) {
+			delete(s.maintainSkip, n)
+		}
+	}
 	if len(cand) == 0 {
 		s.mu.Unlock()
 		return
 	}
+	sort.Slice(cand, func(i, j int) bool { return maintainAge(cand[i]).Before(maintainAge(cand[j])) })
+	c := cand[0]
+	// Yield to real work only while the rotation is ahead of schedule. Once
+	// the oldest candidate is actually overdue, stop yielding: a host that is
+	// always busy, or that sits at its headroom target (which is what the
+	// headroom policy is for), would otherwise never maintain a single cell
+	// and the feature would silently do nothing. This is the starvation the
+	// pressure path bounds with maxPressureDefer; here the bound is the
+	// guarantee the flag makes, so it is expressed in the same units.
+	if (busy || tight) && now.Sub(maintainAge(c)) < s.opt.MaintainEvery {
+		s.mu.Unlock()
+		return
+	}
 	// Pace from the fleet, so the target interval holds at any cell count.
-	// Floored at MinAwake because a wake keeps its cell awake at least that
-	// long and rotation wakes must not stack up; on a fleet large enough to
-	// reach the floor the effective interval is longer than MaintainEvery,
-	// which is the safe direction to be wrong in.
+	// Floored so rotation wakes cannot stack up: a wake keeps its cell awake
+	// for at least MinAwake, and when the operator has turned MinAwake off a
+	// fixed floor still applies. On a fleet large enough to reach the floor
+	// the effective interval is longer than MaintainEvery, which is the safe
+	// direction to be wrong in.
 	pace := s.opt.MaintainEvery / time.Duration(len(cand))
-	if s.opt.MinAwake > 0 && pace < s.opt.MinAwake {
-		pace = s.opt.MinAwake
+	floor := s.opt.MinAwake
+	if floor <= 0 {
+		floor = minMaintainPace
+	}
+	if pace < floor {
+		pace = floor
 	}
 	if now.Sub(s.lastMaintain) < pace {
 		s.mu.Unlock()
@@ -674,8 +710,6 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 	}
 	s.lastMaintain = now
 	s.mu.Unlock()
-	sort.Slice(cand, func(i, j int) bool { return maintainAge(cand[i]).Before(maintainAge(cand[j])) })
-	c := cand[0]
 	s.active.Add(1)
 	go func() {
 		defer s.active.Done()

@@ -48,10 +48,22 @@ no-reply token when nothing needs attention. Proactive behaviour is opt-in.
 **Missed work is delayed, not dropped, and the gateway paces its own
 recovery.** On startup, overdue agent-turn jobs and jobs awaiting a heartbeat
 are rescheduled rather than replayed immediately, deliberately to keep model
-and tool execution out of scheduler startup. Missed timer ticks are coalesced:
-a cell that slept through twelve heartbeats runs one on wake, not twelve. This
-is the post-thaw housekeeping we have been measuring since 2026-09-30 without
-naming it. A tenant can set `cron.skipMissedJobs` to advance missed recurring
+and tool execution out of scheduler startup. This is the post-thaw housekeeping
+we have been measuring since 2026-09-30 without naming it.
+
+**Coalescing is strong but not total (measured 2026-10-05).** Counting rows in
+the cell's own `cron_run_receipts` after booting cells that had been down since
+2 October, roughly three days:
+
+| Job | Occurrences missed | Runs on return |
+|---|---|---|
+| Heartbeat (every 30 min) | ~144 | 1 |
+| Memory dreaming (daily) | 3 | 2 on two cells, 1 on a third |
+
+So the high-frequency job collapses to a single run as documented, but the
+daily agent-turn job did not reduce to one. Plan for a maintenance wake costing
+more than one catch-up turn after a long sleep, and do not state coalescing as
+a flat guarantee. A tenant can set `cron.skipMissedJobs` to advance missed recurring
 slots instead of catching them up, which the docs justify as avoiding stale
 reminders and unnecessary model calls. One-shot (`at`) jobs always catch up
 regardless of that setting.
@@ -90,13 +102,23 @@ longest-unwoken hibernated cell on a pace derived from the fleet, so every cell
 is reached at least once per target interval. Cells woken by real traffic sort
 last and never consume a slot, so the real rate is well below the nominal pace.
 
-Arithmetic at 100 cells and a 24 h target, from measured per-cell figures
-rather than a measured scenario: a maintenance wake costs the minimum awake
-time plus the cell's idle timeout, roughly 11–13 minutes at the shipped 10 m
-idle, so a ~14 minute pace keeps about one extra cell awake continuously, near
-0.8 GB. That is noise against the ~15 concurrent cells the host is already
-sized for, but it is at the edge: the pace must stay longer than the per-wake
-awake cost or wakes accumulate.
+Cost per maintenance wake, measured on the host 2026-10-05 with `-min-awake`
+at the shipped 3 m and the fleet's 45 s idle timeout:
+
+| Cell | Awake for | Note |
+|---|---|---|
+| v18 | 3 m 51 s | first wake in 92 h, catch-up held it awake past the floor |
+| v15 | 3 m 06 s | |
+| v16 | 3 m 05 s | |
+
+The earlier arithmetic in this note was wrong in the safe direction. The idle
+timeout runs *concurrently* with the minimum awake time, not after it, so the
+cost is `max(MinAwake, idle, catch-up)` rather than their sum: at the shipped
+10 m idle expect about 10 minutes per wake, not 13. One cell held awake against
+a pace of the same order is still about 0.8 GB, so the conclusion stands: the
+rotation costs roughly one extra resident cell, which is noise against the ~15
+the host is already sized for. The pace must stay longer than that awake cost
+or wakes accumulate, which is what the floor is for.
 
 The rotation also buys back a little proactivity. Because missed ticks are
 coalesced, a cell woken once a day runs one heartbeat turn a day. That is not
@@ -123,18 +145,51 @@ than adding cost. It belongs in the tier description, not hidden.
 ## Built so far
 
 Only the maintenance rotation, behind `-maintain-every` (0 = off, the default).
+It yields to wakes in flight and to the headroom policy **only while it is
+ahead of schedule**; once the oldest candidate is past its interval it proceeds
+regardless. Yielding without that bound was a review finding: a host that is
+busy, or that sits at its headroom target because the headroom policy is doing
+its job, would otherwise never maintain a single cell.
 The schedule reader is designed above and not written: the pre-wake machinery
 it would feed (`NextDueAt`, `PreWake`, and the rule against sleeping when a job
 is due inside the idle window) already ships and is driven by the operator
 through `cells add -next-due`.
 
+## Verified on the host (2026-10-05, fixed build)
+
+Twenty cells booted on the fleet host, the host held below its headroom target
+throughout (about 11–12 GB available against a 14 GB target) so the yield
+condition was true on every pass:
+
+| Phase | Setup | Result |
+|---|---|---|
+| Ahead of schedule | 240 h target, oldest candidate 92 h | 0 maintenance wakes in 6 min, as intended |
+| Overdue | 1 h target, same tight host | 4 wakes in 15 min, one per 3 min pace, 0 failures |
+
+The second row is the starvation fix. Before it, the rotation returned at the
+headroom check on every pass and would have run nothing at all, on a host whose
+memory policy was working exactly as designed.
+
+Two caveats on what this did *not* establish. Every candidate was last awake
+within a few minutes of every other, so the ordering was never strongly
+discriminated: the picks are consistent with oldest-first but do not prove it
+beyond the unit tests. And the candidate set was the whole registry, 103 cells,
+because a stopped cell is still a hibernated cell; a maintenance wake on a
+stopped cell is a full gateway boot rather than an unpause and costs
+considerably more than the figures above. The pace floor bound at 103
+candidates, stretching the effective interval from 1 h to about 5 h, which is
+the documented safe direction but means the flag's promise only holds while the
+fleet is small enough for the floor not to bind.
+
 ## Open measurements
 
-1. The true awake cost of one maintenance wake at the shipped idle timeout.
-   The rotation's pace floor currently uses `MinAwake`, which is a lower bound,
-   not the measured cost.
-2. Whether a cell that slept a full day really does coalesce into a single
-   catch-up run, as documented.
+1. ~~The true awake cost of one maintenance wake.~~ Measured 2026-10-05:
+   3 m 05 s to 3 m 51 s at `-min-awake 3m` with a 45 s idle timeout, i.e. the
+   floor dominates and catch-up can add ~45 s. Still open at the shipped 10 m
+   idle, where the idle timeout should dominate instead.
+2. ~~Whether a cell that slept a full day coalesces into a single catch-up
+   run.~~ Measured 2026-10-05: the heartbeat does, the daily job does not
+   (see the table above). Still open is how this scales with a longer sleep.
 3. The proactive-tier arithmetic above, on a real host.
 
 ## Upstream
