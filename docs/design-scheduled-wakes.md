@@ -267,6 +267,39 @@ post-thaw window is ~4–5 minutes, of which `MinAwake` is 3. The binding
 constraint is now `MinAwake`, which is the right thing to be bound by: it is a
 measured requirement rather than a guess.
 
+## The schedule reader, verified on a live cell (2026-10-07)
+
+A one-shot reminder delivering to a channel was created inside `alice` through
+the gateway's own CLI, giving the cell four enabled jobs:
+
+| Job | Kind | Delivery | Due | Should wake? |
+|---|---|---|---|---|
+| heartbeat-main | every | unset | 08:19:02 | no, proactivity not a deadline |
+| probe-reminder | at | announce | 10:17:33 | **yes** |
+| skill-collection-review | every | none | 11:13:27 | no |
+| Memory Dreaming Promotion | cron | none | next 03:00 | no |
+
+The heartbeat was due **soonest**, two minutes out, so an earliest-due reader
+would have picked it. The host logged
+`schedule: next user-facing job cell=alice at=2026-10-07T10:17:33Z`, and the
+registry row carried that time. The classification holds on real data.
+
+End to end, with a reminder six minutes out and the 2 min pre-wake:
+
+```
+08:18:42  job created, due 08:24:40
+08:18:42  schedule: next user-facing job cell=alice at=08:24:40 in=5m58s
+08:22:43  woke cell=alice  ready=1.33s
+```
+
+The wake landed 1 m 57 s before the job was due, from the cell's own schedule,
+with nothing registered by an operator.
+
+One thing to fix separately: `clawnap hibernate` on the command line builds its
+supervisor with empty options, so a one-off operator hibernate does not read
+schedules even when the daemon is configured to. The daemon's own path, which
+is what runs in production, does.
+
 ## Open measurements
 
 1. ~~The true awake cost of one maintenance wake.~~ Measured: 3 m 05 s to
