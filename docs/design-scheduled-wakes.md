@@ -160,7 +160,20 @@ than adding cost. It belongs in the tier description, not hidden.
 
 ## Built so far
 
-Only the maintenance rotation, behind `-maintain-every` (0 = off, the default).
+Both halves now exist.
+
+The **schedule reader** (`internal/schedule`, behind `-read-schedules`, off by
+default) reads a cell's own job store when it hibernates and sets its next due
+time from it, so an operator no longer registers each one by hand. It applies
+the classification above, and the privacy rule is enforced by the query rather
+than by discipline: the SQL extracts scheduling fields only, so prompt text,
+job names and descriptions never cross into the host process, with a test that
+fails if they do. Not implemented: the legacy `cron/jobs.json` store of older
+builds. Its shape has not been verified against a real cell, and guessing at a
+schema that decides when a tenant's reminder fires is worse than reporting that
+it cannot be read and falling back to the operator-set due time.
+
+The **maintenance rotation**, behind `-maintain-every` (0 = off, the default).
 It yields to wakes in flight and to the headroom policy **only while it is
 ahead of schedule**; once the oldest candidate is past its interval it proceeds
 regardless. Yielding without that bound was a review finding: a host that is
