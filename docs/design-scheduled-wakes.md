@@ -295,10 +295,13 @@ End to end, with a reminder six minutes out and the 2 min pre-wake:
 The wake landed 1 m 57 s before the job was due, from the cell's own schedule,
 with nothing registered by an operator.
 
-One thing to fix separately: `clawnap hibernate` on the command line builds its
-supervisor with empty options, so a one-off operator hibernate does not read
-schedules even when the daemon is configured to. The daemon's own path, which
-is what runs in production, does.
+`clawnap hibernate` on the command line takes a local path only when no daemon
+is listening; when one is, it forwards and the daemon's own configuration
+applies. That local path built its supervisor with empty options, so it could
+never read schedules. It now takes `-read-schedules`, defaulting to off like the
+daemon's flag so a one-off hibernate writes the same due time the daemon would.
+Verified on the host with the daemon stopped: without the flag the due time
+stayed unset, with it the cell's own delivering one-shot was picked up.
 
 ## Open measurements
 
