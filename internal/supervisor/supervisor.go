@@ -606,8 +606,6 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 	return nil
 }
 
-// checkpointWAL truncates the stopped cell's SQLite WAL from the host, if
-// its state directory is a bind mount we can see. Volumes are skipped.
 // stateDir is the host path of the cell's OpenClaw home, which is a bind
 // mount. Empty when the cell does not have one (or the runtime cannot say).
 func (s *Supervisor) stateDir(ctx context.Context, c registry.Cell) string {
@@ -647,19 +645,20 @@ func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir stri
 	return next
 }
 
+// checkpointWAL truncates the stopped cell's SQLite WAL from the host. dir is
+// the cell's state directory from stateDir; empty means it is not a bind mount
+// we can see (a volume, say), and there is nothing to checkpoint.
 func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell, dir string) {
 	if dir == "" {
 		s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
 		return
 	}
-	{
-		res, err := walcheck.Checkpoint(ctx, dir, nil)
-		for _, r := range res {
-			s.opt.Logger.Info("wal checkpoint", "cell", c.Name, "db", r.Path, "wal_before", r.WALBefore, "wal_after", r.WALAfter, "skipped", r.Skipped)
-		}
-		if err != nil {
-			s.opt.Logger.Warn("wal checkpoint", "cell", c.Name, "err", err)
-		}
+	res, err := walcheck.Checkpoint(ctx, dir, nil)
+	for _, r := range res {
+		s.opt.Logger.Info("wal checkpoint", "cell", c.Name, "db", r.Path, "wal_before", r.WALBefore, "wal_after", r.WALAfter, "skipped", r.Skipped)
+	}
+	if err != nil {
+		s.opt.Logger.Warn("wal checkpoint", "cell", c.Name, "err", err)
 	}
 }
 
@@ -1353,14 +1352,11 @@ type WakeResult struct {
 	ReadyTook      time.Duration // until the gateway port accepts connections
 }
 
-// Wake restores a cell and waits until it is ready. Concurrent wakes of the
-// same cell coalesce; total concurrency is bounded; a wake takes the cell
-// lock, so it waits for any in-progress hibernate/pulse and interrupts an
-// in-progress reclaim at its next chunk (reclaim polls wakeWanted).
-// Wake is the entry point for a wake someone actually asked for: an inbound
-// webhook, the ingress, or an operator. It takes the cell out of the
-// maintenance rotation's set, so a cell that happened to be up for maintenance
-// reverts to its own idle timeout rather than being hung up on mid-turn.
+// Wake restores a cell and waits until it is ready. It is the entry point for
+// a wake someone actually asked for: an inbound webhook, the ingress, or an
+// operator. It takes the cell out of the maintenance rotation's set, so a cell
+// that happened to be up for maintenance reverts to its own idle timeout
+// rather than being hung up on mid-turn, then does the wake through wakeFor.
 func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) {
 	s.mu.Lock()
 	delete(s.maintainAwake, name)
@@ -1368,6 +1364,12 @@ func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) 
 	return s.wakeFor(ctx, name)
 }
 
+// wakeFor does the wake, for any caller. Concurrent wakes of the same cell
+// coalesce; total concurrency is bounded; a wake takes the cell lock, so it
+// waits for any in-progress hibernate/pulse and interrupts an in-progress
+// reclaim at its next chunk (reclaim polls wakeWanted). The maintenance
+// rotation calls this directly rather than Wake, so that its own wake does
+// not clear the mark it just set.
 func (s *Supervisor) wakeFor(ctx context.Context, name string) (WakeResult, error) {
 	// coalesce: followers wait for the leader and receive its real outcome
 	s.mu.Lock()
