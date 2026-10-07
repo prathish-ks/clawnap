@@ -265,3 +265,104 @@ func TestMaintenanceRotationHoldsAtMostItsConcurrencyBudgetAwake(t *testing.T) {
 		t.Fatal("rotation did not resume once the cell it was holding awake had slept")
 	}
 }
+
+// maintainOne: a single hibernated cell with a long idle timeout, so the only
+// thing that can put it to sleep quickly is the maintenance idle rule.
+func maintainOne(t *testing.T, now *time.Time, opt Options) (*Supervisor, *registry.Store, *fakeRunner) {
+	t.Helper()
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-k": runtime.StatePaused},
+		netio: map[string]string{"oc-k": "1kB / 1kB"}, cpu: map[string]string{"oc-k": "0.00%"}}
+	reg, err := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt.Now = func() time.Time { return *now }
+	opt.MaxPause = -1
+	opt.WakeTimeout = time.Second
+	if opt.Probe == nil {
+		opt.Probe = func(context.Context, int) error { return nil }
+	}
+	s := New(reg, runtime.Client{R: fr}, opt)
+	if err := reg.Put(registry.Cell{Name: "k", Container: "oc-k", Port: 1,
+		Phase: registry.PhaseHibernated, PausedAt: now.Add(-9 * time.Hour), WokeAt: now.Add(-9 * time.Hour),
+		IdleAfter: 10 * time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	s.lastMaintain = now.Add(-9 * time.Hour)
+	return s, reg, fr
+}
+
+// A cell the rotation woke sleeps as soon as it goes quiet, instead of waiting
+// out an idle timeout meant for a tenant who is not there.
+func TestMaintenanceWokenCellSleepsAsSoonAsItIsQuiet(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainOne(t, &now, Options{MaintainEvery: time.Hour,
+		MinAwake: time.Minute, MaintainIdle: 30 * time.Second})
+
+	s.ReconcileOnce(context.Background()) // rotation wakes it
+	s.Drain(context.Background())
+	if fr.state["oc-k"] != runtime.StateRunning {
+		t.Fatal("rotation did not wake the cell")
+	}
+	s.ReconcileOnce(context.Background()) // baseline traffic sample
+
+	// Two minutes: past MinAwake and the 30 s maintenance idle, but nowhere
+	// near the cell's own 10 minute timeout.
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-k") {
+		t.Fatalf("maintenance-woken cell did not sleep once quiet: %v", fr.calls)
+	}
+}
+
+// If a tenant's message arrives while the cell happens to be up for
+// maintenance, it must revert to its own idle timeout rather than be hung up on.
+func TestRealWakeRevertsACellToItsOwnIdleTimeout(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainOne(t, &now, Options{MaintainEvery: time.Hour,
+		MinAwake: time.Minute, MaintainIdle: 30 * time.Second})
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	if !s.maintainHeld("k") {
+		t.Fatal("cell was not marked as held by the rotation")
+	}
+
+	// A real wake: the ingress forwarding a message to a cell that is already up.
+	if _, err := s.Wake(context.Background(), "k"); err != nil {
+		t.Fatal(err)
+	}
+	if s.maintainHeld("k") {
+		t.Fatal("a real wake did not release the cell from the rotation's set")
+	}
+
+	s.ReconcileOnce(context.Background())
+	now = now.Add(2 * time.Minute) // past the maintenance idle, inside the cell's own
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-k") {
+		t.Fatalf("cell was hung up on two minutes into a conversation: %v", fr.calls)
+	}
+}
+
+// The maintenance idle must not undercut MinAwake, which exists because pausing
+// inside OpenClaw's post-thaw work makes the next thaw several times slower.
+func TestMaintenanceIdleStillRespectsMinAwake(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainOne(t, &now, Options{MaintainEvery: time.Hour,
+		MinAwake: 3 * time.Minute, MaintainIdle: time.Second})
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	s.ReconcileOnce(context.Background())
+
+	now = now.Add(time.Minute) // quiet, but only 1 min into the 3 min floor
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-k") {
+		t.Fatal("paused inside MinAwake despite a 1 s maintenance idle")
+	}
+	now = now.Add(3 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-k") {
+		t.Fatalf("did not pause once past MinAwake: %v", fr.calls)
+	}
+}

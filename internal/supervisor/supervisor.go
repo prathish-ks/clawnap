@@ -83,6 +83,17 @@ type Options struct {
 	// cells are current their catch-up is short and the rotation speeds up.
 	// 0 = default (1).
 	MaintainConcurrent int
+	// MaintainIdle is the idle timeout applied to a cell the rotation woke,
+	// instead of the cell's own IdleAfter. A cell's normal idle timeout is a
+	// grace period in case its tenant says something else; a maintenance wake
+	// has no tenant, so waiting it out is pure cost. Measured 2026-10-07: at
+	// the shipped 10 m idle a maintenance wake ran 25 min, of which the last
+	// 10 were this wait. The two guards that actually protect a thawed cell
+	// are separate from it and still apply: MinAwake, and the CPU gate that
+	// keeps a cell active while its post-thaw work runs without traffic. The
+	// moment a tenant's message touches the cell it reverts to its own
+	// IdleAfter. 0 = default (30 s), negative = off (use the cell's own).
+	MaintainIdle time.Duration
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -188,6 +199,12 @@ func (o *Options) defaults() {
 	}
 	if o.MaintainConcurrent <= 0 {
 		o.MaintainConcurrent = 1
+	}
+	if o.MaintainIdle == 0 {
+		o.MaintainIdle = 30 * time.Second
+	}
+	if o.MaintainIdle < 0 {
+		o.MaintainIdle = 0
 	}
 	if o.PreWake == 0 {
 		o.PreWake = 2 * time.Minute // covers a stop-tier boot (45–90 s measured)
@@ -543,7 +560,14 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 	}
 	cur := idle.Sample{At: s.opt.Now(), RxBytes: st.Net.RxBytes, TxBytes: st.Net.TxBytes}
 	prev := idle.Sample{RxBytes: c.RxBytes, TxBytes: c.TxBytes} // last persisted counters
-	d := idle.Evaluate(prev, cur, c.LastActivity, c.IdleAfter, s.opt.NoiseBytes)
+	// A cell the rotation woke sleeps as soon as it goes quiet: its idle
+	// timeout is a grace period for a tenant who is not there. MinAwake and
+	// the CPU gate below still hold it awake while its catch-up runs.
+	idleAfter := c.IdleAfter
+	if s.opt.MaintainIdle > 0 && s.opt.MaintainIdle < idleAfter && s.maintainHeld(c.Name) {
+		idleAfter = s.opt.MaintainIdle
+	}
+	d := idle.Evaluate(prev, cur, c.LastActivity, idleAfter, s.opt.NoiseBytes)
 	if s.opt.IdleCPUPct > 0 && st.CPUPct > s.opt.IdleCPUPct {
 		d.LastActivity = cur.At // busy on CPU (post-thaw maintenance, cron): not idle yet
 		d.ShouldSleep = false
@@ -746,7 +770,7 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 		defer s.active.Done()
 		s.opt.Logger.Info("maintenance wake", "cell", c.Name,
 			"asleep_for", now.Sub(maintainAge(c)).Round(time.Second), "pace", pace.Round(time.Second), "candidates", len(cand))
-		if _, err := s.Wake(ctx, c.Name); err != nil {
+		if _, err := s.wakeFor(ctx, c.Name); err != nil { // not Wake: this must not clear its own mark
 			// Hold this cell out of the rotation for one full interval, so a
 			// cell that cannot wake does not sit at the head of the queue and
 			// starve every other cell of its maintenance.
@@ -776,6 +800,14 @@ func maintainAge(c registry.Cell) time.Time {
 		return c.PausedAt
 	}
 	return c.UpdatedAt
+}
+
+// maintainHeld reports whether this cell is currently awake because the
+// rotation woke it, rather than because anyone wanted it.
+func (s *Supervisor) maintainHeld(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.maintainAwake[name]
 }
 
 func (s *Supervisor) anyWakeInFlight() bool {
@@ -1269,7 +1301,18 @@ type WakeResult struct {
 // same cell coalesce; total concurrency is bounded; a wake takes the cell
 // lock, so it waits for any in-progress hibernate/pulse and interrupts an
 // in-progress reclaim at its next chunk (reclaim polls wakeWanted).
+// Wake is the entry point for a wake someone actually asked for: an inbound
+// webhook, the ingress, or an operator. It takes the cell out of the
+// maintenance rotation's set, so a cell that happened to be up for maintenance
+// reverts to its own idle timeout rather than being hung up on mid-turn.
 func (s *Supervisor) Wake(ctx context.Context, name string) (WakeResult, error) {
+	s.mu.Lock()
+	delete(s.maintainAwake, name)
+	s.mu.Unlock()
+	return s.wakeFor(ctx, name)
+}
+
+func (s *Supervisor) wakeFor(ctx context.Context, name string) (WakeResult, error) {
 	// coalesce: followers wait for the leader and receive its real outcome
 	s.mu.Lock()
 	if sh, ok := s.inflt[name]; ok {

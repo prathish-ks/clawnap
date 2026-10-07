@@ -1,0 +1,27 @@
+07:04:51 build=clawnap maintain-idle
+07:04:51 cell idle timeouts: {600: 103}
+07:04:51 start: awake=0 avail=14935MB (all containers Exited after the power cycle)
+07:04:55 policy: -maintain-every 12h -maintain-concurrent 1 -maintain-idle 30s
+07:04:55 rotation on with -maintain-idle 30s; sampling every 60 s for 40 min
+07:09:56   t+5m awake_now=0 peak=0 wakes=0 avail=14970MB
+07:14:56   t+10m awake_now=1 peak=1 wakes=1 avail=14235MB
+07:19:57   t+15m awake_now=1 peak=1 wakes=1 avail=14274MB
+07:24:57   t+20m awake_now=0 peak=1 wakes=2 avail=14373MB
+07:29:58   t+25m awake_now=1 peak=1 wakes=3 avail=13688MB
+07:34:59   t+30m awake_now=1 peak=1 wakes=4 avail=13438MB
+07:39:59   t+35m awake_now=1 peak=1 wakes=4 avail=13527MB
+07:45:00   t+40m awake_now=1 peak=1 wakes=5 avail=13018MB
+07:45:00 RESULT: wakes=5 in 40 min, peak_awake=1
+07:45:00 === picks ===
+  2026/10/07 07:11:52 INFO maintenance wake cell=v55 asleep_for=119h18m10s pace=6m59s candidates=103
+  2026/10/07 07:18:52 INFO maintenance wake cell=v51 asleep_for=119h25m8s pace=6m59s candidates=103
+  2026/10/07 07:25:52 INFO maintenance wake cell=v56 asleep_for=119h32m7s pace=6m59s candidates=103
+  2026/10/07 07:32:52 INFO maintenance wake cell=v54 asleep_for=119h39m6s pace=6m59s candidates=103
+  2026/10/07 07:39:52 INFO maintenance wake cell=v60 asleep_for=119h46m5s pace=6m59s candidates=103
+07:45:00 === awake cost per wake, and where the time went ===
+  v55: wake 07:11:52 ready 07:13:14 hibernated 07:17:54
+  v51: wake 07:18:52 ready 07:20:10 hibernated 07:24:43
+  v56: wake 07:25:52 ready 07:27:09 hibernated 07:31:58
+  v54: wake 07:32:52 ready 07:34:08 hibernated 07:37:09
+07:45:00 final: wake_failures=0
+MI-DONE
