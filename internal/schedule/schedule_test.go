@@ -170,3 +170,45 @@ func TestMissingAndLegacyStores(t *testing.T) {
 		t.Fatal("legacy-only store should report that it cannot be read")
 	}
 }
+
+// A file that is not a database, and a database without the table, are the two
+// ways this can genuinely fail in the field: a store the daemon cannot open,
+// and a schema that moved under us. Both must report rather than look empty,
+// so the caller keeps the operator-set due time instead of silently losing it.
+func TestUnreadableStoresReportRatherThanLookEmpty(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write func(t *testing.T, dir string)
+	}{
+		{"not a database", func(t *testing.T, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, DBPath), []byte("this is not sqlite"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"schema moved: no cron_jobs table", func(t *testing.T, dir string) {
+			db, err := sql.Open("sqlite", filepath.Join(dir, DBPath))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if _, err := db.Exec(`CREATE TABLE something_else (x TEXT)`); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(dir, "state"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			tc.write(t, dir)
+			got, err := Next(context.Background(), dir, time.Now())
+			if err == nil {
+				t.Fatal("an unreadable store returned no error, so a caller cannot tell it apart from a cell with nothing scheduled")
+			}
+			if !got.IsZero() {
+				t.Fatalf("returned a due time from an unreadable store: %v", got)
+			}
+		})
+	}
+}

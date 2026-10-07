@@ -80,6 +80,10 @@ wake, because the gateway coalesces what it missed.
 | Internal maintenance | delivery disabled, recurring, isolated session | never wake for it; catch-up on the next wake |
 | Proactive check-in | heartbeat payload | tier choice, off by default |
 
+In the shipped reader the test is the delivery target and the one-shot kind;
+the wake-mode field is recorded but not acted on, because its meaning is
+inferred from the field name and deferring to it could only skip a wake.
+
 That classification removes the obvious hazard by policy rather than by
 jitter: the nightly memory job on every cell is internal, so a hundred cells
 never contend at 03:00.

@@ -46,11 +46,19 @@ var ErrUnsupportedStore = errors.New("schedule: cell uses a job store this build
 // Job is the scheduling metadata of one enabled job. It holds no prompt text,
 // name or description, by design.
 type Job struct {
-	Kind     string    // schedule kind: "at" (one-shot), "cron", "every"
-	WakeMode string    // "now" or "next-heartbeat"
-	Payload  string    // payload kind: "agentTurn", "heartbeat", ...
-	Delivery string    // delivery mode: "none", a channel, or "" when unset
-	Session  string    // "main" or "isolated"
+	Kind    string // schedule kind: "at" (one-shot), "cron", "every"
+	Payload string // payload kind: "agentTurn", "heartbeat", ...
+	// Delivery is the delivery mode: "none", a channel, or "" when unset. It
+	// is the main signal that a job's result reaches a person.
+	Delivery string
+	// WakeMode ("now" or "next-heartbeat") and Session ("main" or "isolated")
+	// are recorded for diagnostics but deliberately not used by UserFacing.
+	// Their meaning is inferred from the field names rather than from anything
+	// upstream states, and a rule that decides when a tenant's reminder fires
+	// should not rest on a guess. Deferring to them could only ever skip a
+	// wake, which is the unsafe direction here.
+	WakeMode string
+	Session  string
 	NextRun  time.Time // absolute, already computed by the gateway
 }
 
@@ -113,8 +121,9 @@ func Read(ctx context.Context, stateDir string) ([]Job, error) {
 		}
 		return nil, err
 	}
-	// Read-only, and immutable=0 so the write-ahead log of a frozen writer is
-	// still accounted for.
+	// Read-only. immutable is deliberately left at its default of 0: a frozen
+	// cell can have committed data still in its write-ahead log, and
+	// immutable=1 would skip the log and read a stale due time.
 	db, err := sql.Open("sqlite", "file:"+p+"?mode=ro")
 	if err != nil {
 		return nil, err
