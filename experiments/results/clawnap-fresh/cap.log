@@ -1,0 +1,17 @@
+03:01:25 build=clawnap maintain-cap
+03:01:29 policy: -maintain-every 0
+03:01:29 letting the previous run's cells go back to sleep
+03:21:34 settled: awake=4 avail=11643MB
+03:21:39 policy: -maintain-every 12h -maintain-concurrent 1
+03:21:39 capped rotation on; sampling every 60 s for 30 min
+03:26:39   t+5m awake_now=4 peak=4 wakes=0 avail=11722MB
+03:31:40   t+10m awake_now=5 peak=5 wakes=1 avail=11011MB
+03:36:40   t+15m awake_now=5 peak=5 wakes=1 avail=10869MB
+03:41:41   t+20m awake_now=5 peak=5 wakes=1 avail=10842MB
+03:46:42   t+25m awake_now=5 peak=5 wakes=1 avail=10788MB
+03:51:42   t+30m awake_now=5 peak=5 wakes=1 avail=10767MB
+03:51:42 RESULT capped: wakes=1 peak_awake=5 (uncapped run peaked at 4)
+03:51:42 === picks ===
+  2026/10/07 03:28:53 INFO maintenance wake cell=alice asleep_for=116h4m41s pace=7m16s candidates=99
+03:51:42 final: wake_failures=0 avail=10781MB
+CAP-DONE

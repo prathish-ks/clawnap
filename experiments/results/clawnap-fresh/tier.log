@@ -1,0 +1,21 @@
+02:23:52 build=clawnap maintain-7d33aac
+02:23:55 idle timeout set to the shipped 10 m on every cell
+02:23:59 policy: -maintain-every 12h
+02:23:59 rotation on at -maintain-every 12h; sampling concurrent awake cells every 60 s for 36 min
+02:30:00   t+6m awake_now=0 peak=0 wakes=0 avail=14953MB
+02:36:00   t+12m awake_now=1 peak=1 wakes=1 avail=14154MB
+02:42:01   t+18m awake_now=2 peak=2 wakes=2 avail=13496MB
+02:48:02   t+24m awake_now=3 peak=3 wakes=3 avail=12615MB
+02:54:03   t+30m awake_now=4 peak=4 wakes=4 avail=11672MB
+03:00:03   t+36m awake_now=4 peak=4 wakes=4 avail=11667MB
+03:00:03 RESULT: maintenance wakes in 36 min = 4; peak cells awake at once = 4
+03:00:03 === picks ===
+  2026/10/07 02:30:56 INFO maintenance wake cell=v13 asleep_for=131h43m8s pace=6m59s candidates=103
+  2026/10/07 02:38:02 INFO maintenance wake cell=v11 asleep_for=131h49m56s pace=7m4s candidates=102
+  2026/10/07 02:45:13 INFO maintenance wake cell=p202696 asleep_for=116h59m49s pace=7m8s candidates=101
+  2026/10/07 02:52:28 INFO maintenance wake cell=p202697 asleep_for=117h7m1s pace=7m12s candidates=100
+  2026/10/07 02:59:43 INFO maintenance wake cell=bob asleep_for=115h35m39s pace=7m12s candidates=100
+03:00:03 === awake cost per wake (wake -> hibernated) ===
+  v13: woke 2026-10-07T02:30:56+00:00  hibernated 2026-10-07T02:56:23+00:00
+03:00:04 final: wake_failures=0 avail=11649MB
+TIER-DONE

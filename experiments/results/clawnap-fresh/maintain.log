@@ -1,0 +1,9 @@
+10:56:06 policy: -reclaim-after 30m -maintain-every 0 (build clawnap maintain-e06a657)
+10:56:06 STATE start (all exited since 2 Oct): paused=0 running=0 avail=14945MB load=0.04
+10:59:07 booted v1-v10: avail=5935MB load=30.30
+11:05:54 booted v11-v20: avail=552MB load=109.58
+11:05:54 boot done in 588s
+11:05:54 catch-up after ~3 days down (runs per job since boot):
+11:05:54   v1: Memory Dreaming Promotion|2 heartbeat-main|1 
+11:05:55   v2: Memory Dreaming Promotion|2 heartbeat-main|1 
+11:05:55   v3: skill-collection-review-main|1 heartbeat-main|1 Memory Dreaming Promotion|1 

@@ -22,6 +22,7 @@ type Metrics struct {
 	pulses       int
 	fellThru     int
 	selfHeals    int
+	maintains    int // maintenance-rotation wakes
 	reclaims     int
 	reclaimedB   int64
 	readyBuckets []float64 // seconds
@@ -57,6 +58,7 @@ func (m *Metrics) hibernate(tier string) { m.mu.Lock(); m.hibernates[tier]++; m.
 func (m *Metrics) pulse()                { m.mu.Lock(); m.pulses++; m.mu.Unlock() }
 func (m *Metrics) fellThrough()          { m.mu.Lock(); m.fellThru++; m.mu.Unlock() }
 func (m *Metrics) selfHeal()             { m.mu.Lock(); m.selfHeals++; m.mu.Unlock() }
+func (m *Metrics) maintain()             { m.mu.Lock(); m.maintains++; m.mu.Unlock() }
 func (m *Metrics) reclaimed(b int64)     { m.mu.Lock(); m.reclaims++; m.reclaimedB += b; m.mu.Unlock() }
 
 // Write renders the exposition. cells supplies the current phase gauges.
@@ -84,6 +86,7 @@ func (m *Metrics) Write(w io.Writer, cells []registry.Cell) {
 		fmt.Fprintf(w, "clawnap_wakes_total{kind=%q} %d\n", k, m.wakes[k])
 	}
 	fmt.Fprintf(w, "# HELP clawnap_wake_failures_total Wakes that did not reach readiness.\n# TYPE clawnap_wake_failures_total counter\nclawnap_wake_failures_total %d\n", m.wakeFails)
+	fmt.Fprintf(w, "# HELP clawnap_maintenance_wakes_total Wakes started by the maintenance rotation so an unmessaged cell still runs its own schedule.\n# TYPE clawnap_maintenance_wakes_total counter\nclawnap_maintenance_wakes_total %d\n", m.maintains)
 	fmt.Fprintln(w, "# HELP clawnap_hibernates_total Hibernations by tier.\n# TYPE clawnap_hibernates_total counter")
 	for _, t := range sortedKeys(m.hibernates) {
 		fmt.Fprintf(w, "clawnap_hibernates_total{tier=%q} %d\n", t, m.hibernates[t])
