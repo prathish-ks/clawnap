@@ -3,6 +3,7 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -364,5 +365,47 @@ func TestMaintenanceIdleStillRespectsMinAwake(t *testing.T) {
 	s.ReconcileOnce(context.Background())
 	if !fr.has("pause oc-k") {
 		t.Fatalf("did not pause once past MinAwake: %v", fr.calls)
+	}
+}
+
+// The shortened maintenance timeout is bounded. A cell still awake after its
+// own idle timeout has gone that long without once falling quiet, so it is not
+// the brief catch-up the shortening is for, and it must be treated normally
+// again. This is what covers a conversation the host did not route: traffic
+// cannot be the signal, because a maintenance wake's own catch-up produces it.
+func TestMaintenanceIdleStopsApplyingOnceTheCellOutlastsItsOwnTimeout(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainOne(t, &now, Options{MaintainEvery: time.Hour,
+		MinAwake: time.Minute, MaintainIdle: 30 * time.Second})
+
+	s.ReconcileOnce(context.Background()) // rotation wakes it
+	s.Drain(context.Background())
+	if !s.maintainHeld("k") {
+		t.Fatal("cell was not marked as held by the rotation")
+	}
+	// Keep it busy right up to its own 10 minute timeout, so the shortened
+	// window expires without it ever going quiet.
+	for i := 1; i <= 11; i++ {
+		fr.mu.Lock()
+		fr.netio["oc-k"] = fmt.Sprintf("%dkB / %dkB", 100*i, 100*i)
+		fr.mu.Unlock()
+		now = now.Add(time.Minute)
+		s.ReconcileOnce(context.Background())
+	}
+	if fr.has("pause oc-k") {
+		t.Fatal("paused a cell that was never quiet")
+	}
+	// Now it goes quiet. Past its own timeout, the short window no longer
+	// applies, so 2 minutes of silence must not be enough to hibernate it.
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-k") {
+		t.Fatalf("shortened timeout still applied after the cell outlasted its own: %v", fr.calls)
+	}
+	// Its own 10 minute timeout still works.
+	now = now.Add(9 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-k") {
+		t.Fatalf("cell never hibernated on its own timeout: %v", fr.calls)
 	}
 }

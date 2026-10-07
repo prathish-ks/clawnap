@@ -572,8 +572,22 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 	// A cell the rotation woke sleeps as soon as it goes quiet: its idle
 	// timeout is a grace period for a tenant who is not there. MinAwake and
 	// the CPU gate below still hold it awake while its catch-up runs.
+	//
+	// The shortened timeout is dropped once the cell has been awake longer
+	// than its own idle timeout. By then it has gone that long without ever
+	// falling quiet for MaintainIdle, so whatever it is doing is not the
+	// brief, quiet catch-up this is meant for, and it is treated normally
+	// again. That bounds the one case the mark cannot otherwise cover: a
+	// conversation the host did not route, on a channel that reaches the cell
+	// without passing through the ingress. Traffic cannot be used as the
+	// signal instead -- a maintenance wake's own catch-up chatter kept the
+	// activity stamp advancing for ~14 minutes on a cell five days behind
+	// (measured 2026-10-07), so keying on it would cancel the shortened
+	// timeout almost every time and put the awake cost back to ~25 minutes.
 	idleAfter := c.IdleAfter
-	if s.opt.MaintainIdle > 0 && s.opt.MaintainIdle < idleAfter && s.maintainHeld(c.Name) {
+	if s.opt.MaintainIdle > 0 && s.opt.MaintainIdle < idleAfter &&
+		!c.WokeAt.IsZero() && cur.At.Sub(c.WokeAt) <= c.IdleAfter &&
+		s.maintainHeld(c.Name) {
 		idleAfter = s.opt.MaintainIdle
 	}
 	d := idle.Evaluate(prev, cur, c.LastActivity, idleAfter, s.opt.NoiseBytes)
