@@ -221,3 +221,47 @@ func TestMaintenanceRotationPrunesStaleHolds(t *testing.T) {
 		t.Error("live hold was pruned")
 	}
 }
+
+// The rotation's cost is bounded by how many cells it holds awake, not by the
+// pace: a maintenance wake lasts until the cell's own catch-up finishes and its
+// idle timeout elapses, measured at ~24 min against a 7 min pace on the host.
+// While it is already holding its budget awake it must not start another.
+func TestMaintenanceRotationHoldsAtMostItsConcurrencyBudgetAwake(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	s, _, fr := maintainFixture(t, &now, Options{MaintainEvery: 3 * time.Hour,
+		MinAwake: time.Minute, MaintainConcurrent: 1})
+	s.lastMaintain = now.Add(-2 * time.Hour)
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	if fr.state["oc-m1"] != runtime.StateRunning {
+		t.Fatal("first maintenance wake did not happen")
+	}
+	s.mu.Lock()
+	held := s.maintainAwake["m1"]
+	s.mu.Unlock()
+	if !held {
+		t.Fatal("the woken cell was not counted against the concurrency budget")
+	}
+
+	// Well past the pace, but m1 is still awake working through its catch-up.
+	now = now.Add(2 * time.Hour)
+	awake := []registry.Cell{
+		{Name: "m1", Container: "oc-m1", Port: 9000, Phase: registry.PhaseActive, WokeAt: now},
+		{Name: "m2", Container: "oc-m2", Port: 9001, Phase: registry.PhaseHibernated,
+			PausedAt: now.Add(-6 * time.Hour), WokeAt: now.Add(-6 * time.Hour)},
+	}
+	s.maintenanceWake(context.Background(), awake)
+	s.Drain(context.Background())
+	if fr.state["oc-m2"] == runtime.StateRunning {
+		t.Fatal("rotation started a second wake while already holding its budget awake")
+	}
+
+	// Once m1 goes back to sleep the budget frees and the rotation resumes.
+	awake[0].Phase = registry.PhaseHibernated
+	s.maintenanceWake(context.Background(), awake)
+	s.Drain(context.Background())
+	if fr.state["oc-m2"] != runtime.StateRunning {
+		t.Fatal("rotation did not resume once the cell it was holding awake had slept")
+	}
+}

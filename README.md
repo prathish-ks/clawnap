@@ -43,6 +43,51 @@ Cells go warm as soon as they pause and cold only when the host's available memo
 
 The **ingress** is a small HTTP front door. Each cell's webhook URL points at `/hook/<cell>/...`; clawnap verifies the platform's signature (Telegram header secret, Slack and GitHub/Meta HMAC, bearer) with a verify-only secret, wakes the cell, waits until its gateway answers, and proxies the request. Bot tokens stay inside the cell. Unsigned requests are refused without a wake.
 
+## What a sleeping cell gives up: standard and premium
+
+OpenClaw's **heartbeat** is how an agent speaks first. Every 30 minutes by
+default (1 hour under Anthropic OAuth or token auth) the gateway runs an agent
+turn in the cell's main session so the model can raise anything that needs
+attention. A sleeping cell cannot do that, so hibernation changes this one
+behaviour and a host should say so rather than let a tenant discover it.
+
+It changes less than it sounds. The stock heartbeat is deliberately quiet: its
+prompt tells the agent to answer with a no-reply token when nothing needs
+attention, and without a resolvable owner DM the poll skips entirely. Proactive
+behaviour is opt-in. And the gateway coalesces what it missed, measured on this
+host: a cell that had been down about three days ran **one** heartbeat turn on
+return, not the ~144 it had missed.
+
+So the honest offer is two tiers, and both already ship:
+
+| | Standard (`-class hibernate`, the default) | Premium (`-class always-on`) |
+|---|---|---|
+| Wakes on a message | yes, ~1–3 s | always up |
+| Timed jobs aimed at a person | woken before they are due | on time |
+| Internal maintenance (memory consolidation, weekly review) | runs on the next wake; `-maintain-every` guarantees one | continuous |
+| Proactive check-in | once per maintenance wake | native cadence, every 30 min |
+| Cost to the host | ~65 MiB asleep | ~0.8 GB, permanently resident |
+
+With `-maintain-every 12h` a standard cell is woken twice a day, so its
+proactive check-in happens roughly twice a day instead of 48 times. That is the
+trade: a tenant who wants an agent that pipes up on its own belongs on premium.
+
+Sizing the mix on a 16 GB host at 100 cells, arithmetic from the measured
+per-cell figures rather than a measured scenario: each premium cell costs
+~0.8 GB against the ~4.5 GB left once the OS, the cold floors and a burst
+headroom of ten wakes are covered, so roughly **six premium cells alongside 94
+standard**. Beyond that, add RAM.
+
+Two caveats worth reading before promising a cadence. The rotation's real
+interval is bounded by `-maintain-concurrent`, not by `-maintain-every`: a
+maintenance wake lasts until the cell's catch-up finishes and its idle timeout
+then elapses, measured at **24 minutes** on a cell that had been asleep five
+days (75 s boot, ~14 min catch-up, 10 min idle). While a fleet is behind, the
+rotation stretches rather than piling cells up, and it speeds up again as cells
+come current. And a tenant can shape their own side with
+`heartbeat.activeHours`, `heartbeat.every` and `cron.skipMissedJobs`; those are
+theirs to set, not the host's to change.
+
 ## Quickstart on a Linux host (Docker, cgroup v2)
 
 The reference setup is Ubuntu 24.04 with Docker, a swapfile, and clawnap as a systemd service. [experiments/provision/cloud-init.yaml](experiments/provision/cloud-init.yaml) does all of it for a Hetzner cloud server; by hand it is:
@@ -95,6 +140,7 @@ Active cells are the term people forget. clawnap can only make room from idle ce
 | `-min-awake 3m`, `-idle-cpu-pct 10` | a woken cell is not paused again inside its post-thaw housekeeping |
 | `-thaw-settle 1s` | hold on the first forwarded message after a thaw, keyed on the cell's own log |
 | `-maintain-every 0` (off) | maintenance rotation: wake the longest-unwoken hibernated cell on a pace derived from the fleet, so a cell nobody messages still runs its own internal schedule. Stands aside for real wakes and for the headroom policy |
+| `-maintain-concurrent 1` | cells the rotation may hold awake at once. A maintenance wake lasts until the cell's catch-up finishes and its idle timeout elapses, so this, not the pace, is what bounds its cost (~0.8 GB per cell held awake) |
 
 Worked examples, 100 cells:
 

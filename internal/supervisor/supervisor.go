@@ -71,6 +71,18 @@ type Options struct {
 	// Lowest-priority work on the host: it stands aside for wakes in flight
 	// and for the headroom policy. 0 = off.
 	MaintainEvery time.Duration
+	// MaintainConcurrent bounds how many cells the rotation may hold awake at
+	// once. A maintenance wake keeps its cell awake until the cell's own
+	// catch-up work stops and its idle timeout then elapses: measured
+	// 2026-10-07 on a cell asleep five days, that was ~75 s of boot, ~14 min
+	// of catch-up and a 10 min idle timeout, 24 minutes in all, against a
+	// 7 minute pace. A pace floor cannot bound that, because the duration
+	// varies with how far behind the cell is; capping concurrency bounds the
+	// cost directly (~0.8 GB per cell held awake) and simply stretches the
+	// interval while the fleet is behind, which is self-correcting: once
+	// cells are current their catch-up is short and the rotation speeds up.
+	// 0 = default (1).
+	MaintainConcurrent int
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -174,6 +186,9 @@ func (o *Options) defaults() {
 	if o.MaxRestarts == 0 {
 		o.MaxRestarts = 5
 	}
+	if o.MaintainConcurrent <= 0 {
+		o.MaintainConcurrent = 1
+	}
 	if o.PreWake == 0 {
 		o.PreWake = 2 * time.Minute // covers a stop-tier boot (45–90 s measured)
 	}
@@ -251,8 +266,11 @@ type Supervisor struct {
 	// in-memory: a restart costs at most one extra rotation wake.
 	lastMaintain time.Time
 	maintainSkip map[string]time.Time
-	active       sync.WaitGroup // wakes and reconcile passes in flight, for Drain
-	m            *Metrics
+	// maintainAwake holds cells the rotation woke that have not gone back to
+	// sleep yet, so their cost is bounded by MaintainConcurrent.
+	maintainAwake map[string]bool
+	active        sync.WaitGroup // wakes and reconcile passes in flight, for Drain
+	m             *Metrics
 }
 
 // maxPressureDefer is how many consecutive passes pressure reclaim may
@@ -309,7 +327,7 @@ func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 		recon: make(chan struct{}, opt.MaxConcurrent*4),
 		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{},
 		// start the rotation one pace in, not at boot, when the host is busiest
-		lastMaintain: opt.Now(), maintainSkip: map[string]time.Time{}, m: newMetrics()}
+		lastMaintain: opt.Now(), maintainSkip: map[string]time.Time{}, maintainAwake: map[string]bool{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done. A pass is bounded by its slowest action (a
@@ -652,9 +670,9 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 	}
 	s.mu.Lock()
 	var cand []registry.Cell
-	seen := make(map[string]bool, len(cells))
+	phase := make(map[string]registry.Phase, len(cells))
 	for _, c := range cells {
-		seen[c.Name] = true
+		phase[c.Name] = c.Phase
 		if c.Class == registry.ClassAlwaysOn || c.Phase != registry.PhaseHibernated {
 			continue
 		}
@@ -669,9 +687,21 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 	// Drop holds that have expired or that name a cell the operator removed,
 	// so the map tracks the fleet rather than growing with it.
 	for n, until := range s.maintainSkip {
-		if !seen[n] || !now.Before(until) {
+		if _, live := phase[n]; !live || !now.Before(until) {
 			delete(s.maintainSkip, n)
 		}
+	}
+	// Forget cells the rotation woke that have since gone back to sleep (or
+	// been removed); what is left is what the rotation is currently holding
+	// awake, and that is what MaintainConcurrent bounds.
+	for n := range s.maintainAwake {
+		if ph, live := phase[n]; !live || ph == registry.PhaseHibernated {
+			delete(s.maintainAwake, n)
+		}
+	}
+	if len(s.maintainAwake) >= s.opt.MaintainConcurrent {
+		s.mu.Unlock()
+		return // already holding its budget of cells awake
 	}
 	if len(cand) == 0 {
 		s.mu.Unlock()
@@ -709,6 +739,7 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 		return
 	}
 	s.lastMaintain = now
+	s.maintainAwake[c.Name] = true
 	s.mu.Unlock()
 	s.active.Add(1)
 	go func() {
@@ -721,6 +752,7 @@ func (s *Supervisor) maintenanceWake(ctx context.Context, cells []registry.Cell)
 			// starve every other cell of its maintenance.
 			s.mu.Lock()
 			s.maintainSkip[c.Name] = s.opt.Now().Add(s.opt.MaintainEvery)
+			delete(s.maintainAwake, c.Name) // never came up: it is not holding memory
 			s.mu.Unlock()
 			s.opt.Logger.Warn("maintenance wake", "cell", c.Name, "err", err)
 			return

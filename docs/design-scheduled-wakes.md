@@ -111,14 +111,30 @@ at the shipped 3 m and the fleet's 45 s idle timeout:
 | v15 | 3 m 06 s | |
 | v16 | 3 m 05 s | |
 
-The earlier arithmetic in this note was wrong in the safe direction. The idle
-timeout runs *concurrently* with the minimum awake time, not after it, so the
-cost is `max(MinAwake, idle, catch-up)` rather than their sum: at the shipped
-10 m idle expect about 10 minutes per wake, not 13. One cell held awake against
-a pace of the same order is still about 0.8 GB, so the conclusion stands: the
-rotation costs roughly one extra resident cell, which is noise against the ~15
-the host is already sized for. The pace must stay longer than that awake cost
-or wakes accumulate, which is what the floor is for.
+Measured again 2026-10-07 at the **shipped 10 m idle**, which corrects both of
+the estimates above. The idle clock does not start when the cell wakes; it
+starts when the cell's catch-up stops generating traffic. On a cell that had
+been asleep 131 hours:
+
+| Segment | Measured |
+|---|---|
+| Wake to ready (stopped cell: a full gateway boot) | ~75 s |
+| Ready to last activity (catch-up) | ~14 min |
+| Last activity to hibernate (idle timeout) | 10 min |
+| **Total awake** | **25 min 27 s** |
+
+So the cost is `boot + catch-up + idle`, and the catch-up term grows with how
+far behind the cell is. At a 12 h target over ~100 cells the pace is ~7 min, so
+25 minute wakes overlap: the run peaked at **4 cells awake at once**, matching
+3.6 predicted. This is a worst case for a neglected fleet, not the steady
+state, where a 12 h rotation faces 12 h of missed work rather than five days.
+
+A pace floor cannot bound this, because the duration varies with how far behind
+the cell is. `-maintain-concurrent` (default 1) bounds it directly: the
+rotation starts a wake only while it is holding fewer than that many cells
+awake. The interval then stretches while a fleet is behind and tightens again
+as cells come current, which is self-correcting and keeps the cost at about
+0.8 GB.
 
 The rotation also buys back a little proactivity. Because missed ticks are
 coalesced, a cell woken once a day runs one heartbeat turn a day. That is not
@@ -181,12 +197,35 @@ candidates, stretching the effective interval from 1 h to about 5 h, which is
 the documented safe direction but means the flag's promise only holds while the
 fleet is small enough for the floor not to bind.
 
+## The concurrency cap, verified (2026-10-07)
+
+Same host, same settings (`-maintain-every 12h`, shipped 10 m idle), the only
+change being `-maintain-concurrent`:
+
+| | Uncapped | Capped at 1 |
+|---|---|---|
+| Rotation wakes | 4 in 36 min, one per 7 min pace | 1 in 30 min |
+| Rotation cells awake at once | 4 | 1 |
+
+The capped run is attributable: the cell it woke (`alice`, ready 03:30:08)
+never hibernated inside the window — zero hibernations were logged in the whole
+30 minutes — so the budget was never freed and no second wake was eligible.
+The headroom check was disabled for both runs, so it cannot explain the
+difference.
+
+Awake duration is also far more variable than one figure suggests. In the same
+session it was 25 min for one cell, over 45 min for another still working at
+139 % of a core, and over 21 min for `alice` when the window closed. No pace
+can be chosen safely against a spread like that, which is the case for bounding
+concurrency instead.
+
 ## Open measurements
 
-1. ~~The true awake cost of one maintenance wake.~~ Measured 2026-10-05:
-   3 m 05 s to 3 m 51 s at `-min-awake 3m` with a 45 s idle timeout, i.e. the
-   floor dominates and catch-up can add ~45 s. Still open at the shipped 10 m
-   idle, where the idle timeout should dominate instead.
+1. ~~The true awake cost of one maintenance wake.~~ Measured: 3 m 05 s to
+   3 m 51 s at a 45 s idle timeout (2026-10-05), and 25 m 27 s at the shipped
+   10 m idle on a cell five days behind (2026-10-07, broken down above). What
+   remains open is the **steady-state** cost, where a cell is only ever ~12 h
+   behind; that needs a run longer than one session.
 2. ~~Whether a cell that slept a full day coalesces into a single catch-up
    run.~~ Measured 2026-10-05: the heartbeat does, the daily job does not
    (see the table above). Still open is how this scales with a longer sleep.
