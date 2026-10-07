@@ -78,13 +78,14 @@ per-cell figures rather than a measured scenario: each premium cell costs
 headroom of ten wakes are covered, so roughly **six premium cells alongside 94
 standard**. Beyond that, add RAM.
 
-Two caveats worth reading before promising a cadence. The rotation's real
-interval is bounded by `-maintain-concurrent`, not by `-maintain-every`: a
-maintenance wake lasts until the cell's catch-up finishes and its idle timeout
-then elapses, measured at **24 minutes** on a cell that had been asleep five
-days (75 s boot, ~14 min catch-up, 10 min idle). While a fleet is behind, the
-rotation stretches rather than piling cells up, and it speeds up again as cells
-come current. And a tenant can shape their own side with
+On the cadence: `-maintain-every 12h` holds on a 100-cell host, measured. A
+maintenance wake costs 4–6 minutes (a boot, the cell's post-thaw work, then it
+sleeps at the first quiet moment rather than waiting out an idle timeout meant
+for an absent tenant), which is under the ~7 minute pace, so wakes land at the
+configured interval and the host never holds more than one maintenance cell
+awake, about 0.8 GB. If a fleet falls far behind, `-maintain-concurrent` caps
+the cost and the interval stretches instead of cells piling up. A tenant can
+shape their own side with
 `heartbeat.activeHours`, `heartbeat.every` and `cron.skipMissedJobs`; those are
 theirs to set, not the host's to change.
 
@@ -141,6 +142,7 @@ Active cells are the term people forget. clawnap can only make room from idle ce
 | `-thaw-settle 1s` | hold on the first forwarded message after a thaw, keyed on the cell's own log |
 | `-maintain-every 0` (off) | maintenance rotation: wake the longest-unwoken hibernated cell on a pace derived from the fleet, so a cell nobody messages still runs its own internal schedule. Stands aside for real wakes and for the headroom policy |
 | `-maintain-concurrent 1` | cells the rotation may hold awake at once. A maintenance wake lasts until the cell's catch-up finishes and its idle timeout elapses, so this, not the pace, is what bounds its cost (~0.8 GB per cell held awake) |
+| `-maintain-idle 30s` | idle timeout for a cell the rotation woke, instead of its own: a maintenance wake has no tenant to wait for, so the cell sleeps as soon as it goes quiet. `-min-awake` and the CPU gate still apply, and a real message reverts the cell to its own timeout. Measured: this cut a maintenance wake from 25 min to 4–6 min |
 
 Worked examples, 100 cells:
 

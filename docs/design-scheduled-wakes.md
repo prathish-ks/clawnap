@@ -219,6 +219,41 @@ session it was 25 min for one cell, over 45 min for another still working at
 can be chosen safely against a spread like that, which is the case for bounding
 concurrency instead.
 
+## Sleeping a maintenance-woken cell as soon as it is quiet (2026-10-07)
+
+A cell's idle timeout is a grace period in case its tenant says something
+else. A maintenance wake has no tenant, so `-maintain-idle` (default 30 s)
+applies a short timeout to cells the rotation woke, reverting to the cell's own
+the moment a real wake touches it. The two guards that actually protect a
+thawed cell are separate from the idle timeout and still apply: `MinAwake`, and
+the CPU gate that keeps a cell active while its post-thaw work runs without
+traffic.
+
+Same host, same conditions (all containers exited, cells at the shipped 10 m
+idle, `-maintain-every 12h`):
+
+| Configuration | Wakes | Peak cells awake | Awake cost |
+|---|---|---|---|
+| Uncapped, 10 m idle | 4 in 36 min | 4 | 25 m 27 s |
+| Capped at 1, 10 m idle | 1 in 30 min | 1 | did not finish in window |
+| Capped at 1, 30 s maintenance idle | **5 in 40 min** | **1** | **4 m 17 s – 6 m 06 s** |
+
+The third row is the full throughput of the uncapped run at a quarter of its
+memory cost. It also changes the character of the rotation: at ~6 minutes awake
+against a ~7 minute pace the concurrency cap stops binding, so wakes land at the
+configured pace exactly (6 m 59 s apart, five times running). The effective
+interval becomes what the flag says: 103 candidates × 7 min = **12 hours**, so
+"maintain 100 cells twice a day" holds at `-maintain-concurrent 1`, costing
+about 0.8 GB.
+
+This also corrects the breakdown above. That reading attributed ~14 minutes to
+catch-up, but `last_activity` advances on any traffic over the noise floor, so
+sporadic background chatter during the 10 minute wait was being counted as work.
+With a 30 s threshold the first genuine quiet gap ends the wake, and the real
+post-thaw window is ~4–5 minutes, of which `MinAwake` is 3. The binding
+constraint is now `MinAwake`, which is the right thing to be bound by: it is a
+measured requirement rather than a guess.
+
 ## Open measurements
 
 1. ~~The true awake cost of one maintenance wake.~~ Measured: 3 m 05 s to
