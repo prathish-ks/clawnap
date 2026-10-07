@@ -211,6 +211,14 @@ func run(args []string) error {
 	case "hibernate", "wake":
 		fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 		name := fs.String("name", "", "cell name")
+		// Only meaningful on the local fallback below, and only for
+		// hibernate: when a daemon is listening it does this according to
+		// its own configuration. Defaults to off, like the daemon's flag, so
+		// a one-off hibernate writes the same due time the daemon would.
+		var readSched *bool
+		if args[0] == "hibernate" {
+			readSched = fs.Bool("read-schedules", false, "with no daemon running, take the cell's next due time from its own job store as -read-schedules does on the daemon")
+		}
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -225,7 +233,11 @@ func run(args []string) error {
 			}
 			return nil
 		}
-		_, sup, err := open(supervisor.Options{})
+		var opts supervisor.Options
+		if readSched != nil {
+			opts.ReadSchedules = *readSched
+		}
+		_, sup, err := open(opts)
 		if err != nil {
 			return err
 		}
