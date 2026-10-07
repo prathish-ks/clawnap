@@ -142,7 +142,7 @@ Active cells are the term people forget. clawnap can only make room from idle ce
 | `-thaw-settle 1s` | hold on the first forwarded message after a thaw, keyed on the cell's own log |
 | `-maintain-every 0` (off) | maintenance rotation: wake the longest-unwoken hibernated cell on a pace derived from the fleet, so a cell nobody messages still runs its own internal schedule. Stands aside for real wakes and for the headroom policy |
 | `-maintain-concurrent 1` | cells the rotation may hold awake at once. A maintenance wake lasts until the cell's catch-up finishes and its idle timeout elapses, so this, not the pace, is what bounds its cost (~0.8 GB per cell held awake) |
-| `-maintain-idle 30s` | idle timeout for a cell the rotation woke, instead of its own: a maintenance wake has no tenant to wait for, so the cell sleeps as soon as it goes quiet. `-min-awake` and the CPU gate still apply, and a real message reverts the cell to its own timeout. Measured: this cut a maintenance wake from 25 min to 4–6 min |
+| `-maintain-idle 30s` | idle timeout for a cell the rotation woke, instead of its own: a maintenance wake has no tenant to wait for, so the cell sleeps as soon as it goes quiet. `-min-awake` and the CPU gate still apply; a message through the ingress reverts the cell to its own timeout, as does the cell staying awake longer than that timeout. Measured: this cut a maintenance wake from 25 min to 4–6 min |
 | `-read-schedules` (off) | take each cell's next due time from its own job store when it hibernates, rather than from `-next-due`. Reads scheduling metadata only; an upstream schema change falls back to the operator-set value |
 
 Worked examples, 100 cells:
