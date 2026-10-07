@@ -18,6 +18,7 @@ import (
 	"github.com/prathish-ks/clawnap/internal/reclaim"
 	"github.com/prathish-ks/clawnap/internal/registry"
 	"github.com/prathish-ks/clawnap/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/walcheck"
 )
 
 // fakeRunner scripts a runtime per container.
@@ -31,6 +32,7 @@ type fakeRunner struct {
 	state  map[string]runtime.State
 	netio  map[string]string
 	cpu    map[string]string // container -> docker CPUPerc string
+	mounts map[string]string // container -> host path bind-mounted at the OpenClaw state dir
 	calls  []string
 	failOn string
 	// hold makes "stats" of a running container block until the channel is
@@ -64,6 +66,9 @@ func (f *fakeRunner) Run(_ context.Context, args ...string) (string, error) {
 		return b.String(), nil
 	case "inspect":
 		if len(args) > 2 && args[2] == "{{json .Mounts}}" {
+			if src := f.mounts[name]; src != "" {
+				return `[{"Type":"bind","Source":"` + src + `","Destination":"` + walcheck.StatePathInContainer + `"}]`, nil
+			}
 			return "[]", nil
 		}
 		if len(args) > 2 && args[2] == "{{.Id}}" {

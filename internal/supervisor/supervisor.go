@@ -25,6 +25,7 @@ import (
 	"github.com/prathish-ks/clawnap/internal/reclaim"
 	"github.com/prathish-ks/clawnap/internal/registry"
 	"github.com/prathish-ks/clawnap/internal/runtime"
+	"github.com/prathish-ks/clawnap/internal/schedule"
 	"github.com/prathish-ks/clawnap/internal/walcheck"
 )
 
@@ -94,6 +95,14 @@ type Options struct {
 	// moment a tenant's message touches the cell it reverts to its own
 	// IdleAfter. 0 = default (30 s), negative = off (use the cell's own).
 	MaintainIdle time.Duration
+	// ReadSchedules turns on reading a cell's own scheduled jobs from its
+	// state directory when it hibernates, so NextDueAt comes from the cell
+	// rather than from an operator setting it by hand. Only jobs a person is
+	// waiting on are woken for; the cell's internal maintenance is left to
+	// catch up on its next wake. Off by default: it reads another project's
+	// internal store, so a schema change upstream should degrade to the
+	// operator-set due time rather than silently mis-schedule.
+	ReadSchedules bool
 	// MaxPause caps how long a cell stays frozen. OpenClaw tolerated a 48 s
 	// freeze but restarted itself after ~3 h (lease constants 125 s / 30 min);
 	// beyond the cap the cell is pulsed (unpaused for PulseWindow so its
@@ -599,26 +608,59 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 
 // checkpointWAL truncates the stopped cell's SQLite WAL from the host, if
 // its state directory is a bind mount we can see. Volumes are skipped.
-func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell) {
+// stateDir is the host path of the cell's OpenClaw home, which is a bind
+// mount. Empty when the cell does not have one (or the runtime cannot say).
+func (s *Supervisor) stateDir(ctx context.Context, c registry.Cell) string {
 	mounts, err := s.rt.Mounts(ctx, c.Container)
 	if err != nil {
-		s.opt.Logger.Warn("wal checkpoint: mounts", "cell", c.Name, "err", err)
-		return
+		s.opt.Logger.Warn("state dir: mounts", "cell", c.Name, "err", err)
+		return ""
 	}
 	for _, m := range mounts {
-		if m.Destination != walcheck.StatePathInContainer || m.Type != "bind" {
-			continue
+		if m.Destination == walcheck.StatePathInContainer && m.Type == "bind" {
+			return m.Source
 		}
-		res, err := walcheck.Checkpoint(ctx, m.Source, nil)
+	}
+	return ""
+}
+
+// cellSchedule asks the cell when it next has work a person is waiting for.
+// Zero when the feature is off, the cell has no readable store, or nothing is
+// due: in every one of those cases the caller leaves NextDueAt as it found it,
+// so an operator-set due time survives.
+func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir string) time.Time {
+	if !s.opt.ReadSchedules || dir == "" {
+		return time.Time{}
+	}
+	next, err := schedule.Next(ctx, dir, s.opt.Now())
+	if err != nil {
+		if errors.Is(err, schedule.ErrUnsupportedStore) {
+			s.opt.Logger.Info("schedule: cell keeps its jobs in a store this build cannot read; using the operator-set due time", "cell", c.Name)
+		} else {
+			s.opt.Logger.Warn("schedule", "cell", c.Name, "err", err)
+		}
+		return time.Time{}
+	}
+	if !next.IsZero() {
+		s.opt.Logger.Info("schedule: next user-facing job", "cell", c.Name, "at", next.Format(time.RFC3339), "in", next.Sub(s.opt.Now()).Round(time.Second))
+	}
+	return next
+}
+
+func (s *Supervisor) checkpointWAL(ctx context.Context, c registry.Cell, dir string) {
+	if dir == "" {
+		s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
+		return
+	}
+	{
+		res, err := walcheck.Checkpoint(ctx, dir, nil)
 		for _, r := range res {
 			s.opt.Logger.Info("wal checkpoint", "cell", c.Name, "db", r.Path, "wal_before", r.WALBefore, "wal_after", r.WALAfter, "skipped", r.Skipped)
 		}
 		if err != nil {
 			s.opt.Logger.Warn("wal checkpoint", "cell", c.Name, "err", err)
 		}
-		return
 	}
-	s.opt.Logger.Info("wal checkpoint skipped: state dir is not a host bind mount", "cell", c.Name)
 }
 
 // pressureVictims picks the paused, still-resident cells to reclaim when the
@@ -1056,7 +1098,7 @@ func (s *Supervisor) capPause(ctx context.Context, c registry.Cell) error {
 		if err != nil {
 			return err
 		}
-		s.checkpointWAL(ctx, c)
+		s.checkpointWAL(ctx, c, s.stateDir(ctx, c))
 		s.m.fellThrough()
 		s.opt.Logger.Info("pause cap: fell through to stop", "cell", c.Name, "frozen", frozen, "took", took)
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.PausedAt = time.Time{} })
@@ -1269,11 +1311,13 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 		return err
 	}
 	var took time.Duration
+	var dir string
 	switch c.Tier {
 	case registry.TierStop:
 		took, err = s.rt.Stop(ctx, c.Container, s.opt.StopGrace)
 		if err == nil {
-			s.checkpointWAL(ctx, c) // best effort; logged, never fatal
+			dir = s.stateDir(ctx, c)
+			s.checkpointWAL(ctx, c, dir) // best effort; logged, never fatal
 		}
 	default:
 		took, err = s.rt.Pause(ctx, c.Container)
@@ -1287,7 +1331,19 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 	if c.Tier != registry.TierStop {
 		pausedAt = s.opt.Now()
 	}
-	return s.reg.Update(name, func(x *registry.Cell) { x.Phase = registry.PhaseHibernated; x.PausedAt = pausedAt })
+	// Ask the cell when it next has work a person is waiting for. A frozen
+	// cell cannot change its own schedule, so this stays true for the sleep.
+	if s.opt.ReadSchedules && dir == "" {
+		dir = s.stateDir(ctx, c)
+	}
+	next := s.cellSchedule(ctx, c, dir)
+	return s.reg.Update(name, func(x *registry.Cell) {
+		x.Phase = registry.PhaseHibernated
+		x.PausedAt = pausedAt
+		if !next.IsZero() {
+			x.NextDueAt, x.NextDueEvery = next, 0 // re-read at the next pause, so no recurrence to track
+		}
+	})
 }
 
 // WakeResult reports timings a provider cares about.
