@@ -649,3 +649,67 @@ Findings:
 - **Headroom is restored from idle cells only.** In A2/B2 every warm cell was one of the twenty being churned; both builds ran their pressure passes and reclaimed nothing until the traffic stopped (each reclaim was interrupted by that cell's next wake, by design). Residents and active cells count against the target and nothing in the reclaim path can touch them: when they alone exceed it, the answer is admission or a cap on residents, not a faster reclaim.
 - **The 4 GB target and uncapped residents do not coexist on 16 GB.** Four residents at ~0.8 GB each plus ten idle warm cells at 300 MiB is already under target. The shipped unit's 4 GB assumes residents are few or capped; the earlier capped-resident scenario (350 MiB) is the one that fitted.
 - Caveat: the fixed build also carries the per-pass snapshot, so part of B's extra throughput is the core it hands back; the under-target fraction and the first-reclaim bound are the policy itself.
+
+## 2026-10-08/09 · 15 h soak at the documented settings, and the idle-clock bug it found
+
+First run longer than an hour, and the first with tenant traffic: 100 cells at
+the README's `-idle 10m`, the shipped unit plus `-maintain-every 12h`,
+`-maintain-concurrent 1`, `-maintain-idle 30s` and `-read-schedules`, with 10 %
+of cells taking a message roughly hourly each (one somewhere in the fleet every
+~6 min). 15 h of 5-minute samples, zero failures throughout.
+
+**What it set out to measure, answered.**
+
+| | Result |
+|---|---|
+| Maintenance wakes | 86, reaching 76 distinct cells |
+| Awake cost per maintenance wake | median **3.5 min**, p90 4.2 min |
+| Cadence | median 8.5 min apart, no drift (9.9 → 8.1 min across halves) |
+| Messages | 150, all 200; p50 0.14 s, p90 2.65 s, max 7.71 s |
+| Latency drift | none: second half faster than first |
+| Schedule reader false positives | 0 in 15 h |
+
+Steady-state maintenance is 3.5 minutes per wake, essentially the 3 min
+`MinAwake` floor, against 25 m 27 s before `-maintain-idle`. The rotation never
+competed with tenant traffic.
+
+**What it found instead.** The fleet never reached the published density. It
+settled at **15 cells permanently awake with 1.2 GB free**, not 100 cells with
+8–9 GB. Cause, measured on a real cell at the daemon's own 5 s resolution: an
+idle OpenClaw cell sits at 2–5 % of a core and **bursts to ~47 % for 5–10 s
+roughly every two minutes**. The CPU gate treated any sample over
+`-idle-cpu-pct` as activity and reset `LastActivity`, restarting the whole idle
+countdown. At any idle timeout longer than the gap between bursts, the
+countdown could never finish and the cell could never hibernate.
+
+The published figures were measured with cells created at `-idle 45s`, short
+enough to fit between bursts. Nobody had run the documented `10m` long enough
+to see it fail, and it fails silently: a host full of awake cells looks busy,
+not broken.
+
+**Fix and confirmation.** The gate now only blocks sleeping; it no longer
+touches `LastActivity`. Same host, same traffic, starting from the state the
+soak left:
+
+| | Awake | Free |
+|---|---|---|
+| Before the fix (after 15 h stuck) | 12 | 1.68 GB |
+| +5 min | 9 | 2.88 GB |
+| +10 min | 3 | 5.00 GB |
+| 2 h steady state | 1–3 | ~4.2 GB |
+
+46 hibernations in the two hours, against near zero in the 15 h before. The one
+cell awake at the end was a traffic cell, as it should be.
+
+**The trade is now visible and is the product working as intended.** Because
+cells actually sleep, more messages pay a wake: latency went from p50 0.14 s
+(85 % of messages hit a cell that was still awake) to p50 2.71 s / p90 3.46 s /
+max 4.51 s. That is the documented cold-wake cost, bought with 3 GB of memory.
+
+**Open: density on an aged fleet.** At rest now — 100 cold cells, 1 active —
+free memory is 4.2 GB, not 8–9. The cells hold 10.1 GB resident between them,
+~98 MiB each, against the ~65 MiB the README records at the cold floor. This
+fleet has been woken repeatedly over a week; the published figure was taken on
+a fresh one. Whether cells grow with use, or the two measurements differ in
+what they count, needs a clean fleet to settle. Until then the 8–9 GB figure
+should be read as "fresh fleet", not steady state.

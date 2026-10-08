@@ -8,7 +8,7 @@ Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **
 
 | | Stock | With clawnap (2026.9.6) |
 |---|---|---|
-| Cells per 16 GB host | ~35 with zram; at 40, two died and three failed health | **100, all healthy, 8–9 GB RAM still free** |
+| Cells per 16 GB host | ~35 with zram; at 40, two died and three failed health | **100, all healthy, 8–9 GB RAM still free on a fresh fleet; ~4 GB after a week of use (see below)** |
 | RAM per idle cell | ~750 MiB | ~65 MiB cold (150 MiB floor, the rest is cache), 300 MiB warm |
 | Wake of a recently active cell | always on | ~1 s (0.7–1.3 s) |
 | Wake of a cold cell on its first message | always on | ~3 s, answer delivered on the platform's first push |
@@ -24,6 +24,13 @@ The same host with 2026.9.7 cells, 100 cells, measured 2026-10-02:
 | Ten cold cells at once, nothing else active | 5.0 / 9.9 / 11.5 s |
 | Ten cold cells at once with 5 uncapped residents active (host over-committed, see Tuning) | 7.4 / 8.3 / 11.3 s |
 | Ten cold cells at once, first wake after a fleet boot | 17–28 s: each cell's post-thaw housekeeping is CPU-bound and runs once |
+
+Measured over 15 hours at these settings with 10 % of cells taking traffic: the
+fleet holds 1–3 cells awake, free memory sits near 4 GB, and a message to a
+sleeping cell is answered in 2.7 s at the median (3.5 s at p90). The 8–9 GB
+figure above was taken on a freshly created fleet; this one had been in use for
+a week, and its cold cells hold ~98 MiB each rather than ~65. Which of the two
+a host sees over months is not yet settled, so size for the lower one.
 
 Every number, including the ones that did not work (zram, zswap, ZFS, dm-vdo, KSM, memory caps), is in [experiments/hetzner-measurements-2026-09-27.md](experiments/hetzner-measurements-2026-09-27.md). The plan and decisions are in [docs/plan.md](docs/plan.md).
 
