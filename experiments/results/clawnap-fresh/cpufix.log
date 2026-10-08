@@ -1,0 +1,57 @@
+2026-10-08T21:37:10 baseline BEFORE the fix is deployed: awake=12 paused=91 avail=1676MB
+2026-10-08T21:37:10   (the 15 h soak settled here: median 15 awake, 1.2 GB free, at -idle 10m)
+2026-10-08T21:37:17 fixed build deployed: clawnap cpugate-fix
+2026-10-08T21:37:17 cell idle timeouts: {600: 103}
+2026-10-08T21:37:17 traffic generator started over: v3 v11 v22 v34 v45 v56 v67 v78 v89 v97
+2026-10-08T21:42:18 SAMPLE t+5m awake=9 paused=94 avail=2877MB load=0.89 swap_used=85274MB
+2026-10-08T21:43:06 TRAFFIC cell=v45 code=200 took=3.0s
+2026-10-08T21:47:19 SAMPLE t+10m awake=3 paused=100 avail=5001MB load=1.18 swap_used=87526MB
+2026-10-08T21:47:50 TRAFFIC cell=v97 code=200 took=3.46s
+2026-10-08T21:52:19 SAMPLE t+15m awake=3 paused=100 avail=4348MB load=0.84 swap_used=87085MB
+2026-10-08T21:52:40 TRAFFIC cell=v3 code=200 took=2.99s
+2026-10-08T21:57:20 SAMPLE t+20m awake=3 paused=100 avail=4471MB load=0.26 swap_used=87170MB
+2026-10-08T21:59:45 TRAFFIC cell=v22 code=200 took=2.62s
+2026-10-08T22:02:21 SAMPLE t+25m awake=2 paused=101 avail=4690MB load=0.30 swap_used=87214MB
+2026-10-08T22:05:22 TRAFFIC cell=v34 code=200 took=2.22s
+2026-10-08T22:07:22 SAMPLE t+30m awake=3 paused=100 avail=4311MB load=0.39 swap_used=86888MB
+2026-10-08T22:09:59 TRAFFIC cell=v67 code=200 took=2.9s
+2026-10-08T22:12:23 SAMPLE t+35m awake=2 paused=101 avail=4248MB load=0.12 swap_used=86864MB
+2026-10-08T22:14:40 TRAFFIC cell=v89 code=200 took=3.96s
+2026-10-08T22:17:24 SAMPLE t+40m awake=2 paused=101 avail=4630MB load=0.76 swap_used=87315MB
+2026-10-08T22:21:06 TRAFFIC cell=v22 code=200 took=2.1s
+2026-10-08T22:22:25 SAMPLE t+45m awake=3 paused=100 avail=4528MB load=0.10 swap_used=87149MB
+2026-10-08T22:25:55 TRAFFIC cell=v3 code=200 took=2.73s
+2026-10-08T22:27:26 SAMPLE t+50m awake=2 paused=101 avail=4649MB load=0.14 swap_used=87201MB
+2026-10-08T22:32:26 SAMPLE t+55m awake=1 paused=102 avail=4575MB load=0.41 swap_used=87069MB
+2026-10-08T22:32:30 TRAFFIC cell=v22 code=200 took=1.72s
+2026-10-08T22:37:28 SAMPLE t+60m awake=2 paused=101 avail=4433MB load=0.27 swap_used=86878MB
+2026-10-08T22:37:40 TRAFFIC cell=v11 code=200 took=4.51s
+2026-10-08T22:42:28 SAMPLE t+65m awake=3 paused=100 avail=4136MB load=0.83 swap_used=86967MB
+2026-10-08T22:45:31 TRAFFIC cell=v97 code=200 took=3.41s
+2026-10-08T22:47:29 SAMPLE t+70m awake=2 paused=101 avail=4497MB load=0.90 swap_used=87098MB
+2026-10-08T22:51:21 TRAFFIC cell=v11 code=200 took=2.71s
+2026-10-08T22:52:30 SAMPLE t+75m awake=2 paused=101 avail=4522MB load=0.35 swap_used=87077MB
+2026-10-08T22:56:17 TRAFFIC cell=v56 code=200 took=3.74s
+2026-10-08T22:57:31 SAMPLE t+80m awake=4 paused=99 avail=3934MB load=1.21 swap_used=86620MB
+2026-10-08T23:02:19 TRAFFIC cell=v97 code=200 took=2.35s
+2026-10-08T23:02:32 SAMPLE t+85m awake=2 paused=101 avail=4426MB load=0.10 swap_used=86986MB
+2026-10-08T23:07:31 TRAFFIC cell=v56 code=200 took=1.88s
+2026-10-08T23:07:33 SAMPLE t+90m awake=2 paused=101 avail=4645MB load=0.22 swap_used=87141MB
+2026-10-08T23:12:34 SAMPLE t+95m awake=2 paused=101 avail=4330MB load=0.37 swap_used=86909MB
+2026-10-08T23:13:40 TRAFFIC cell=v56 code=200 took=0.1s
+2026-10-08T23:17:35 SAMPLE t+100m awake=0 paused=103 avail=4356MB load=0.75 swap_used=87079MB
+2026-10-08T23:18:24 TRAFFIC cell=v3 code=200 took=2.65s
+2026-10-08T23:22:36 SAMPLE t+105m awake=1 paused=102 avail=4522MB load=0.22 swap_used=87171MB
+2026-10-08T23:25:48 TRAFFIC cell=v78 code=200 took=3.21s
+2026-10-08T23:27:37 SAMPLE t+110m awake=3 paused=100 avail=3518MB load=0.21 swap_used=86430MB
+2026-10-08T23:31:29 TRAFFIC cell=v78 code=200 took=0.43s
+2026-10-08T23:32:38 SAMPLE t+115m awake=2 paused=101 avail=3966MB load=0.14 swap_used=86751MB
+2026-10-08T23:37:16 TRAFFIC cell=v97 code=200 took=2.52s
+2026-10-08T23:37:39 SAMPLE t+120m awake=1 paused=102 avail=4214MB load=0.33 swap_used=87017MB
+2026-10-08T23:37:39 === which cells are still awake, and are they the traffic ones? ===
+  awake=1 of which traffic cells=1: v97
+2026-10-08T23:37:39 === hibernations in the run (the fix should produce many; before it, near zero) ===
+  hibernations: 46
+2026-10-08T23:37:39 === message latency ===
+  n=21 min=0.10 p50=2.71 p90=3.46 max=4.51 s
+CPUFIX-DONE
