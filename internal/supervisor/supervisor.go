@@ -591,8 +591,18 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 		idleAfter = s.opt.MaintainIdle
 	}
 	d := idle.Evaluate(prev, cur, c.LastActivity, idleAfter, s.opt.NoiseBytes)
+	// Busy on CPU (post-thaw maintenance, cron): hold it awake for now, but do
+	// not touch LastActivity. The gate answers "is it working this instant",
+	// not "did its tenant just do something", and restarting the idle clock
+	// from a CPU sample conflates the two. Measured 2026-10-08: an idle
+	// OpenClaw cell sits at 2–5 % of a core and bursts to ~47 % for 5–10 s
+	// roughly every two minutes, so resetting the clock on a burst meant any
+	// cell whose idle timeout was longer than that gap could never hibernate
+	// at all — a 15 h soak at the documented -idle 10m settled at 15 cells
+	// permanently awake and 1.2 GB free instead of the measured 8–9 GB. The
+	// gate still does its real job: the cell stays awake while the work runs,
+	// and sleeps once it stops and the idle window has genuinely elapsed.
 	if s.opt.IdleCPUPct > 0 && st.CPUPct > s.opt.IdleCPUPct {
-		d.LastActivity = cur.At // busy on CPU (post-thaw maintenance, cron): not idle yet
 		d.ShouldSleep = false
 	}
 	forgive := c.Restarts > 0 && !c.WokeAt.IsZero() && cur.At.Sub(c.WokeAt) >= restartForgiveAfter

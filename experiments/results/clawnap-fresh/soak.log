@@ -1,0 +1,528 @@
+2026-10-08T03:11:41 soak start, build=clawnap soak-a0fdd2d
+2026-10-08T03:14:37 booted v1-v10 avail=5928MB load=32.42
+2026-10-08T03:26:13 booted v11-v20 avail=1963MB load=6.56
+2026-10-08T03:34:54 booted v21-v30 avail=2721MB load=38.25
+2026-10-08T03:44:04 booted v31-v40 avail=1736MB load=43.46
+2026-10-08T03:53:44 booted v41-v50 avail=675MB load=39.03
+2026-10-08T04:04:21 booted v51-v60 avail=530MB load=23.73
+2026-10-08T04:15:36 booted v61-v70 avail=397MB load=35.18
+2026-10-08T04:28:14 booted v71-v80 avail=482MB load=81.27
+2026-10-08T04:44:21 booted v81-v90 avail=668MB load=101.63
+2026-10-08T04:57:51 booted v91-v99 avail=416MB load=238.46
+2026-10-08T04:57:51 boot done in 6366s; waiting for the policy to pause and cool them
+2026-10-08T05:41:42 settled: paused=58 running=41 avail=1159MB
+2026-10-08T05:41:42 traffic generator started (pid 602212) over: v3 v11 v22 v34 v45 v56 v67 v78 v89 v97
+2026-10-08T05:41:50 POLICY /usr/local/bin/clawnap serve -listen 127.0.0.1:8080 -interval 5s -reclaim-after 30m -headroom-mib 4096 -warm-keep-mib 300 -reclaim-keep-mib 150 -prefetch-on-wake -max-pause -1s -maintain-every 12h -maintain-concurrent 1 -maintain-idle 30s -read-schedules
+2026-10-08T05:41:50 rotation on; sampling every 5 min for 15 h
+2026-10-08T05:46:52 SAMPLE t+5m running=41 paused=57 avail=693MB mwakes=0 failures=0 load=3.82 swap_used=80047MB
+2026-10-08T05:46:54 TRAFFIC cell=v22 code=200 took=5.84s
+2026-10-08T05:51:53 SAMPLE t+10m running=39 paused=60 avail=829MB mwakes=0 failures=0 load=5.41 swap_used=80404MB
+2026-10-08T05:54:36 TRAFFIC cell=v78 code=200 took=1.41s
+2026-10-08T05:56:56 SAMPLE t+15m running=39 paused=60 avail=1169MB mwakes=1 failures=0 load=4.70 swap_used=80848MB
+2026-10-08T06:00:35 TRAFFIC cell=v89 code=200 took=1.96s
+2026-10-08T06:01:57 SAMPLE t+20m running=38 paused=61 avail=522MB mwakes=1 failures=0 load=4.13 swap_used=80270MB
+2026-10-08T06:06:58 SAMPLE t+25m running=39 paused=60 avail=731MB mwakes=2 failures=0 load=4.43 swap_used=80435MB
+2026-10-08T06:06:59 TRAFFIC cell=v89 code=200 took=0.1s
+2026-10-08T06:12:00 SAMPLE t+30m running=38 paused=61 avail=726MB mwakes=2 failures=0 load=7.80 swap_used=80673MB
+2026-10-08T06:14:29 TRAFFIC cell=v97 code=200 took=0.12s
+2026-10-08T06:17:01 SAMPLE t+35m running=38 paused=61 avail=550MB mwakes=3 failures=0 load=3.81 swap_used=80449MB
+2026-10-08T06:19:23 TRAFFIC cell=v22 code=200 took=0.6s
+2026-10-08T06:22:03 SAMPLE t+40m running=37 paused=62 avail=746MB mwakes=3 failures=0 load=7.69 swap_used=80637MB
+2026-10-08T06:26:17 TRAFFIC cell=v97 code=200 took=0.71s
+2026-10-08T06:27:04 SAMPLE t+45m running=37 paused=62 avail=637MB mwakes=4 failures=0 load=4.03 swap_used=80695MB
+2026-10-08T06:32:05 SAMPLE t+50m running=36 paused=63 avail=683MB mwakes=4 failures=0 load=5.63 swap_used=80668MB
+2026-10-08T06:33:10 TRAFFIC cell=v56 code=200 took=5.22s
+2026-10-08T06:37:07 SAMPLE t+55m running=37 paused=62 avail=701MB mwakes=5 failures=0 load=11.62 swap_used=81136MB
+2026-10-08T06:39:37 TRAFFIC cell=v67 code=200 took=7.71s
+2026-10-08T06:40:12 NOTE added /swap2.img (20G) at t+~57m: the 80G swapfile was 98.7% full at 784MB/cell, which would have had the soak measuring swap exhaustion rather than the rotation
+2026-10-08T06:42:08 SAMPLE t+60m running=37 paused=62 avail=701MB mwakes=5 failures=0 load=7.16 swap_used=80706MB
+2026-10-08T06:44:20 TRAFFIC cell=v78 code=200 took=0.1s
+2026-10-08T06:47:09 SAMPLE t+65m running=37 paused=62 avail=589MB mwakes=5 failures=0 load=3.86 swap_used=80568MB
+2026-10-08T06:48:41 TRAFFIC cell=v67 code=200 took=0.15s
+2026-10-08T06:52:13 SAMPLE t+70m running=38 paused=61 avail=782MB mwakes=6 failures=0 load=4.93 swap_used=80723MB
+2026-10-08T06:56:25 TRAFFIC cell=v78 code=200 took=0.72s
+2026-10-08T06:57:14 SAMPLE t+75m running=38 paused=61 avail=478MB mwakes=6 failures=0 load=5.43 swap_used=80586MB
+2026-10-08T07:02:16 TRAFFIC cell=v45 code=200 took=0.11s
+2026-10-08T07:02:16 SAMPLE t+80m running=37 paused=62 avail=676MB mwakes=7 failures=0 load=5.51 swap_used=80648MB
+2026-10-08T07:07:17 SAMPLE t+85m running=35 paused=64 avail=729MB mwakes=7 failures=0 load=5.87 swap_used=80817MB
+2026-10-08T07:08:25 TRAFFIC cell=v89 code=200 took=1.86s
+2026-10-08T07:12:19 SAMPLE t+90m running=35 paused=64 avail=615MB mwakes=8 failures=0 load=6.48 swap_used=80633MB
+2026-10-08T07:15:45 TRAFFIC cell=v89 code=200 took=1.18s
+2026-10-08T07:17:20 SAMPLE t+95m running=34 paused=65 avail=561MB mwakes=8 failures=0 load=6.19 swap_used=80545MB
+2026-10-08T07:21:18 TRAFFIC cell=v67 code=200 took=1.77s
+2026-10-08T07:22:22 SAMPLE t+100m running=35 paused=64 avail=606MB mwakes=9 failures=0 load=4.74 swap_used=80934MB
+2026-10-08T07:27:23 SAMPLE t+105m running=33 paused=66 avail=554MB mwakes=9 failures=0 load=4.14 swap_used=80615MB
+2026-10-08T07:27:59 TRAFFIC cell=v56 code=200 took=5.89s
+2026-10-08T07:32:25 SAMPLE t+110m running=34 paused=65 avail=631MB mwakes=10 failures=0 load=4.52 swap_used=80532MB
+2026-10-08T07:35:11 TRAFFIC cell=v34 code=200 took=5.13s
+2026-10-08T07:37:26 SAMPLE t+115m running=34 paused=65 avail=709MB mwakes=10 failures=0 load=3.08 swap_used=80552MB
+2026-10-08T07:41:24 TRAFFIC cell=v56 code=200 took=0.08s
+2026-10-08T07:42:28 SAMPLE t+120m running=35 paused=64 avail=504MB mwakes=11 failures=0 load=4.48 swap_used=80494MB
+2026-10-08T07:47:29 SAMPLE t+125m running=35 paused=64 avail=606MB mwakes=11 failures=0 load=3.34 swap_used=80344MB
+2026-10-08T07:47:46 TRAFFIC cell=v89 code=200 took=1.68s
+2026-10-08T07:52:19 TRAFFIC cell=v56 code=200 took=0.3s
+2026-10-08T07:52:31 SAMPLE t+130m running=35 paused=64 avail=828MB mwakes=12 failures=0 load=5.23 swap_used=80573MB
+2026-10-08T07:57:32 SAMPLE t+135m running=33 paused=66 avail=746MB mwakes=12 failures=0 load=2.18 swap_used=80393MB
+2026-10-08T07:57:46 TRAFFIC cell=v78 code=200 took=0.08s
+2026-10-08T08:02:22 TRAFFIC cell=v3 code=200 took=5.89s
+2026-10-08T08:02:33 SAMPLE t+140m running=34 paused=65 avail=487MB mwakes=13 failures=0 load=3.40 swap_used=80782MB
+2026-10-08T08:07:34 SAMPLE t+145m running=33 paused=66 avail=715MB mwakes=13 failures=0 load=3.11 swap_used=80784MB
+2026-10-08T08:09:55 TRAFFIC cell=v45 code=200 took=0.09s
+2026-10-08T08:12:35 SAMPLE t+150m running=34 paused=65 avail=600MB mwakes=14 failures=0 load=2.09 swap_used=80509MB
+2026-10-08T08:16:04 TRAFFIC cell=v78 code=200 took=0.53s
+2026-10-08T08:17:37 SAMPLE t+155m running=33 paused=66 avail=520MB mwakes=14 failures=0 load=1.57 swap_used=80317MB
+2026-10-08T08:22:38 SAMPLE t+160m running=34 paused=65 avail=631MB mwakes=15 failures=0 load=3.40 swap_used=80586MB
+2026-10-08T08:23:53 TRAFFIC cell=v11 code=200 took=0.1s
+2026-10-08T08:27:39 SAMPLE t+165m running=32 paused=67 avail=748MB mwakes=15 failures=0 load=2.25 swap_used=80649MB
+2026-10-08T08:31:49 TRAFFIC cell=v45 code=200 took=0.11s
+2026-10-08T08:32:41 SAMPLE t+170m running=32 paused=67 avail=861MB mwakes=16 failures=0 load=3.89 swap_used=80397MB
+2026-10-08T08:37:24 TRAFFIC cell=v11 code=200 took=2.65s
+2026-10-08T08:37:42 SAMPLE t+175m running=31 paused=68 avail=750MB mwakes=16 failures=0 load=2.96 swap_used=80653MB
+2026-10-08T08:42:19 TRAFFIC cell=v34 code=200 took=0.14s
+2026-10-08T08:42:43 SAMPLE t+180m running=31 paused=68 avail=510MB mwakes=17 failures=0 load=2.41 swap_used=80234MB
+2026-10-08T08:47:44 SAMPLE t+185m running=30 paused=69 avail=767MB mwakes=17 failures=0 load=2.04 swap_used=80432MB
+2026-10-08T08:48:33 TRAFFIC cell=v45 code=200 took=0.08s
+2026-10-08T08:52:45 SAMPLE t+190m running=31 paused=68 avail=630MB mwakes=18 failures=0 load=2.72 swap_used=80240MB
+2026-10-08T08:56:34 TRAFFIC cell=v22 code=200 took=4.8s
+2026-10-08T08:57:47 SAMPLE t+195m running=30 paused=69 avail=607MB mwakes=18 failures=0 load=2.84 swap_used=80423MB
+2026-10-08T09:02:48 SAMPLE t+200m running=31 paused=68 avail=888MB mwakes=19 failures=0 load=3.43 swap_used=80928MB
+2026-10-08T09:03:18 TRAFFIC cell=v3 code=200 took=0.07s
+2026-10-08T09:07:49 SAMPLE t+205m running=30 paused=69 avail=865MB mwakes=19 failures=0 load=2.30 swap_used=80623MB
+2026-10-08T09:08:23 TRAFFIC cell=v45 code=200 took=0.67s
+2026-10-08T09:12:50 SAMPLE t+210m running=31 paused=68 avail=703MB mwakes=20 failures=0 load=2.27 swap_used=80314MB
+2026-10-08T09:13:22 TRAFFIC cell=v56 code=200 took=0.07s
+2026-10-08T09:17:51 SAMPLE t+215m running=30 paused=69 avail=843MB mwakes=20 failures=0 load=1.79 swap_used=80498MB
+2026-10-08T09:19:32 TRAFFIC cell=v67 code=200 took=4.59s
+2026-10-08T09:22:52 SAMPLE t+220m running=31 paused=68 avail=687MB mwakes=21 failures=0 load=1.77 swap_used=80585MB
+2026-10-08T09:23:33 TRAFFIC cell=v78 code=200 took=1.16s
+2026-10-08T09:27:53 SAMPLE t+225m running=30 paused=69 avail=624MB mwakes=21 failures=0 load=2.24 swap_used=80479MB
+2026-10-08T09:29:23 TRAFFIC cell=v34 code=200 took=0.83s
+2026-10-08T09:32:55 SAMPLE t+230m running=31 paused=68 avail=660MB mwakes=22 failures=0 load=4.15 swap_used=80337MB
+2026-10-08T09:34:48 TRAFFIC cell=v34 code=200 took=0.88s
+2026-10-08T09:37:56 SAMPLE t+235m running=30 paused=69 avail=846MB mwakes=22 failures=0 load=6.55 swap_used=80518MB
+2026-10-08T09:39:08 TRAFFIC cell=v89 code=200 took=1.01s
+2026-10-08T09:42:57 SAMPLE t+240m running=31 paused=68 avail=657MB mwakes=23 failures=0 load=8.90 swap_used=80650MB
+2026-10-08T09:46:54 TRAFFIC cell=v22 code=200 took=0.08s
+2026-10-08T09:47:58 SAMPLE t+245m running=29 paused=70 avail=697MB mwakes=23 failures=0 load=8.36 swap_used=80586MB
+2026-10-08T09:52:21 TRAFFIC cell=v89 code=200 took=0.08s
+2026-10-08T09:52:59 SAMPLE t+250m running=30 paused=69 avail=559MB mwakes=24 failures=0 load=7.91 swap_used=80416MB
+2026-10-08T09:58:01 SAMPLE t+255m running=29 paused=70 avail=868MB mwakes=24 failures=0 load=9.93 swap_used=80700MB
+2026-10-08T10:00:06 TRAFFIC cell=v97 code=200 took=0.1s
+2026-10-08T10:03:02 SAMPLE t+260m running=29 paused=70 avail=743MB mwakes=25 failures=0 load=7.07 swap_used=80652MB
+2026-10-08T10:07:50 TRAFFIC cell=v34 code=200 took=0.08s
+2026-10-08T10:08:03 SAMPLE t+265m running=28 paused=71 avail=960MB mwakes=25 failures=0 load=8.59 swap_used=80790MB
+2026-10-08T10:12:13 TRAFFIC cell=v56 code=200 took=0.07s
+2026-10-08T10:13:04 SAMPLE t+270m running=27 paused=72 avail=1169MB mwakes=26 failures=0 load=7.97 swap_used=80903MB
+2026-10-08T10:18:06 SAMPLE t+275m running=26 paused=73 avail=1412MB mwakes=26 failures=0 load=6.34 swap_used=81091MB
+2026-10-08T10:18:07 TRAFFIC cell=v67 code=200 took=0.36s
+2026-10-08T10:23:02 TRAFFIC cell=v22 code=200 took=0.68s
+2026-10-08T10:23:07 SAMPLE t+280m running=26 paused=73 avail=1133MB mwakes=27 failures=0 load=6.72 swap_used=81134MB
+2026-10-08T10:28:08 SAMPLE t+285m running=24 paused=75 avail=1544MB mwakes=27 failures=0 load=6.57 swap_used=81371MB
+2026-10-08T10:28:34 TRAFFIC cell=v22 code=200 took=0.08s
+2026-10-08T10:33:09 SAMPLE t+290m running=23 paused=76 avail=1478MB mwakes=28 failures=0 load=5.76 swap_used=81329MB
+2026-10-08T10:34:09 TRAFFIC cell=v56 code=200 took=2.65s
+2026-10-08T10:38:11 SAMPLE t+295m running=24 paused=75 avail=976MB mwakes=29 failures=0 load=6.78 swap_used=80972MB
+2026-10-08T10:41:25 TRAFFIC cell=v67 code=200 took=0.08s
+2026-10-08T10:43:12 SAMPLE t+300m running=23 paused=76 avail=1019MB mwakes=29 failures=0 load=6.57 swap_used=80975MB
+2026-10-08T10:46:04 TRAFFIC cell=v78 code=200 took=0.1s
+2026-10-08T10:48:13 SAMPLE t+305m running=24 paused=75 avail=698MB mwakes=30 failures=0 load=9.09 swap_used=80746MB
+2026-10-08T10:53:14 SAMPLE t+310m running=23 paused=76 avail=859MB mwakes=30 failures=0 load=8.32 swap_used=80905MB
+2026-10-08T10:53:29 TRAFFIC cell=v34 code=200 took=3.25s
+2026-10-08T10:58:16 SAMPLE t+315m running=24 paused=75 avail=876MB mwakes=31 failures=0 load=8.70 swap_used=81012MB
+2026-10-08T11:01:01 TRAFFIC cell=v78 code=200 took=0.78s
+2026-10-08T11:03:17 SAMPLE t+320m running=23 paused=76 avail=962MB mwakes=31 failures=0 load=6.51 swap_used=81055MB
+2026-10-08T11:05:21 TRAFFIC cell=v97 code=200 took=0.09s
+2026-10-08T11:08:18 SAMPLE t+325m running=24 paused=75 avail=743MB mwakes=32 failures=0 load=3.58 swap_used=80823MB
+2026-10-08T11:12:53 TRAFFIC cell=v67 code=200 took=1.91s
+2026-10-08T11:13:19 SAMPLE t+330m running=23 paused=76 avail=884MB mwakes=32 failures=0 load=3.96 swap_used=80874MB
+2026-10-08T11:18:21 SAMPLE t+335m running=22 paused=77 avail=1223MB mwakes=33 failures=0 load=1.53 swap_used=80848MB
+2026-10-08T11:19:02 TRAFFIC cell=v34 code=200 took=0.08s
+2026-10-08T11:23:22 SAMPLE t+340m running=22 paused=77 avail=742MB mwakes=34 failures=0 load=1.91 swap_used=80599MB
+2026-10-08T11:23:33 TRAFFIC cell=v78 code=200 took=4.43s
+2026-10-08T11:28:16 TRAFFIC cell=v89 code=200 took=0.12s
+2026-10-08T11:28:23 SAMPLE t+345m running=22 paused=77 avail=1235MB mwakes=34 failures=0 load=3.22 swap_used=81115MB
+2026-10-08T11:33:24 SAMPLE t+350m running=21 paused=78 avail=1169MB mwakes=35 failures=0 load=1.47 swap_used=81121MB
+2026-10-08T11:34:35 TRAFFIC cell=v97 code=200 took=1.3s
+2026-10-08T11:38:25 SAMPLE t+355m running=20 paused=79 avail=1494MB mwakes=35 failures=0 load=0.72 swap_used=81247MB
+2026-10-08T11:42:17 TRAFFIC cell=v89 code=200 took=0.96s
+2026-10-08T11:43:26 SAMPLE t+360m running=21 paused=78 avail=923MB mwakes=36 failures=0 load=1.02 swap_used=80705MB
+2026-10-08T11:48:27 SAMPLE t+365m running=20 paused=79 avail=1176MB mwakes=36 failures=0 load=0.56 swap_used=81021MB
+2026-10-08T11:48:34 TRAFFIC cell=v22 code=200 took=0.08s
+2026-10-08T11:53:28 SAMPLE t+370m running=20 paused=79 avail=1413MB mwakes=37 failures=0 load=1.49 swap_used=81411MB
+2026-10-08T11:54:53 TRAFFIC cell=v22 code=200 took=0.69s
+2026-10-08T11:58:29 SAMPLE t+375m running=20 paused=79 avail=1309MB mwakes=38 failures=0 load=1.04 swap_used=81226MB
+2026-10-08T11:59:15 TRAFFIC cell=v11 code=200 took=0.08s
+2026-10-08T12:03:29 TRAFFIC cell=v34 code=200 took=0.07s
+2026-10-08T12:03:30 SAMPLE t+380m running=19 paused=80 avail=1562MB mwakes=38 failures=0 load=1.01 swap_used=81407MB
+2026-10-08T12:08:31 SAMPLE t+385m running=19 paused=80 avail=857MB mwakes=39 failures=0 load=0.67 swap_used=80926MB
+2026-10-08T12:09:17 TRAFFIC cell=v56 code=200 took=3.32s
+2026-10-08T12:13:32 SAMPLE t+390m running=19 paused=80 avail=1090MB mwakes=39 failures=0 load=1.88 swap_used=81317MB
+2026-10-08T12:16:39 TRAFFIC cell=v97 code=200 took=0.57s
+2026-10-08T12:18:33 SAMPLE t+395m running=20 paused=79 avail=895MB mwakes=40 failures=0 load=1.88 swap_used=80806MB
+2026-10-08T12:22:05 TRAFFIC cell=v78 code=200 took=0.08s
+2026-10-08T12:23:35 SAMPLE t+400m running=19 paused=80 avail=789MB mwakes=41 failures=0 load=1.94 swap_used=80806MB
+2026-10-08T12:27:43 TRAFFIC cell=v89 code=200 took=0.09s
+2026-10-08T12:28:36 SAMPLE t+405m running=18 paused=81 avail=1233MB mwakes=41 failures=0 load=2.11 swap_used=81047MB
+2026-10-08T12:31:52 TRAFFIC cell=v45 code=200 took=0.29s
+2026-10-08T12:33:37 SAMPLE t+410m running=19 paused=80 avail=617MB mwakes=42 failures=0 load=5.43 swap_used=80668MB
+2026-10-08T12:36:03 TRAFFIC cell=v97 code=200 took=0.07s
+2026-10-08T12:38:38 SAMPLE t+415m running=17 paused=82 avail=1643MB mwakes=42 failures=0 load=3.20 swap_used=81560MB
+2026-10-08T12:40:48 TRAFFIC cell=v97 code=200 took=1.98s
+2026-10-08T12:43:39 SAMPLE t+420m running=17 paused=83 avail=1282MB mwakes=43 failures=0 load=1.43 swap_used=81965MB
+2026-10-08T12:45:48 TRAFFIC cell=v78 code=200 took=0.08s
+2026-10-08T12:48:40 SAMPLE t+425m running=16 paused=84 avail=1772MB mwakes=43 failures=0 load=0.37 swap_used=82380MB
+2026-10-08T12:51:59 TRAFFIC cell=v97 code=200 took=0.09s
+2026-10-08T12:53:41 SAMPLE t+430m running=16 paused=85 avail=1047MB mwakes=44 failures=0 load=1.60 swap_used=82677MB
+2026-10-08T12:56:20 TRAFFIC cell=v3 code=200 took=2.65s
+2026-10-08T12:58:42 SAMPLE t+435m running=18 paused=84 avail=863MB mwakes=45 failures=0 load=2.08 swap_used=83381MB
+2026-10-08T13:03:23 TRAFFIC cell=v56 code=200 took=0.65s
+2026-10-08T13:03:43 SAMPLE t+440m running=16 paused=86 avail=2026MB mwakes=45 failures=0 load=0.70 swap_used=84397MB
+2026-10-08T13:08:44 SAMPLE t+445m running=16 paused=86 avail=1742MB mwakes=46 failures=0 load=1.31 swap_used=84057MB
+2026-10-08T13:10:18 TRAFFIC cell=v97 code=200 took=0.09s
+2026-10-08T13:13:45 SAMPLE t+450m running=16 paused=86 avail=1753MB mwakes=46 failures=0 load=0.41 swap_used=84107MB
+2026-10-08T13:16:58 TRAFFIC cell=v56 code=200 took=1.89s
+2026-10-08T13:18:46 SAMPLE t+455m running=16 paused=86 avail=1488MB mwakes=47 failures=0 load=0.79 swap_used=84006MB
+2026-10-08T13:23:47 SAMPLE t+460m running=17 paused=85 avail=969MB mwakes=48 failures=0 load=0.85 swap_used=83498MB
+2026-10-08T13:23:48 TRAFFIC cell=v56 code=200 took=1.0s
+2026-10-08T13:28:48 SAMPLE t+465m running=16 paused=86 avail=1509MB mwakes=48 failures=0 load=1.12 swap_used=83794MB
+2026-10-08T13:30:38 TRAFFIC cell=v97 code=200 took=1.09s
+2026-10-08T13:33:49 SAMPLE t+470m running=17 paused=86 avail=1082MB mwakes=49 failures=0 load=1.38 swap_used=84144MB
+2026-10-08T13:38:04 TRAFFIC cell=v78 code=200 took=0.09s
+2026-10-08T13:38:50 SAMPLE t+475m running=16 paused=87 avail=1611MB mwakes=49 failures=0 load=2.97 swap_used=84854MB
+2026-10-08T13:43:52 SAMPLE t+480m running=15 paused=88 avail=1878MB mwakes=49 failures=0 load=3.71 swap_used=85176MB
+2026-10-08T13:44:18 TRAFFIC cell=v56 code=200 took=0.08s
+2026-10-08T13:48:52 SAMPLE t+485m running=15 paused=88 avail=1822MB mwakes=49 failures=0 load=3.22 swap_used=85171MB
+2026-10-08T13:49:08 TRAFFIC cell=v67 code=200 took=2.97s
+2026-10-08T13:53:53 SAMPLE t+490m running=16 paused=87 avail=1467MB mwakes=49 failures=0 load=1.93 swap_used=84754MB
+2026-10-08T13:57:08 TRAFFIC cell=v78 code=200 took=1.31s
+2026-10-08T13:58:54 SAMPLE t+495m running=16 paused=87 avail=1371MB mwakes=49 failures=0 load=1.50 swap_used=84714MB
+2026-10-08T14:03:56 SAMPLE t+500m running=16 paused=87 avail=1356MB mwakes=49 failures=0 load=0.40 swap_used=84622MB
+2026-10-08T14:04:08 TRAFFIC cell=v45 code=200 took=0.08s
+2026-10-08T14:08:57 SAMPLE t+505m running=16 paused=87 avail=1172MB mwakes=49 failures=0 load=0.61 swap_used=84615MB
+2026-10-08T14:09:08 TRAFFIC cell=v56 code=200 took=2.15s
+2026-10-08T14:13:15 TRAFFIC cell=v56 code=200 took=0.07s
+2026-10-08T14:13:57 SAMPLE t+510m running=16 paused=87 avail=1156MB mwakes=49 failures=0 load=0.42 swap_used=84590MB
+2026-10-08T14:18:58 SAMPLE t+515m running=16 paused=87 avail=1292MB mwakes=49 failures=0 load=1.16 swap_used=84562MB
+2026-10-08T14:20:38 TRAFFIC cell=v78 code=200 took=1.46s
+2026-10-08T14:23:59 SAMPLE t+520m running=16 paused=87 avail=1289MB mwakes=49 failures=0 load=0.45 swap_used=84549MB
+2026-10-08T14:27:30 TRAFFIC cell=v78 code=200 took=0.07s
+2026-10-08T14:29:01 SAMPLE t+525m running=16 paused=87 avail=1310MB mwakes=49 failures=0 load=0.37 swap_used=84525MB
+2026-10-08T14:31:43 TRAFFIC cell=v97 code=200 took=0.3s
+2026-10-08T14:34:02 SAMPLE t+530m running=16 paused=87 avail=1186MB mwakes=49 failures=0 load=0.66 swap_used=84501MB
+2026-10-08T14:39:04 SAMPLE t+535m running=16 paused=87 avail=1314MB mwakes=49 failures=0 load=1.34 swap_used=84496MB
+2026-10-08T14:39:33 TRAFFIC cell=v45 code=200 took=1.62s
+2026-10-08T14:44:06 SAMPLE t+540m running=16 paused=87 avail=1276MB mwakes=49 failures=0 load=1.86 swap_used=84493MB
+2026-10-08T14:45:14 TRAFFIC cell=v97 code=200 took=0.14s
+2026-10-08T14:49:07 SAMPLE t+545m running=16 paused=87 avail=1171MB mwakes=49 failures=0 load=0.78 swap_used=84488MB
+2026-10-08T14:49:58 TRAFFIC cell=v78 code=200 took=1.88s
+2026-10-08T14:54:09 SAMPLE t+550m running=16 paused=87 avail=1193MB mwakes=49 failures=0 load=1.37 swap_used=84463MB
+2026-10-08T14:55:46 TRAFFIC cell=v89 code=200 took=0.13s
+2026-10-08T14:59:10 SAMPLE t+555m running=16 paused=87 avail=1161MB mwakes=49 failures=0 load=2.39 swap_used=84416MB
+2026-10-08T15:03:46 TRAFFIC cell=v3 code=200 took=0.1s
+2026-10-08T15:04:11 SAMPLE t+560m running=16 paused=87 avail=994MB mwakes=49 failures=0 load=1.42 swap_used=84405MB
+2026-10-08T15:09:00 TRAFFIC cell=v89 code=200 took=0.12s
+2026-10-08T15:09:13 SAMPLE t+565m running=16 paused=87 avail=1022MB mwakes=49 failures=0 load=1.91 swap_used=84407MB
+2026-10-08T15:14:14 SAMPLE t+570m running=16 paused=87 avail=1158MB mwakes=49 failures=0 load=0.82 swap_used=84409MB
+2026-10-08T15:15:09 TRAFFIC cell=v3 code=200 took=2.02s
+2026-10-08T15:19:15 SAMPLE t+575m running=17 paused=86 avail=1070MB mwakes=50 failures=0 load=1.09 swap_used=84412MB
+2026-10-08T15:20:14 TRAFFIC cell=v34 code=200 took=0.09s
+2026-10-08T15:24:18 SAMPLE t+580m running=15 paused=88 avail=1647MB mwakes=50 failures=0 load=0.69 swap_used=85230MB
+2026-10-08T15:24:56 TRAFFIC cell=v97 code=200 took=0.09s
+2026-10-08T15:29:19 SAMPLE t+585m running=15 paused=88 avail=1630MB mwakes=51 failures=0 load=1.45 swap_used=85077MB
+2026-10-08T15:29:45 TRAFFIC cell=v34 code=200 took=0.09s
+2026-10-08T15:33:53 TRAFFIC cell=v22 code=200 took=1.42s
+2026-10-08T15:34:21 SAMPLE t+590m running=15 paused=88 avail=1795MB mwakes=51 failures=0 load=1.23 swap_used=85136MB
+2026-10-08T15:39:22 SAMPLE t+595m running=15 paused=88 avail=1592MB mwakes=51 failures=0 load=0.79 swap_used=85121MB
+2026-10-08T15:41:43 TRAFFIC cell=v67 code=200 took=1.79s
+2026-10-08T15:44:23 SAMPLE t+600m running=15 paused=88 avail=1608MB mwakes=51 failures=0 load=0.82 swap_used=85117MB
+2026-10-08T15:46:58 TRAFFIC cell=v22 code=200 took=0.89s
+2026-10-08T15:49:24 SAMPLE t+605m running=15 paused=88 avail=1625MB mwakes=51 failures=0 load=0.90 swap_used=85098MB
+2026-10-08T15:51:23 TRAFFIC cell=v45 code=200 took=0.07s
+2026-10-08T15:54:25 SAMPLE t+610m running=15 paused=88 avail=1723MB mwakes=51 failures=0 load=0.64 swap_used=85088MB
+2026-10-08T15:58:39 TRAFFIC cell=v56 code=200 took=0.11s
+2026-10-08T15:59:26 SAMPLE t+615m running=15 paused=88 avail=1641MB mwakes=51 failures=0 load=1.35 swap_used=85062MB
+2026-10-08T16:04:27 SAMPLE t+620m running=15 paused=88 avail=1443MB mwakes=51 failures=0 load=0.62 swap_used=85013MB
+2026-10-08T16:04:33 TRAFFIC cell=v11 code=200 took=0.63s
+2026-10-08T16:09:25 TRAFFIC cell=v11 code=200 took=0.08s
+2026-10-08T16:09:28 SAMPLE t+625m running=16 paused=87 avail=935MB mwakes=52 failures=0 load=0.96 swap_used=84452MB
+2026-10-08T16:14:29 SAMPLE t+630m running=15 paused=88 avail=1471MB mwakes=52 failures=0 load=0.70 swap_used=84735MB
+2026-10-08T16:15:20 TRAFFIC cell=v89 code=200 took=0.07s
+2026-10-08T16:19:30 SAMPLE t+635m running=16 paused=87 avail=1003MB mwakes=53 failures=0 load=1.22 swap_used=84169MB
+2026-10-08T16:19:43 TRAFFIC cell=v45 code=200 took=0.07s
+2026-10-08T16:24:03 TRAFFIC cell=v22 code=200 took=0.77s
+2026-10-08T16:24:31 SAMPLE t+640m running=15 paused=88 avail=1234MB mwakes=53 failures=0 load=0.61 swap_used=84442MB
+2026-10-08T16:29:32 SAMPLE t+645m running=15 paused=88 avail=1095MB mwakes=54 failures=0 load=3.33 swap_used=84230MB
+2026-10-08T16:31:05 TRAFFIC cell=v97 code=200 took=0.07s
+2026-10-08T16:34:33 SAMPLE t+650m running=15 paused=88 avail=1179MB mwakes=55 failures=0 load=6.34 swap_used=84430MB
+2026-10-08T16:36:13 TRAFFIC cell=v67 code=200 took=0.69s
+2026-10-08T16:39:34 SAMPLE t+655m running=14 paused=89 avail=1485MB mwakes=55 failures=0 load=6.82 swap_used=84580MB
+2026-10-08T16:43:43 TRAFFIC cell=v97 code=200 took=1.86s
+2026-10-08T16:44:35 SAMPLE t+660m running=15 paused=88 avail=1021MB mwakes=56 failures=0 load=6.46 swap_used=84028MB
+2026-10-08T16:49:36 SAMPLE t+665m running=14 paused=89 avail=1219MB mwakes=56 failures=0 load=6.98 swap_used=84347MB
+2026-10-08T16:50:33 TRAFFIC cell=v78 code=200 took=0.09s
+2026-10-08T16:54:37 SAMPLE t+670m running=14 paused=89 avail=1143MB mwakes=57 failures=0 load=6.45 swap_used=84269MB
+2026-10-08T16:54:53 TRAFFIC cell=v22 code=200 took=0.09s
+2026-10-08T16:59:38 SAMPLE t+675m running=15 paused=88 avail=950MB mwakes=58 failures=0 load=7.03 swap_used=83987MB
+2026-10-08T17:00:49 TRAFFIC cell=v78 code=200 took=0.07s
+2026-10-08T17:04:39 SAMPLE t+680m running=14 paused=89 avail=1233MB mwakes=58 failures=0 load=6.11 swap_used=84277MB
+2026-10-08T17:07:38 TRAFFIC cell=v67 code=200 took=0.41s
+2026-10-08T17:09:40 SAMPLE t+685m running=15 paused=88 avail=929MB mwakes=59 failures=0 load=6.76 swap_used=83927MB
+2026-10-08T17:14:20 TRAFFIC cell=v97 code=200 took=0.08s
+2026-10-08T17:14:41 SAMPLE t+690m running=14 paused=89 avail=1115MB mwakes=59 failures=0 load=6.17 swap_used=84196MB
+2026-10-08T17:19:42 SAMPLE t+695m running=14 paused=89 avail=1232MB mwakes=60 failures=0 load=6.44 swap_used=84144MB
+2026-10-08T17:19:53 TRAFFIC cell=v89 code=200 took=0.88s
+2026-10-08T17:24:43 SAMPLE t+700m running=14 paused=89 avail=1161MB mwakes=61 failures=0 load=7.16 swap_used=83946MB
+2026-10-08T17:27:28 TRAFFIC cell=v34 code=200 took=0.09s
+2026-10-08T17:29:44 SAMPLE t+705m running=13 paused=90 avail=1648MB mwakes=61 failures=0 load=4.34 swap_used=84271MB
+2026-10-08T17:34:40 TRAFFIC cell=v89 code=200 took=0.07s
+2026-10-08T17:34:46 SAMPLE t+710m running=13 paused=90 avail=1579MB mwakes=62 failures=0 load=3.26 swap_used=84101MB
+2026-10-08T17:38:53 TRAFFIC cell=v67 code=200 took=1.66s
+2026-10-08T17:39:47 SAMPLE t+715m running=14 paused=89 avail=933MB mwakes=63 failures=0 load=12.39 swap_used=83604MB
+2026-10-08T17:43:53 TRAFFIC cell=v34 code=200 took=0.09s
+2026-10-08T17:44:48 SAMPLE t+720m running=13 paused=90 avail=1463MB mwakes=63 failures=0 load=18.36 swap_used=83941MB
+2026-10-08T17:49:49 SAMPLE t+725m running=14 paused=89 avail=1073MB mwakes=64 failures=0 load=8.84 swap_used=83427MB
+2026-10-08T17:51:45 TRAFFIC cell=v3 code=200 took=0.07s
+2026-10-08T17:54:50 SAMPLE t+730m running=13 paused=90 avail=1407MB mwakes=64 failures=0 load=2.80 swap_used=83707MB
+2026-10-08T17:59:38 TRAFFIC cell=v3 code=200 took=0.09s
+2026-10-08T17:59:51 SAMPLE t+735m running=13 paused=90 avail=1199MB mwakes=65 failures=0 load=2.75 swap_used=83628MB
+2026-10-08T18:04:18 TRAFFIC cell=v3 code=200 took=0.08s
+2026-10-08T18:04:52 SAMPLE t+740m running=13 paused=90 avail=1072MB mwakes=66 failures=0 load=2.29 swap_used=83543MB
+2026-10-08T18:09:53 SAMPLE t+745m running=12 paused=91 avail=1409MB mwakes=66 failures=0 load=0.39 swap_used=83841MB
+2026-10-08T18:12:05 TRAFFIC cell=v34 code=200 took=0.1s
+2026-10-08T18:14:54 SAMPLE t+750m running=12 paused=91 avail=1540MB mwakes=67 failures=0 load=0.65 swap_used=83977MB
+2026-10-08T18:17:19 TRAFFIC cell=v89 code=200 took=0.08s
+2026-10-08T18:19:55 SAMPLE t+755m running=13 paused=90 avail=947MB mwakes=68 failures=0 load=1.29 swap_used=83466MB
+2026-10-08T18:23:40 TRAFFIC cell=v56 code=200 took=0.09s
+2026-10-08T18:24:56 SAMPLE t+760m running=12 paused=91 avail=1472MB mwakes=68 failures=0 load=0.45 swap_used=83914MB
+2026-10-08T18:28:53 TRAFFIC cell=v34 code=200 took=0.76s
+2026-10-08T18:29:57 SAMPLE t+765m running=12 paused=91 avail=1213MB mwakes=69 failures=0 load=1.03 swap_used=83584MB
+2026-10-08T18:34:58 SAMPLE t+770m running=13 paused=90 avail=822MB mwakes=70 failures=0 load=1.43 swap_used=83188MB
+2026-10-08T18:35:37 TRAFFIC cell=v56 code=200 took=0.09s
+2026-10-08T18:39:47 TRAFFIC cell=v34 code=200 took=0.7s
+2026-10-08T18:39:59 SAMPLE t+775m running=12 paused=91 avail=1378MB mwakes=70 failures=0 load=0.78 swap_used=83557MB
+2026-10-08T18:45:00 SAMPLE t+780m running=13 paused=90 avail=927MB mwakes=71 failures=0 load=0.72 swap_used=83216MB
+2026-10-08T18:46:59 TRAFFIC cell=v78 code=200 took=0.08s
+2026-10-08T18:50:01 SAMPLE t+785m running=12 paused=91 avail=1188MB mwakes=71 failures=0 load=0.52 swap_used=83539MB
+2026-10-08T18:54:08 TRAFFIC cell=v78 code=200 took=0.81s
+2026-10-08T18:55:02 SAMPLE t+790m running=12 paused=91 avail=1187MB mwakes=72 failures=0 load=0.66 swap_used=83465MB
+2026-10-08T19:00:04 SAMPLE t+795m running=12 paused=91 avail=1130MB mwakes=73 failures=0 load=0.70 swap_used=83407MB
+2026-10-08T19:01:23 TRAFFIC cell=v45 code=200 took=2.05s
+2026-10-08T19:05:05 SAMPLE t+800m running=11 paused=92 avail=1601MB mwakes=73 failures=0 load=0.98 swap_used=83719MB
+2026-10-08T19:08:54 TRAFFIC cell=v34 code=200 took=0.08s
+2026-10-08T19:10:06 SAMPLE t+805m running=12 paused=91 avail=1028MB mwakes=74 failures=0 load=1.25 swap_used=83282MB
+2026-10-08T19:15:07 SAMPLE t+810m running=12 paused=91 avail=911MB mwakes=75 failures=0 load=1.12 swap_used=83188MB
+2026-10-08T19:15:25 TRAFFIC cell=v11 code=200 took=3.37s
+2026-10-08T19:20:08 SAMPLE t+815m running=12 paused=91 avail=1330MB mwakes=75 failures=0 load=0.89 swap_used=83624MB
+2026-10-08T19:20:58 TRAFFIC cell=v34 code=200 took=1.48s
+2026-10-08T19:25:09 SAMPLE t+820m running=13 paused=90 avail=861MB mwakes=76 failures=0 load=0.98 swap_used=83265MB
+2026-10-08T19:27:19 TRAFFIC cell=v11 code=200 took=0.07s
+2026-10-08T19:30:10 SAMPLE t+825m running=13 paused=90 avail=805MB mwakes=77 failures=0 load=1.68 swap_used=83158MB
+2026-10-08T19:31:30 TRAFFIC cell=v3 code=200 took=0.07s
+2026-10-08T19:35:11 SAMPLE t+830m running=12 paused=91 avail=1362MB mwakes=77 failures=0 load=0.58 swap_used=83735MB
+2026-10-08T19:35:57 TRAFFIC cell=v22 code=200 took=3.26s
+2026-10-08T19:40:12 SAMPLE t+835m running=14 paused=89 avail=606MB mwakes=78 failures=0 load=1.06 swap_used=83407MB
+2026-10-08T19:41:40 TRAFFIC cell=v97 code=200 took=0.09s
+2026-10-08T19:45:13 SAMPLE t+840m running=13 paused=90 avail=1138MB mwakes=78 failures=0 load=1.21 swap_used=83706MB
+2026-10-08T19:48:38 TRAFFIC cell=v45 code=200 took=2.07s
+2026-10-08T19:50:14 SAMPLE t+845m running=13 paused=90 avail=1258MB mwakes=79 failures=0 load=0.50 swap_used=83580MB
+2026-10-08T19:53:28 TRAFFIC cell=v11 code=200 took=0.07s
+2026-10-08T19:55:14 SAMPLE t+850m running=14 paused=89 avail=888MB mwakes=80 failures=0 load=0.71 swap_used=83330MB
+2026-10-08T19:57:30 TRAFFIC cell=v67 code=200 took=0.08s
+2026-10-08T20:00:16 SAMPLE t+855m running=13 paused=90 avail=1184MB mwakes=80 failures=0 load=0.55 swap_used=83671MB
+2026-10-08T20:04:35 TRAFFIC cell=v3 code=200 took=0.07s
+2026-10-08T20:05:17 SAMPLE t+860m running=14 paused=89 avail=584MB mwakes=81 failures=0 load=1.12 swap_used=83336MB
+2026-10-08T20:10:18 SAMPLE t+865m running=14 paused=89 avail=703MB mwakes=82 failures=0 load=1.15 swap_used=83283MB
+2026-10-08T20:11:53 TRAFFIC cell=v89 code=200 took=4.42s
+2026-10-08T20:15:19 SAMPLE t+870m running=14 paused=89 avail=1176MB mwakes=82 failures=0 load=0.71 swap_used=83859MB
+2026-10-08T20:16:45 TRAFFIC cell=v78 code=200 took=0.07s
+2026-10-08T20:20:20 SAMPLE t+875m running=15 paused=88 avail=844MB mwakes=83 failures=0 load=1.26 swap_used=83407MB
+2026-10-08T20:24:00 TRAFFIC cell=v56 code=200 took=0.08s
+2026-10-08T20:25:21 SAMPLE t+880m running=13 paused=90 avail=1679MB mwakes=83 failures=0 load=0.58 swap_used=84153MB
+2026-10-08T20:29:04 TRAFFIC cell=v22 code=200 took=0.08s
+2026-10-08T20:30:22 SAMPLE t+885m running=13 paused=90 avail=1661MB mwakes=84 failures=0 load=1.01 swap_used=84109MB
+2026-10-08T20:35:23 SAMPLE t+890m running=13 paused=90 avail=1540MB mwakes=85 failures=0 load=2.51 swap_used=83948MB
+2026-10-08T20:36:50 TRAFFIC cell=v97 code=200 took=0.06s
+2026-10-08T20:40:24 SAMPLE t+895m running=12 paused=91 avail=1920MB mwakes=85 failures=0 load=2.01 swap_used=84312MB
+2026-10-08T20:43:03 TRAFFIC cell=v11 code=200 took=1.35s
+2026-10-08T20:45:25 SAMPLE t+900m running=13 paused=90 avail=1426MB mwakes=86 failures=0 load=0.95 swap_used=83899MB
+2026-10-08T20:45:25 sampling done; mwakes=86 failures=0
+2026-10-08T20:45:25 === maintenance wakes ===
+  05:53:04 v52 asleep_for=141h59m16s
+  06:04:13 v59 asleep_for=142h10m23s
+  06:15:08 v58 asleep_for=142h21m18s
+  06:25:55 v57 asleep_for=142h32m4s
+  06:36:41 v5 asleep_for=138h54m5s
+  06:47:37 v6 asleep_for=139h4m59s
+  06:58:32 v39 asleep_for=139h4m33s
+  07:09:11 v38 asleep_for=139h15m13s
+  07:19:42 v40 asleep_for=139h25m42s
+  07:30:01 v36 asleep_for=139h36m0s
+  07:40:31 v37 asleep_for=139h46m28s
+  07:51:00 v3 asleep_for=139h55m5s
+  08:01:09 v2 asleep_for=140h5m14s
+  08:11:27 v4 asleep_for=140h15m32s
+  08:21:46 v1 asleep_for=140h25m51s
+  08:31:50 v49 asleep_for=140h32m45s
+  08:41:50 v50 asleep_for=140h42m41s
+  08:51:45 v41 asleep_for=140h41m30s
+  09:01:39 v42 asleep_for=140h51m22s
+  09:11:36 v43 asleep_for=141h1m16s
+  09:21:40 v44 asleep_for=141h11m17s
+  09:31:35 v46 asleep_for=141h21m7s
+  09:41:30 v47 asleep_for=141h31m1s
+  09:51:15 v48 asleep_for=141h40m41s
+  10:00:59 v29 asleep_for=141h46m8s
+  10:10:41 v23 asleep_for=141h55m48s
+  10:19:55 v53 asleep_for=146h26m6s
+  10:29:05 v30 asleep_for=142h14m12s
+  10:38:05 v32 asleep_for=142h23m13s
+  10:47:06 v24 asleep_for=142h32m12s
+  10:56:06 v26 asleep_for=142h41m12s
+  11:05:09 v33 asleep_for=142h50m15s
+  11:14:04 v25 asleep_for=142h59m10s
+  11:22:54 v27 asleep_for=143h7m59s
+  11:31:45 v28 asleep_for=143h16m49s
+  11:40:30 v35 asleep_for=143h25m35s
+  11:49:15 v31 asleep_for=143h34m18s
+  11:57:50 v18 asleep_for=72h33m21s
+  12:06:25 v15 asleep_for=72h38m57s
+  12:15:00 v16 asleep_for=72h44m32s
+  12:23:29 v17 asleep_for=72h50m2s
+  12:31:59 v13 asleep_for=33h59m43s
+  12:40:24 p202696 asleep_for=33h54m45s
+  12:48:43 p202697 asleep_for=33h54m59s
+  12:57:09 bob asleep_for=33h56m52s
+  13:05:28 v55 asleep_for=29h52m14s
+  13:13:48 v54 asleep_for=29h39m39s
+  13:22:08 v60 asleep_for=29h40m58s
+  13:30:28 alice asleep_for=25h53m7s
+  15:17:23 v14 asleep_for=12h0m1s
+  15:25:38 v21 asleep_for=147h10m43s
+  16:09:18 v64 asleep_for=12h0m0s
+  16:17:33 v65 asleep_for=12h6m51s
+  16:25:48 v71 asleep_for=12h13m52s
+  16:33:58 v51 asleep_for=33h13m48s
+  16:42:08 v73 asleep_for=12h26m15s
+  16:50:18 v62 asleep_for=12h21m33s
+  16:58:28 v7 asleep_for=12h29m40s
+  17:06:38 v72 asleep_for=12h37m50s
+  17:14:48 v83 asleep_for=12h45m58s
+  17:22:58 v88 asleep_for=12h54m8s
+  17:31:03 v86 asleep_for=13h2m13s
+  17:39:03 v84 asleep_for=13h10m10s
+  17:47:08 v85 asleep_for=13h18m15s
+  17:55:08 v66 asleep_for=13h24m43s
+  18:03:03 v68 asleep_for=13h32m38s
+  18:10:58 v9 asleep_for=13h37m11s
+  18:18:53 v81 asleep_for=13h39m36s
+  18:26:48 v79 asleep_for=13h28m27s
+  18:34:43 v98 asleep_for=13h35m38s
+  18:42:38 v70 asleep_for=13h42m44s
+  18:50:33 v99 asleep_for=13h39m32s
+  18:58:23 v19 asleep_for=13h31m37s
+  19:06:13 v52 asleep_for=13h13m5s
+  19:14:03 v8 asleep_for=13h10m37s
+  19:21:58 v59 asleep_for=13h17m38s
+  19:29:53 v58 asleep_for=13h14m40s
+  19:37:58 v57 asleep_for=13h11m57s
+  19:46:03 v5 asleep_for=13h9m18s
+  19:54:03 v6 asleep_for=13h6m21s
+  20:02:03 v39 asleep_for=13h3m26s
+  20:10:08 v38 asleep_for=13h0m51s
+  20:18:18 v20 asleep_for=13h6m57s
+  20:26:13 v40 asleep_for=13h6m27s
+  20:34:08 v90 asleep_for=13h8m8s
+  20:42:03 v36 asleep_for=13h11m55s
+2026-10-08T20:45:25 === awake duration per maintenance wake ===
+  v52 05:53:04 -> 05:56:43
+  v59 06:04:13 -> 06:07:47
+  v58 06:15:08 -> 06:19:15
+  v57 06:25:55 -> 06:29:03
+  v5 06:36:41 -> 06:39:48
+  v39 06:58:32 -> 07:02:44
+  v38 07:09:11 -> 07:13:06
+  v40 07:19:42 -> 07:22:49
+  v36 07:30:01 -> 07:33:28
+  v3 07:51:00 -> 07:54:43
+  v2 08:01:09 -> 08:05:21
+  v4 08:11:27 -> 08:15:03
+  v1 08:21:46 -> 08:25:28
+  v49 08:31:50 -> 08:34:58
+  v50 08:41:50 -> 08:45:32
+  v41 08:51:45 -> 08:55:54
+  v42 09:01:39 -> 09:05:20
+  v43 09:11:36 -> 09:15:15
+  v37 07:40:31 -> 09:22:37
+  v44 09:21:40 -> 09:24:50
+  v46 09:31:35 -> 09:35:48
+  v6 06:47:37 -> 09:43:24
+  v47 09:41:30 -> 09:44:38
+  v48 09:51:15 -> 09:54:25
+  v29 10:00:59 -> 10:04:08
+  v23 10:10:41 -> 10:14:18
+  v53 10:19:55 -> 10:23:28
+  v30 10:29:05 -> 10:32:38
+  v32 10:38:05 -> 10:41:15
+  v24 10:47:06 -> 10:50:43
+  v26 10:56:06 -> 10:59:13
+  v33 11:05:09 -> 11:08:42
+  v25 11:14:04 -> 11:18:13
+  v27 11:22:54 -> 11:26:28
+  v28 11:31:45 -> 11:36:30
+  v35 11:40:30 -> 11:44:08
+  v31 11:49:15 -> 11:52:53
+  v18 11:57:50 -> 12:01:22
+  v15 12:06:25 -> 12:10:02
+  v16 12:15:00 -> 12:18:33
+  v17 12:23:29 -> 12:27:08
+  v13 12:31:59 -> 12:35:03
+  p202696 12:40:24 -> 12:44:53
+  p202697 12:48:43 -> 12:53:33
+  bob 12:57:09 -> 13:02:18
+  v55 13:05:28 -> 13:08:38
+  v54 13:13:48 -> 13:16:53
+  v60 13:22:08 -> 13:25:13
+  alice 13:30:28 -> 13:37:43
+  v14 15:17:23 -> 15:20:29
+  v21 15:25:38 -> 15:29:13
+  v64 16:09:18 -> 16:12:23
+  v65 16:17:33 -> 16:20:38
+  v71 16:25:48 -> 16:28:58
+  v51 16:33:58 -> 16:37:03
+  v73 16:42:08 -> 16:45:13
+  v62 16:50:18 -> 16:53:28
+  v7 16:58:28 -> 17:01:33
+  v72 17:06:38 -> 17:09:43
+  v83 17:14:48 -> 17:18:33
+  v88 17:22:58 -> 17:26:08
+  v86 17:31:03 -> 17:34:08
+  v84 17:39:03 -> 17:42:13
+  v85 17:47:08 -> 17:50:13
+  v66 17:55:08 -> 17:58:43
+  v68 18:03:03 -> 18:06:08
+  v9 18:10:58 -> 18:14:03
+  v81 18:18:53 -> 18:21:58
+  v79 18:26:48 -> 18:29:53
+  v98 18:34:43 -> 18:37:48
+  v70 18:42:38 -> 18:47:13
+  v99 18:50:33 -> 18:53:38
+  v19 18:58:23 -> 19:02:28
+  v52 19:06:13 -> 19:10:18
+  v8 19:14:03 -> 19:17:08
+  v59 19:21:58 -> 19:26:07
+  v58 19:29:53 -> 19:32:58
+  v57 19:37:58 -> 19:41:38
+  v5 19:46:03 -> 19:49:08
+  v6 19:54:03 -> 19:57:08
+  v39 20:02:03 -> 20:06:13
+  v38 20:10:08 -> 20:13:13
+  v20 20:18:18 -> 20:21:23
+  v40 20:26:13 -> 20:30:22
+  v90 20:34:08 -> 20:37:13
+2026-10-08T20:45:26 === schedule reader output (should be silent: stock cells have no user-facing jobs) ===
+  user-facing due times found: 0
+2026-10-08T20:45:26 === warnings and errors ===
+2026-10-08T20:45:26 === did the traffic cells ever take a rotation slot? (design says no) ===
+  v3 took 1 maintenance wakes
+  (nothing above = none of them did)
+SOAK-DONE

@@ -195,3 +195,65 @@ func TestMinAwakeAfterWake(t *testing.T) {
 		t.Fatalf("expected pause after MinAwake: %v", fr.calls)
 	}
 }
+
+// A CPU burst must delay hibernation, not restart the idle countdown. An idle
+// OpenClaw cell bursts to ~47 % of a core for a few seconds every couple of
+// minutes; when that reset LastActivity, any cell whose idle timeout was longer
+// than the gap between bursts could never hibernate at all.
+func TestCPUBurstDelaysSleepWithoutRestartingTheIdleClock(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-b": runtime.StateRunning},
+		netio: map[string]string{"oc-b": "1kB / 1kB"}, cpu: map[string]string{"oc-b": "2.00%"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, IdleCPUPct: 10, MaxPause: -1})
+	_ = reg.Put(registry.Cell{Name: "b", Container: "oc-b", Port: 1, IdleAfter: 10 * time.Minute})
+
+	s.ReconcileOnce(context.Background()) // baseline
+	// Nine quiet minutes with a burst every two, exactly the real pattern.
+	for i := 1; i <= 9; i++ {
+		now = now.Add(time.Minute)
+		fr.mu.Lock()
+		fr.cpu["oc-b"] = map[bool]string{true: "47.00%", false: "2.00%"}[i%2 == 0]
+		fr.mu.Unlock()
+		s.ReconcileOnce(context.Background())
+		if fr.has("pause oc-b") {
+			t.Fatalf("hibernated after %d min, inside the 10 min idle window", i)
+		}
+	}
+	// Past the window and quiet: it must sleep, despite the bursts along the way.
+	now = now.Add(2 * time.Minute)
+	fr.mu.Lock()
+	fr.cpu["oc-b"] = "2.00%"
+	fr.mu.Unlock()
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-b") {
+		t.Fatalf("CPU bursts restarted the idle clock: cell never hibernated. calls=%v", fr.calls)
+	}
+}
+
+// The gate still holds a cell awake while work is actually running.
+func TestSustainedCPUStillBlocksHibernation(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-c": runtime.StateRunning},
+		netio: map[string]string{"oc-c": "1kB / 1kB"}, cpu: map[string]string{"oc-c": "40.00%"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, IdleCPUPct: 10, MaxPause: -1})
+	_ = reg.Put(registry.Cell{Name: "c", Container: "oc-c", Port: 1, IdleAfter: time.Minute})
+
+	s.ReconcileOnce(context.Background())
+	now = now.Add(5 * time.Minute) // long past the idle window, but still working
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-c") {
+		t.Fatal("hibernated a cell that was still busy on CPU")
+	}
+	fr.mu.Lock()
+	fr.cpu["oc-c"] = "2.00%" // work finishes
+	fr.mu.Unlock()
+	now = now.Add(10 * time.Second)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-c") {
+		t.Fatalf("did not hibernate once the work stopped: %v", fr.calls)
+	}
+}
