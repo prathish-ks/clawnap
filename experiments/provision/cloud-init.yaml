@@ -81,9 +81,12 @@ runcmd:
   - systemctl daemon-reload && systemctl enable --now node_exporter
   # cAdvisor (pinned), loopback only
   - docker run -d --name cadvisor --restart=always -p 127.0.0.1:8081:8080 -v /:/rootfs:ro -v /var/run:/var/run:ro -v /sys:/sys:ro -v /var/lib/docker/:/var/lib/docker:ro --privileged --device=/dev/kmsg gcr.io/cadvisor/cadvisor:v0.60.6
-  # Swapfile for hibernated cells: about 0.8 GB per cell the host should hold
-  # (a reclaimed OpenClaw cell keeps ~150 MiB resident and puts ~700 MiB in
-  # swap). __SWAP_GB__ is substituted by provision-hetzner.sh (default 80).
+  # Swapfile for hibernated cells: 1 GB per cell the host should hold. A
+  # reclaimed cell keeps ~150 MiB resident and puts the rest here; measured
+  # 784 MiB per cell after booting a full fleet with the policy running, so do
+  # not size this to the steady state alone. A full swapfile does not fail
+  # loudly, it stops the host being able to reclaim.
+  # __SWAP_GB__ is substituted by provision-hetzner.sh (default 100).
   - fallocate -l __SWAP_GB__G /swap.img && chmod 600 /swap.img && mkswap /swap.img
   - echo "/swap.img none swap sw,pri=100 0 0" >> /etc/fstab && swapon -a
   - 'swapon --show | grep -q swap.img || echo "WARNING - swapfile not active" >&2'

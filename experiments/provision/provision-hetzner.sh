@@ -11,7 +11,9 @@ EXTRA=""; [ -n "${EXTRA_PUBKEY_FILE:-}" ] && EXTRA=$(cat "$EXTRA_PUBKEY_FILE")  
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 hcloud ssh-key describe fleet-key >/dev/null 2>&1 || hcloud ssh-key create --name fleet-key --public-key "$PUB"
-SWAP_GB=${SWAP_GB:-80}         # ~0.8 GB per hibernated cell; 80 GB holds ~100 cells
+SWAP_GB=${SWAP_GB:-100}        # 1 GB per cell. Measured 784 MiB/cell after a full-fleet
+                               # boot, so 80 GB for 100 cells ran 98.7 % full, which silently
+                               # stops the headroom policy being able to reclaim at all.
 python3 - "$HERE/cloud-init.yaml" "$PUB" "$EXTRA" "$SWAP_GB" > /tmp/fleet-cloud-init.yaml <<'PY'
 import sys
 src, pub, extra, swap = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
