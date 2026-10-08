@@ -40,7 +40,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: go build -trimpath -ldflags="-s -w" -o clawnap-linux-${{ matrix.goarch }} ./cmd/clawnap
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: clawnap-linux-${{ matrix.goarch }}
           path: clawnap-linux-${{ matrix.goarch }}
