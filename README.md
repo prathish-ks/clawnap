@@ -94,8 +94,8 @@ theirs to set, not the host's to change.
 The reference setup is Ubuntu 24.04 with Docker, a swapfile, and clawnap as a systemd service. [experiments/provision/cloud-init.yaml](experiments/provision/cloud-init.yaml) does all of it for a Hetzner cloud server; by hand it is:
 
 ```bash
-# 1. a swapfile for the cold tier, ~0.7 GB per cell you plan to hold (measured 66–68 GB for 100 cells; no zram)
-fallocate -l 80G /swap.img && chmod 600 /swap.img && mkswap /swap.img
+# 1. a swapfile for the cold tier: 1 GB per cell you plan to hold, and do not undersize it (see below; no zram)
+fallocate -l 100G /swap.img && chmod 600 /swap.img && mkswap /swap.img
 echo "/swap.img none swap sw,pri=100 0 0" >> /etc/fstab && swapon -a
 
 # 2. the daemon
@@ -123,10 +123,29 @@ clawnap check                            # read-only security inspection of host
 Four numbers describe a host. The daemon flags that set them, and the rule that ties them together (every term measured on the reference host):
 
 ```
-RAM ≈ 1 GB (OS) + 65 MiB × cold cells + 300 MiB × warm cells
-      + 0.8 GB × active cells (uncapped residents: tenants in a conversation)
-      + 0.8 GB × cold wakes you want at full speed at once (a woken cell holds ~0.8 GB through its post-thaw window; the page-in itself is ~0.3 GB)
+RAM  ≈ 1 GB (OS) + 65 MiB × cold cells + 300 MiB × warm cells
+       + 0.8 GB × active cells (uncapped residents: tenants in a conversation)
+       + 0.8 GB × cold wakes you want at full speed at once (a woken cell holds ~0.8 GB through its post-thaw window; the page-in itself is ~0.3 GB)
+
+swap ≈ 1 GB × cells
 ```
+
+**Do not undersize the swapfile.** A cold cell's pages live there, and the
+headroom policy frees RAM by moving more of them there, so a full swapfile does
+not fail loudly: it quietly removes the host's ability to reclaim at all.
+Measured on a 16 GB host after booting 100 cells with the policy running, usage
+reached 784 MiB per cell, so an 80 GB file was 98.7 % full. Memory pressure read
+near zero and nothing was OOM-killed, while cold wakes ran 4.6–7.7 s instead of
+the usual 2–3.5 s and the headroom target could no longer be met. 1 GB per cell
+leaves room for the steady state plus the reclaim a burst triggers. It buys
+headroom, not speed: page-in is bound by the device, so a larger file does not
+make a wake faster, it stops the tier from seizing up.
+
+Disk is then the next constraint, and it is the cheap one. Measured on the
+reference host, the OS, images and 100 cell state directories come to about
+29 GB, so budget `disk ≈ 30 GB + 1 GB × cells`: 130 GB for 100 cells, which
+fits that host's 150 GB with ~20 GB spare. Prefer paying for disk over RAM, it
+is the resource this design trades into.
 
 Active cells are the term people forget. clawnap can only make room from idle cells; a resident gateway in use holds its ~0.8 GB until it goes idle, and ten of them on 16 GB leave nothing for a burst. The measured over-commit: 95 cold + 5 uncapped residents + a burst of ten is ~20 GB on paper, and the burst ran memory-bound (7.4 / 8.3 / 11.3 s on 2026.9.7 against 5.0 / 9.9 / 11.5 s with no residents). Hosts that expect many simultaneous conversations need the RAM for them, or a memory cap on resident cells (an idle gateway runs at ~290 MiB under a 350 MiB cap; lifting the cap at wake is on the backlog).
 
