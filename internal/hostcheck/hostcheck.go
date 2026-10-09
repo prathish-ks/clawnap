@@ -110,9 +110,11 @@ const swapPerCellBytes = 784 << 20
 // an 80 GB file ran 98.7 % full at 100 cells and cold wakes went from 2-3.5 s
 // to 4.6-7.7 s with nothing in the logs to say why.
 func checkSwapForFleet(cells int) Result {
-	total, free, ok := swapTotals()
-	if !ok {
-		return Result{Name: "swap capacity", Level: LevelPass, Detail: "not determined on " + runtime.GOOS + ": /proc/meminfo is Linux-only"}
+	total, free, read := swapTotals()
+	if !read {
+		// Could not read the file at all, so there is nothing to judge. This
+		// is distinct from reading it and finding no swap, which is a finding.
+		return Result{Name: "swap capacity", Level: LevelPass, Detail: "not determined: /proc/meminfo is not readable on " + runtime.GOOS}
 	}
 	return swapVerdict(cells, total, free)
 }
@@ -124,6 +126,14 @@ func swapVerdict(cells int, total, free int64) Result {
 	gib := func(b int64) string { return strconv.FormatFloat(float64(b)/(1<<30), 'f', 1, 64) + " GiB" }
 	detail := gib(total) + " for " + strconv.Itoa(cells) + " cells (" + gib(free) + " free); sizing is ~784 MiB per hibernated cell"
 	switch {
+	case total <= 0:
+		// The worst case, and the easiest to miss: with no swap there is no
+		// cold tier at all. Cells can still be paused, but their memory has
+		// nowhere to go, so the host holds every one of them resident and the
+		// density this project exists for does not happen.
+		return Result{Name: name, Level: LevelWarn,
+			Detail:      "no swap configured, so there is no cold tier: a paused cell keeps its memory and the host holds all " + strconv.Itoa(cells) + " of them resident",
+			Remediation: "create a swapfile of ~1 GB per cell: fallocate -l " + strconv.Itoa(cells) + "G /swap.img && chmod 600 /swap.img && mkswap /swap.img && swapon /swap.img, then add it to /etc/fstab"}
 	case total < need:
 		return Result{Name: name, Level: LevelWarn, Detail: detail + ", so this host is short of " + gib(need-total),
 			Remediation: "add swap: fallocate -l <N>G /swap2.img && chmod 600 /swap2.img && mkswap /swap2.img && swapon /swap2.img, then add it to /etc/fstab. A full swapfile does not fail loudly; it stops the host being able to reclaim."}
@@ -134,8 +144,10 @@ func swapVerdict(cells int, total, free int64) Result {
 	return Result{Name: name, Level: LevelPass, Detail: detail}
 }
 
-// swapTotals reads SwapTotal and SwapFree in bytes. ok is false off Linux.
-func swapTotals() (total, free int64, ok bool) {
+// swapTotals reads SwapTotal and SwapFree in bytes. read reports whether
+// /proc/meminfo could be read at all, which is not the same as there being
+// swap: a Linux host with none reads fine and returns zero.
+func swapTotals() (total, free int64, read bool) {
 	b, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
 		return 0, 0, false
@@ -156,7 +168,7 @@ func swapTotals() (total, free int64, ok bool) {
 			free = v << 10
 		}
 	}
-	return total, free, total > 0
+	return total, free, true
 }
 
 func checkRuntime(ctx context.Context, r Runner) Result {

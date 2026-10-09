@@ -94,6 +94,10 @@ func TestSwapCapacityCheck(t *testing.T) {
 		{"room for the fleet", 100, 110 << 30, 40 << 30, LevelPass},
 		{"cannot hold the fleet", 100, 80 << 30, 1 << 30, LevelWarn},
 		{"holds it but nearly full", 100, 100 << 30, 2 << 30, LevelWarn},
+		// A Linux host with no swap reads /proc/meminfo fine and returns zero.
+		// That is the worst configuration, not an indeterminate one: without
+		// swap there is no cold tier, so every paused cell stays resident.
+		{"no swap at all", 100, 0, 0, LevelWarn},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := swapVerdict(tc.cells, tc.total, tc.free)
