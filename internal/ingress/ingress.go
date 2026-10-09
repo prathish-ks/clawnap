@@ -42,10 +42,17 @@ const hookReadyTimeout = 20 * time.Second
 // with a 5xx while finishing its post-thaw channel restart.
 const hookRetryWindow = 3 * time.Second
 
-// waitServing polls the cell's hook path with an empty unsigned POST until
-// the listener answers any HTTP status at all (a 4xx is fine: it proves the
-// application is serving, and the platform's real request follows). A
-// connection reset, EOF or refusal means the listener is not up yet.
+// waitServing polls the cell's hook path with a side-effect-free GET until the
+// listener answers any HTTP status at all. A connection reset, EOF or refusal
+// means the listener is not up yet.
+//
+// This establishes listener availability, not application readiness, and the
+// distinction is deliberate. Any status counts, including a 503: a gateway part
+// way through its post-thaw channel restart answers 5xx while it finishes, and
+// treating that as "not serving" would burn the whole timeout waiting for a
+// listener that is already there. Application readiness is handled one layer
+// up, where a forward answered with the channel's own "not ready" 5xx is
+// retried within hookRetryWindow.
 func waitServing(ctx context.Context, port int, fullPath, cell string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	path := strings.TrimPrefix(fullPath, "/hook/"+cell)
@@ -56,8 +63,12 @@ func waitServing(ctx context.Context, port int, fullPath, cell string, timeout t
 	client := &http.Client{Timeout: 700 * time.Millisecond}
 	var last error
 	for time.Now().Before(deadline) {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader("{}"))
-		req.Header.Set("Content-Type", "application/json")
+		// GET, not POST: any HTTP answer proves the listener is serving, and a
+		// 404 or 405 does that just as well as a 200. A POST would be a real
+		// delivery to the tenant's own handler, which for a cell configured
+		// with the "none" verifier would be processed rather than rejected.
+		// A probe must not be able to do anything.
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		res, err := client.Do(req)
 		if err == nil {
 			_ = res.Body.Close()
@@ -89,7 +100,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /hibernate/{cell}", s.handleHibernate)
 	mux.HandleFunc("/hook/{cell}/", s.handleHook)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
+	// /metrics needs the token like the control endpoints: the exposition
+	// names every cell and its phase, wake counts and memory, which is the
+	// host's tenant list and their activity pattern. The listener defaults to
+	// loopback, but the quickstart puts a reverse proxy in front of it for
+	// /hook, and a proxy that forwards every path would publish this.
+	// /healthz stays open: it says nothing and load balancers need it.
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !s.authorized(r) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		if s.Metrics == nil {
 			http.Error(w, "metrics not configured", http.StatusNotFound)
 			return

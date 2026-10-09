@@ -85,6 +85,10 @@ type Cell struct {
 }
 
 // Store is a file-backed cell registry safe for concurrent use in-process.
+// staleAfter bounds how long an unchanged-looking file is trusted without
+// re-reading it. See Store.loadedAt.
+const staleAfter = 2 * time.Second
+
 type Store struct {
 	path  string
 	mu    sync.Mutex
@@ -93,6 +97,12 @@ type Store struct {
 	// skip re-parsing an unchanged file.
 	loadedMod  time.Time
 	loadedSize int64
+	// loadedAt bounds how long that skip may be trusted. Matching mtime and
+	// size almost always means unchanged, but two writes can share both where
+	// the filesystem clock is coarse enough, and a reader must not then serve
+	// a stale cell for ever. Re-reading at most this often costs a parse of a
+	// small file and turns an unbounded staleness into a bounded one.
+	loadedAt time.Time
 }
 
 // refresh re-reads the file only when its size or mtime changed since the
@@ -107,7 +117,7 @@ func (s *Store) refresh() {
 		}
 		return
 	}
-	if fi.ModTime().Equal(s.loadedMod) && fi.Size() == s.loadedSize {
+	if fi.ModTime().Equal(s.loadedMod) && fi.Size() == s.loadedSize && time.Since(s.loadedAt) < staleAfter {
 		return
 	}
 	_ = s.reload() // best effort; on error keep the last good map
@@ -151,6 +161,7 @@ func (s *Store) reload() error {
 	if fi, err := os.Stat(s.path); err == nil {
 		s.loadedMod, s.loadedSize = fi.ModTime(), fi.Size()
 	}
+	s.loadedAt = time.Now()
 	return nil
 }
 

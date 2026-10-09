@@ -500,12 +500,6 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info runtime.Info) error {
-	// A recurring due time that slipped past its window (its wakes kept
-	// failing) is moved on, so the schedule survives one bad morning; a
-	// one-shot that slipped stays as a record and is ignored by dueSoon.
-	if c.NextDueEvery > 0 && !c.NextDueAt.IsZero() && c.NextDueAt.Before(s.opt.Now().Add(-s.opt.PreWake)) {
-		_ = s.advanceDue(c.Name)
-	}
 	switch info.State {
 	case runtime.StateMissing:
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = "container missing" })
@@ -573,12 +567,43 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info ru
 // wakeDue wakes a hibernated cell for its scheduled job and only then moves
 // the due time on, so a wake that fails is retried on the next pass instead
 // of the schedule being consumed by the attempt.
+//
+// reconcileCell used to advance an overdue recurring time before getting here,
+// which made sense only while dueSoon ignored overdue times. Now that it wakes
+// for them, that advance did two wrong things: it discarded the missed
+// occurrence if the wake then failed, and because the caller's copy of the cell
+// still held the old time, a wake that succeeded advanced the schedule twice
+// and skipped an occurrence. The decision belongs here, after the attempt.
 func (s *Supervisor) wakeDue(ctx context.Context, c registry.Cell) error {
-	_, err := s.wakeLocked(ctx, c.Name)
-	if err == nil {
-		_ = s.advanceDue(c.Name)
+	_, wakeErr := s.wakeLocked(ctx, c.Name)
+	if wakeErr == nil {
+		// The wake succeeded, so the schedule has to move with it. If that
+		// does not persist, the old due time is still on disk and the next
+		// pass wakes this cell again for a job already served, so this is not
+		// a success to report quietly. The caller records it against the cell.
+		if err := s.advanceDue(c.Name); err != nil {
+			return fmt.Errorf("woke %s for its scheduled job but could not advance its due time: %w", c.Name, err)
+		}
+		return nil
 	}
-	return err
+	// The wake failed: keep the due time so the next pass retries it. The one
+	// exception is a recurring occurrence that has now been missed for longer
+	// than its own interval, where the following occurrence is closer than the
+	// one we keep failing on; move to it rather than retrying this one for
+	// ever. Retries are paced by the cell lock and the wake timeout, not by
+	// the reconcile interval, so this is a bound rather than a hot loop.
+	if c.NextDueEvery > 0 && s.opt.Now().Sub(c.NextDueAt) > c.NextDueEvery {
+		s.opt.Logger.Warn("schedule: giving up on a missed occurrence after repeated wake failures",
+			"cell", c.Name, "was_due", c.NextDueAt.Format(time.RFC3339), "every", c.NextDueEvery)
+		if err := s.advanceDue(c.Name); err != nil {
+			// Report the wake failure, not this one: it is why we are here,
+			// and an occurrence that did not move is simply retried next pass,
+			// which is the same place a working advance would have left us.
+			s.opt.Logger.Warn("schedule: could not advance past the missed occurrence",
+				"cell", c.Name, "err", err)
+		}
+	}
+	return wakeErr
 }
 
 func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid int) error {
@@ -674,26 +699,30 @@ func (s *Supervisor) stateDir(ctx context.Context, c registry.Cell) string {
 }
 
 // cellSchedule asks the cell when it next has work a person is waiting for.
-// Zero when the feature is off, the cell has no readable store, or nothing is
-// due: in every one of those cases the caller leaves NextDueAt as it found it,
-// so an operator-set due time survives.
-func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir string) time.Time {
+// read says whether the cell's own store could be consulted, which the caller
+// needs in order to tell two different situations apart: the store said there
+// is nothing due, so any due time we are holding is finished and should go;
+// against the store being unreadable or the feature off, where whatever an
+// operator set must survive untouched.
+func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir string) (next time.Time, read bool) {
 	if !s.opt.ReadSchedules || dir == "" {
-		return time.Time{}
+		return time.Time{}, false
 	}
 	next, err := schedule.Next(ctx, dir, s.opt.Now())
-	if err != nil {
-		if errors.Is(err, schedule.ErrUnsupportedStore) {
-			s.opt.Logger.Info("schedule: cell keeps its jobs in a store this build cannot read; using the operator-set due time", "cell", c.Name)
-		} else {
-			s.opt.Logger.Warn("schedule", "cell", c.Name, "err", err)
-		}
-		return time.Time{}
+	switch {
+	case errors.Is(err, schedule.ErrNoStore):
+		return time.Time{}, false // ordinary: nothing to consult, say nothing
+	case errors.Is(err, schedule.ErrUnsupportedStore):
+		s.opt.Logger.Info("schedule: cell keeps its jobs in a store this build cannot read; using the operator-set due time", "cell", c.Name)
+		return time.Time{}, false
+	case err != nil:
+		s.opt.Logger.Warn("schedule", "cell", c.Name, "err", err)
+		return time.Time{}, false
 	}
 	if !next.IsZero() {
 		s.opt.Logger.Info("schedule: next user-facing job", "cell", c.Name, "at", next.Format(time.RFC3339), "in", next.Sub(s.opt.Now()).Round(time.Second))
 	}
-	return next
+	return next, true
 }
 
 // checkpointWAL truncates the stopped cell's SQLite WAL from the host. dir is
@@ -1324,15 +1353,25 @@ func (s *Supervisor) pauseWakeTimeout(c registry.Cell) time.Duration {
 	return s.opt.WakeTimeout
 }
 
-// dueSoon: a hibernated cell whose next job is within PreWake should wake now.
-// A due time already in the past by more than PreWake is stale (the job has
-// fired, or the operator set a one-shot) and is ignored until advanced.
+// dueSoon: a hibernated cell whose next job is due within PreWake, or is
+// already overdue, should wake now.
+//
+// Overdue used to be ignored, on the assumption that a past due time meant the
+// job had already fired. That assumption predates ReadSchedules: a due time now
+// comes from the cell's own store, where "in the past" means the host missed it
+// — the daemon was down across the window, or wakes kept failing — and a
+// tenant is waiting on a reminder that has not run. Waking late beats never.
+//
+// It cannot loop. A recurring schedule is advanced past the window by
+// reconcileCell; a one-shot is cleared by advanceDue after the wake, and when
+// the reader can see the cell's store it also clears a due time the cell no
+// longer has. Concurrency after an outage is bounded by the wake semaphore, so
+// a fleet with many overdue jobs queues rather than storms.
 func (s *Supervisor) dueSoon(c registry.Cell) bool {
 	if c.NextDueAt.IsZero() {
 		return false
 	}
-	now := s.opt.Now()
-	return !c.NextDueAt.After(now.Add(s.opt.PreWake)) && c.NextDueAt.After(now.Add(-s.opt.PreWake))
+	return !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
 }
 
 // advanceDue moves a fired due time forward by NextDueEvery, or clears a
@@ -1407,12 +1446,19 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 	if s.opt.ReadSchedules && dir == "" {
 		dir = s.stateDir(ctx, c)
 	}
-	next := s.cellSchedule(ctx, c, dir)
+	next, read := s.cellSchedule(ctx, c, dir)
 	return s.reg.Update(name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseHibernated
 		x.PausedAt = pausedAt
-		if !next.IsZero() {
+		switch {
+		case !next.IsZero():
 			x.NextDueAt, x.NextDueEvery = next, 0 // re-read at the next pause, so no recurrence to track
+		case read:
+			// The cell's own store says nothing is waiting, so a due time we
+			// are still holding has been served. Clearing it matters now that
+			// an overdue time wakes the cell: left behind, it would wake this
+			// cell on every pass for a job that no longer exists.
+			x.NextDueAt, x.NextDueEvery = time.Time{}, 0
 		}
 	})
 }
