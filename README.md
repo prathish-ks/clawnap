@@ -137,6 +137,15 @@ RAM  ≈ 1 GB (OS) + 65 MiB × cold cells + 300 MiB × warm cells
 swap ≈ 1 GB × cells
 ```
 
+**Already running on an 80 GB file?** Nothing shrinks or moves: add a second
+swapfile and the kernel uses both. `clawnap check` now warns when the swapfile
+cannot hold the cells already on the host.
+
+```bash
+fallocate -l 20G /swap2.img && chmod 600 /swap2.img && mkswap /swap2.img && swapon /swap2.img
+echo "/swap2.img none swap sw,pri=100 0 0" >> /etc/fstab
+```
+
 **Do not undersize the swapfile.** A cold cell's pages live there, and the
 headroom policy frees RAM by moving more of them there, so a full swapfile does
 not fail loudly: it quietly removes the host's ability to reclaim at all.
