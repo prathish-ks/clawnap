@@ -105,9 +105,12 @@ The reference setup is Ubuntu 24.04 with Docker, a swapfile, and clawnap as a sy
 fallocate -l 100G /swap.img && chmod 600 /swap.img && mkswap /swap.img
 echo "/swap.img none swap sw,pri=100 0 0" >> /etc/fstab && swapon -a
 
-# 2. the daemon
+# 2. the daemon, from the latest release (arm64 is published beside it; or build it yourself, see Development)
+base=https://github.com/prathish-ks/clawnap/releases/latest/download
+curl -fsSLO $base/clawnap-linux-amd64 && curl -fsSLO $base/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
 install -m 0755 clawnap-linux-amd64 /usr/local/bin/clawnap
-cp experiments/provision/clawnap.service /etc/systemd/system/
+curl -fsSL -o /etc/systemd/system/clawnap.service https://raw.githubusercontent.com/prathish-ks/clawnap/main/experiments/provision/clawnap.service
 echo "CLAWNAP_TOKEN=$(openssl rand -hex 16)" > /etc/clawnap.env && chmod 600 /etc/clawnap.env
 systemctl daemon-reload && systemctl enable --now clawnap
 
@@ -149,11 +152,12 @@ echo "/swap2.img none swap sw,pri=100 0 0" >> /etc/fstab
 **Do not undersize the swapfile.** A cold cell's pages live there, and the
 headroom policy frees RAM by moving more of them there, so a full swapfile does
 not fail loudly: it quietly removes the host's ability to reclaim at all.
-Measured on a 16 GB host after booting 100 cells with the policy running, usage
-reached 784 MiB per cell, so an 80 GB file was 98.7 % full. Memory pressure read
-near zero and nothing was OOM-killed, while cold wakes ran 4.6–7.7 s instead of
-the usual 2–3.5 s and the headroom target could no longer be met. 1 GB per cell
-leaves room for the steady state plus the reclaim a burst triggers. It buys
+Observed on the reference host with 100 cells held cold, swap usage reached
+~784 MiB per cell, so an 80 GB file ran 98.7 % full; memory pressure read near
+zero and nothing was OOM-killed. What a host with no reclaim headroom left
+costs is measured separately: the same cold burst of ten ran 4.1 / 7.7 / 10.5 s
+with 8 GB available and 19.9 / 23.1 / 25.6 s with 3 GB. 1 GB per cell leaves
+room for the steady state plus the reclaim a burst triggers. It buys
 headroom, not speed: page-in is bound by the device, so a larger file does not
 make a wake faster, it stops the tier from seizing up.
 
@@ -173,7 +177,7 @@ Active cells are the term people forget. clawnap can only make room from idle ce
 | `-reclaim-after 30m` | timed limit after which a warm cell goes cold anyway |
 | `-wake-concurrency 4` | page-ins in flight (a hot-set wake reads ~270 MiB on 2026.9.6, 330–420 MiB on 2026.9.7; four in flight fill a cloud volume's ~0.5 GB/s) |
 | `-max-recovering 8` | cells between unpause and ready at once (CPU-bound: OpenClaw's recovery; tuned for 8 vCPUs) |
-| `-min-awake 3m`, `-idle-cpu-pct 10` | a woken cell is not paused again inside its post-thaw housekeeping |
+| `-min-awake 3m`, `-idle-cpu-pct 10`, `-idle-cpu-cooldown 1m` | a woken cell is not paused again inside its post-thaw housekeeping. The CPU gate holds it awake while that work runs; the cooldown covers the I/O-bound tail afterwards, which neither traffic counters nor CPU can see. Note the gate does **not** restart the idle countdown: an idle cell bursts to ~47 % of a core every couple of minutes, and treating each burst as activity meant a cell could never hibernate at a timeout longer than the gap between them |
 | `-thaw-settle 1s` | hold on the first forwarded message after a thaw, keyed on the cell's own log |
 | `-maintain-every 0` (off) | maintenance rotation: wake the longest-unwoken hibernated cell on a pace derived from the fleet, so a cell nobody messages still runs its own internal schedule. Stands aside for real wakes and for the headroom policy |
 | `-maintain-concurrent 1` | cells the rotation may hold awake at once. A maintenance wake lasts until the cell's catch-up finishes and its idle timeout elapses, so this, not the pace, is what bounds its cost (~0.8 GB per cell held awake) |

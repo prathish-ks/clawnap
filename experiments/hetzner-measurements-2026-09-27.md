@@ -713,3 +713,19 @@ fleet has been woken repeatedly over a week; the published figure was taken on
 a fresh one. Whether cells grow with use, or the two measurements differ in
 what they count, needs a clean fleet to settle. Until then the 8–9 GB figure
 should be read as "fresh fleet", not steady state.
+
+## Operational notes carried over from the hosts' run logs
+
+Not controlled runs: things seen while a host was doing something else, kept
+here because the README cites them.
+
+**The 80 GB swapfile filled at 100 cold cells (2026-09-30).** With the fleet
+held cold under the shipped policy, swap usage reached ~784 MiB per cell and the
+80 GB file ran 98.7 % full. Nothing was OOM-killed and memory pressure read near
+zero, which is the hazard: the host had simply lost the ability to reclaim, with
+no failure to point at. Intervention at the time was a second file
+(`fallocate -l 20G /swap2.img`, added to fstab, `pri=100`), which is why the
+quickstart sizes the cold tier at 1 GB per cell and the provisioning scripts
+default to 100 GB. What a host with no reclaim headroom costs a burst is
+measured properly in the 100-cell headroom section above (8 GB available:
+4.1 / 7.7 / 10.5 s; 3 GB: 19.9 / 23.1 / 25.6 s).
