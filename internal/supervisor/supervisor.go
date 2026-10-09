@@ -674,26 +674,30 @@ func (s *Supervisor) stateDir(ctx context.Context, c registry.Cell) string {
 }
 
 // cellSchedule asks the cell when it next has work a person is waiting for.
-// Zero when the feature is off, the cell has no readable store, or nothing is
-// due: in every one of those cases the caller leaves NextDueAt as it found it,
-// so an operator-set due time survives.
-func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir string) time.Time {
+// read says whether the cell's own store could be consulted, which the caller
+// needs in order to tell two different situations apart: the store said there
+// is nothing due, so any due time we are holding is finished and should go;
+// against the store being unreadable or the feature off, where whatever an
+// operator set must survive untouched.
+func (s *Supervisor) cellSchedule(ctx context.Context, c registry.Cell, dir string) (next time.Time, read bool) {
 	if !s.opt.ReadSchedules || dir == "" {
-		return time.Time{}
+		return time.Time{}, false
 	}
 	next, err := schedule.Next(ctx, dir, s.opt.Now())
-	if err != nil {
-		if errors.Is(err, schedule.ErrUnsupportedStore) {
-			s.opt.Logger.Info("schedule: cell keeps its jobs in a store this build cannot read; using the operator-set due time", "cell", c.Name)
-		} else {
-			s.opt.Logger.Warn("schedule", "cell", c.Name, "err", err)
-		}
-		return time.Time{}
+	switch {
+	case errors.Is(err, schedule.ErrNoStore):
+		return time.Time{}, false // ordinary: nothing to consult, say nothing
+	case errors.Is(err, schedule.ErrUnsupportedStore):
+		s.opt.Logger.Info("schedule: cell keeps its jobs in a store this build cannot read; using the operator-set due time", "cell", c.Name)
+		return time.Time{}, false
+	case err != nil:
+		s.opt.Logger.Warn("schedule", "cell", c.Name, "err", err)
+		return time.Time{}, false
 	}
 	if !next.IsZero() {
 		s.opt.Logger.Info("schedule: next user-facing job", "cell", c.Name, "at", next.Format(time.RFC3339), "in", next.Sub(s.opt.Now()).Round(time.Second))
 	}
-	return next
+	return next, true
 }
 
 // checkpointWAL truncates the stopped cell's SQLite WAL from the host. dir is
@@ -1324,15 +1328,25 @@ func (s *Supervisor) pauseWakeTimeout(c registry.Cell) time.Duration {
 	return s.opt.WakeTimeout
 }
 
-// dueSoon: a hibernated cell whose next job is within PreWake should wake now.
-// A due time already in the past by more than PreWake is stale (the job has
-// fired, or the operator set a one-shot) and is ignored until advanced.
+// dueSoon: a hibernated cell whose next job is due within PreWake, or is
+// already overdue, should wake now.
+//
+// Overdue used to be ignored, on the assumption that a past due time meant the
+// job had already fired. That assumption predates ReadSchedules: a due time now
+// comes from the cell's own store, where "in the past" means the host missed it
+// — the daemon was down across the window, or wakes kept failing — and a
+// tenant is waiting on a reminder that has not run. Waking late beats never.
+//
+// It cannot loop. A recurring schedule is advanced past the window by
+// reconcileCell; a one-shot is cleared by advanceDue after the wake, and when
+// the reader can see the cell's store it also clears a due time the cell no
+// longer has. Concurrency after an outage is bounded by the wake semaphore, so
+// a fleet with many overdue jobs queues rather than storms.
 func (s *Supervisor) dueSoon(c registry.Cell) bool {
 	if c.NextDueAt.IsZero() {
 		return false
 	}
-	now := s.opt.Now()
-	return !c.NextDueAt.After(now.Add(s.opt.PreWake)) && c.NextDueAt.After(now.Add(-s.opt.PreWake))
+	return !c.NextDueAt.After(s.opt.Now().Add(s.opt.PreWake))
 }
 
 // advanceDue moves a fired due time forward by NextDueEvery, or clears a
@@ -1407,12 +1421,19 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 	if s.opt.ReadSchedules && dir == "" {
 		dir = s.stateDir(ctx, c)
 	}
-	next := s.cellSchedule(ctx, c, dir)
+	next, read := s.cellSchedule(ctx, c, dir)
 	return s.reg.Update(name, func(x *registry.Cell) {
 		x.Phase = registry.PhaseHibernated
 		x.PausedAt = pausedAt
-		if !next.IsZero() {
+		switch {
+		case !next.IsZero():
 			x.NextDueAt, x.NextDueEvery = next, 0 // re-read at the next pause, so no recurrence to track
+		case read:
+			// The cell's own store says nothing is waiting, so a due time we
+			// are still holding has been served. Clearing it matters now that
+			// an overdue time wakes the cell: left behind, it would wake this
+			// cell on every pass for a job that no longer exists.
+			x.NextDueAt, x.NextDueEvery = time.Time{}, 0
 		}
 	})
 }

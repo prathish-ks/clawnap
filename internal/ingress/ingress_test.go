@@ -155,11 +155,11 @@ func TestHookRetriesCellNotReadyThenSucceeds(t *testing.T) {
 	// the platform must see a single 204, not a 500 it has to retry
 	var calls int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		if string(b) == "{}" { // the ingress's readiness probe; answer it and do not count it
-			w.WriteHeader(401)
+		if r.Method == http.MethodGet { // the ingress's readiness probe: not a delivery
+			w.WriteHeader(405)
 			return
 		}
+		b, _ := io.ReadAll(r.Body)
 		n := atomic.AddInt32(&calls, 1)
 		if string(b) != `{"update_id":7}` {
 			t.Errorf("body not replayed on attempt %d: %q", n, b)
@@ -209,9 +209,8 @@ func TestHookRefusesOversizedBodyBeforeWaking(t *testing.T) {
 func TestHookDoesNotReplayApplicationErrors(t *testing.T) {
 	var calls int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		if string(b) == "{}" {
-			w.WriteHeader(401) // readiness probe
+		if r.Method == http.MethodGet { // readiness probe: not a delivery
+			w.WriteHeader(405)
 			return
 		}
 		atomic.AddInt32(&calls, 1)
@@ -230,5 +229,58 @@ func TestHookDoesNotReplayApplicationErrors(t *testing.T) {
 	b, _ := io.ReadAll(res.Body)
 	if atomic.LoadInt32(&calls) != 1 || !strings.Contains(string(b), "handler crashed") {
 		t.Fatalf("want exactly one forward with the cell's body passed through, got calls=%d body=%q", calls, b)
+	}
+}
+
+// /metrics names every cell, its phase and its wake counts: the host's tenant
+// list and their activity pattern. It must need the token like the control
+// endpoints, because the quickstart puts a reverse proxy in front of this
+// listener and a proxy forwarding every path would otherwise publish it.
+func TestMetricsRequiresTheToken(t *testing.T) {
+	srv := &Server{Token: "sekret", Metrics: func(w http.ResponseWriter) {
+		_, _ = w.Write([]byte("clawnap_cells{phase=\"active\"} 1\n"))
+	}}
+	h := srv.Handler()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated /metrics returned %d, body %q", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer sekret")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "clawnap_cells") {
+		t.Fatalf("authorised /metrics returned %d, body %q", rec.Code, rec.Body.String())
+	}
+
+	// /healthz stays open: it reveals nothing and load balancers need it.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/healthz should not need a token, got %d", rec.Code)
+	}
+}
+
+// The readiness probe runs against the tenant's own handler, so it must not be
+// able to do anything: a cell using the "none" verifier would process a POST.
+func TestReadinessProbeIsSideEffectFree(t *testing.T) {
+	var methods []string
+	cell := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		w.WriteHeader(http.StatusMethodNotAllowed) // a GET-less hook handler
+	}))
+	defer cell.Close()
+	port, _ := strconv.Atoi(strings.TrimPrefix(cell.URL, "http://127.0.0.1:"))
+
+	if err := waitServing(context.Background(), port, "/hook/c/telegram", "c", time.Second); err != nil {
+		t.Fatalf("a 405 still proves the listener is serving: %v", err)
+	}
+	for _, m := range methods {
+		if m != http.MethodGet {
+			t.Fatalf("probe used %s; it must not be able to deliver anything", m)
+		}
 	}
 }

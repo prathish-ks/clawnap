@@ -84,3 +84,61 @@ func TestGetSeesOtherProcessWrites(t *testing.T) {
 		t.Fatalf("daemon must see the CLI's removal, got %v", err)
 	}
 }
+
+// refresh() skips reloading when the file's mtime and size both match what it
+// last saw. An external review asked whether that can hide a cross-process
+// write. These are the three shapes that matter in practice: another process
+// replacing the file atomically, a same-size edit, and a reader opened before
+// any of it happened.
+func TestCrossProcessWritesAreSeen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cells.json")
+	writer, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Put(Cell{Name: "a", Container: "oc-a", Port: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second store on the same file, standing in for another process.
+	reader, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.Get("a"); err != nil {
+		t.Fatalf("reader cannot see the first write: %v", err)
+	}
+
+	// Growing write: a new cell appears.
+	if err := writer.Put(Cell{Name: "b", Container: "oc-b", Port: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.Get("b"); err != nil {
+		t.Fatalf("reader missed a cell added by another process: %v", err)
+	}
+
+	// Same-size write: a field changes without the file length moving, which is
+	// the case the mtime+size check could in principle miss.
+	if err := writer.Update("a", func(c *Cell) { c.Port = 9 }); err != nil {
+		t.Fatal(err)
+	}
+	got, err := reader.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Port != 9 {
+		t.Fatalf("reader kept a stale copy after a same-size write: port=%d", got.Port)
+	}
+
+	// Restart recovery: a store opened fresh sees everything on disk.
+	after, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err := after.Get("a"); err != nil || c.Port != 9 {
+		t.Fatalf("a newly opened store did not recover the file: %+v err=%v", c, err)
+	}
+	if len(after.List()) != 2 {
+		t.Fatalf("want 2 cells after restart, got %d", len(after.List()))
+	}
+}

@@ -166,3 +166,69 @@ func TestUnreadableStoreKeepsTheOperatorsDueTime(t *testing.T) {
 		t.Fatalf("an unreadable store wiped the operator's due time: %v", c.NextDueAt)
 	}
 }
+
+// A scheduled job the host missed must still wake the cell. Overdue used to be
+// ignored on the assumption that a past due time meant the job had fired; once
+// due times come from the cell's own store, "in the past" means the host missed
+// it and a tenant is waiting. Waking late beats never waking.
+func TestOverdueJobStillWakesTheCell(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-o": runtime.StatePaused},
+		netio: map[string]string{"oc-o": "1kB / 1kB"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, WakeTimeout: time.Second, MaxPause: -1})
+	// Due an hour ago: the daemon was down across its window.
+	_ = reg.Put(registry.Cell{Name: "o", Container: "oc-o", Port: 1, IdleAfter: time.Minute,
+		Phase: registry.PhaseHibernated, PausedAt: now.Add(-2 * time.Hour),
+		NextDueAt: now.Add(-time.Hour)})
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	if !fr.has("unpause oc-o") {
+		t.Fatalf("an overdue job never woke its cell: %v", fr.calls)
+	}
+	// One-shot: cleared after the wake, so it cannot wake again on every pass.
+	c, _ := reg.Get("o")
+	if !c.NextDueAt.IsZero() {
+		t.Fatalf("one-shot due time survived the wake: %v", c.NextDueAt)
+	}
+}
+
+// Reading the cell and finding nothing due must clear a due time we are still
+// holding; otherwise, now that overdue wakes, a served job would wake its cell
+// on every pass forever.
+func TestReaderClearsADueTimeTheCellNoLongerHas(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	dir := t.TempDir() // a store with no user-facing job at all
+	if err := os.MkdirAll(filepath.Join(dir, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(dir, schedule.DBPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE cron_jobs (store_key TEXT NOT NULL, job_id TEXT NOT NULL,
+		name TEXT NOT NULL, enabled INTEGER NOT NULL, payload_kind TEXT NOT NULL,
+		job_json TEXT NOT NULL, state_json TEXT NOT NULL DEFAULT '{}', updated_at INTEGER NOT NULL,
+		PRIMARY KEY (store_key, job_id)) STRICT`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-z": runtime.StateRunning},
+		netio: map[string]string{"oc-z": "1kB / 1kB"}, mounts: map[string]string{"oc-z": dir}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, ReadSchedules: true})
+	_ = reg.Put(registry.Cell{Name: "z", Container: "oc-z", Port: 1, Phase: registry.PhaseActive,
+		IdleAfter: time.Minute, NextDueAt: now.Add(-time.Hour)}) // a job that has been served
+
+	if err := s.Hibernate(context.Background(), "z"); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := reg.Get("z")
+	if !c.NextDueAt.IsZero() {
+		t.Fatalf("a served due time survived a successful read: %v", c.NextDueAt)
+	}
+}

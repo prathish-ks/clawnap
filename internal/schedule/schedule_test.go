@@ -3,6 +3,7 @@ package schedule
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,8 +156,8 @@ func TestPayloadTextNeverLeavesTheCell(t *testing.T) {
 func TestMissingAndLegacyStores(t *testing.T) {
 	empty := t.TempDir()
 	got, err := Next(context.Background(), empty, time.Now())
-	if err != nil || !got.IsZero() {
-		t.Fatalf("missing store should be silent: got %v, %v", got, err)
+	if !errors.Is(err, ErrNoStore) || !got.IsZero() {
+		t.Fatalf("a cell with no store must say so, not look like one with nothing due: got %v, %v", got, err)
 	}
 
 	legacy := t.TempDir()

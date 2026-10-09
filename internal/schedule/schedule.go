@@ -43,6 +43,13 @@ const LegacyJobsPath = "cron/jobs.json"
 // cannot read. The caller should fall back to an operator-set due time.
 var ErrUnsupportedStore = errors.New("schedule: cell uses a job store this build cannot read")
 
+// ErrNoStore means the cell has no job store at all, which is ordinary rather
+// than a fault: a cell may simply never have had one. It is reported, not
+// swallowed, because "there was nothing to consult" and "the cell says nothing
+// is due" are different answers, and a caller that clears state on the second
+// must not act on the first.
+var ErrNoStore = errors.New("schedule: cell has no job store")
+
 // Job is the scheduling metadata of one enabled job. It holds no prompt text,
 // name or description, by design.
 type Job struct {
@@ -117,7 +124,7 @@ func Read(ctx context.Context, stateDir string) ([]Job, error) {
 			if _, lerr := os.Stat(filepath.Join(stateDir, LegacyJobsPath)); lerr == nil {
 				return nil, ErrUnsupportedStore
 			}
-			return nil, nil // no schedule store at all: not an error
+			return nil, ErrNoStore
 		}
 		return nil, err
 	}
