@@ -18,8 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	rt "github.com/prathish-ks/clawnap/internal/runtime"
@@ -88,10 +90,73 @@ func Run(ctx context.Context, r Runner, opt Options) []Result {
 		out = append(out, Result{Name: "cells", Level: LevelPass, Detail: "no cells found (label " + opt.Label + "); nothing to inspect"})
 		return out
 	}
+	out = append(out, checkSwapForFleet(len(names)))
 	for _, n := range names {
 		out = append(out, checkCell(ctx, r, n)...)
 	}
 	return out
+}
+
+// swapPerCellBytes is what a hibernated cell was measured to put in swap on the
+// reference host (784 MiB after a full-fleet boot with the policy running), the
+// figure the 1 GB-per-cell sizing guidance is built on.
+const swapPerCellBytes = 784 << 20
+
+// checkSwapForFleet warns when the swapfile cannot hold the cells already on
+// the host. This failure is otherwise silent: a cold cell's pages live in swap
+// and the headroom policy frees RAM by moving more of them there, so a full
+// swapfile does not error, it removes the host's ability to reclaim at all,
+// while memory pressure still reads near zero. Measured on the reference host,
+// an 80 GB file ran 98.7 % full at 100 cells and cold wakes went from 2-3.5 s
+// to 4.6-7.7 s with nothing in the logs to say why.
+func checkSwapForFleet(cells int) Result {
+	total, free, ok := swapTotals()
+	if !ok {
+		return Result{Name: "swap capacity", Level: LevelPass, Detail: "not determined on " + runtime.GOOS + ": /proc/meminfo is Linux-only"}
+	}
+	return swapVerdict(cells, total, free)
+}
+
+// swapVerdict is the judgement, split out so it can be tested without a host.
+func swapVerdict(cells int, total, free int64) Result {
+	const name = "swap capacity"
+	need := int64(cells) * swapPerCellBytes
+	gib := func(b int64) string { return strconv.FormatFloat(float64(b)/(1<<30), 'f', 1, 64) + " GiB" }
+	detail := gib(total) + " for " + strconv.Itoa(cells) + " cells (" + gib(free) + " free); sizing is ~784 MiB per hibernated cell"
+	switch {
+	case total < need:
+		return Result{Name: name, Level: LevelWarn, Detail: detail + ", so this host is short of " + gib(need-total),
+			Remediation: "add swap: fallocate -l <N>G /swap2.img && chmod 600 /swap2.img && mkswap /swap2.img && swapon /swap2.img, then add it to /etc/fstab. A full swapfile does not fail loudly; it stops the host being able to reclaim."}
+	case free < int64(cells)*(swapPerCellBytes/8): // under ~12 % spare
+		return Result{Name: name, Level: LevelWarn, Detail: detail + ", which leaves little room for the reclaim a burst of wakes triggers",
+			Remediation: "size the swapfile for 1 GB per cell"}
+	}
+	return Result{Name: name, Level: LevelPass, Detail: detail}
+}
+
+// swapTotals reads SwapTotal and SwapFree in bytes. ok is false off Linux.
+func swapTotals() (total, free int64, ok bool) {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, 0, false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		v, err := strconv.ParseInt(f[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		switch f[0] {
+		case "SwapTotal:":
+			total = v << 10
+		case "SwapFree:":
+			free = v << 10
+		}
+	}
+	return total, free, total > 0
 }
 
 func checkRuntime(ctx context.Context, r Runner) Result {

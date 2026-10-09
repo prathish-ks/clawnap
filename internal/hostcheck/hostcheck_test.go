@@ -79,3 +79,34 @@ func TestHardenedCellPassesAndSloppyCellFails(t *testing.T) {
 		t.Fatalf("summary pass=%d warn=%d fail=%d", p, w, f)
 	}
 }
+
+// The swap check exists because the failure it catches is silent: a full
+// swapfile does not error, it removes the host's ability to reclaim.
+func TestSwapCapacityCheck(t *testing.T) {
+	const cell = 784 << 20
+	for _, tc := range []struct {
+		name  string
+		cells int
+		total int64
+		free  int64
+		want  Level
+	}{
+		{"room for the fleet", 100, 110 << 30, 40 << 30, LevelPass},
+		{"cannot hold the fleet", 100, 80 << 30, 1 << 30, LevelWarn},
+		{"holds it but nearly full", 100, 100 << 30, 2 << 30, LevelWarn},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := swapVerdict(tc.cells, tc.total, tc.free)
+			if got.Level != tc.want {
+				t.Fatalf("want %s, got %s (%s)", tc.want, got.Level, got.Detail)
+			}
+			if tc.want == LevelWarn && got.Remediation == "" {
+				t.Fatal("a warning with no remediation tells an operator nothing")
+			}
+		})
+	}
+	// Off Linux there is no /proc/meminfo: say so rather than warn falsely.
+	if r := checkSwapForFleet(100); r.Level == LevelFail {
+		t.Fatalf("an undeterminable check must not fail: %s", r.Detail)
+	}
+}

@@ -162,14 +162,82 @@ func TestCPUBusyCellIsNotIdle(t *testing.T) {
 	if fr.has("pause oc-c") {
 		t.Fatal("must not pause a CPU-busy cell")
 	}
+	// Going quiet does not restart the idle clock: the window elapsed while the
+	// cell was working, so what stands between it and sleep now is only the
+	// CPU cooldown.
 	fr.mu.Lock()
 	fr.cpu["oc-c"] = "0.8%"
 	fr.mu.Unlock()
-	s.ReconcileOnce(context.Background()) // quiet now: the idle clock starts here
-	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-c") {
+		t.Fatal("paused in the same sample its CPU dropped, with no cooldown")
+	}
+	now = now.Add(2 * time.Minute) // past the cooldown
 	s.ReconcileOnce(context.Background())
 	if !fr.has("pause oc-c") {
-		t.Fatalf("expected pause once quiet and idle: %v", fr.calls)
+		t.Fatalf("expected pause once quiet, idle and past the cooldown: %v", fr.calls)
+	}
+}
+
+// The gap an external review asked about: a cell whose idle window elapsed
+// while it was busy must not be frozen in the same sample its CPU drops.
+// OpenClaw's post-thaw work ends in an I/O-bound tail that neither the traffic
+// counter nor the CPU gate can see, and MinAwake only covers the first minutes
+// after a wake, so a long-running cell had nothing protecting that tail once
+// the CPU gate stopped restarting the idle clock.
+func TestCellIsNotFrozenTheInstantItsCPUDrops(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-t": runtime.StateRunning},
+		netio: map[string]string{"oc-t": "1kB / 1kB"}, cpu: map[string]string{"oc-t": "60.00%"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, IdleCPUPct: 10,
+		IdleCPUCooldown: time.Minute, MaxPause: -1})
+	// MinAwake is irrelevant here: the cell has been up far longer than it.
+	_ = reg.Put(registry.Cell{Name: "t", Container: "oc-t", Port: 1, IdleAfter: 2 * time.Minute,
+		WokeAt: now.Add(-time.Hour)})
+
+	s.ReconcileOnce(context.Background())
+	now = now.Add(15 * time.Minute) // works for 15 min: the 2 min idle window is long gone
+	s.ReconcileOnce(context.Background())
+	if fr.has("pause oc-t") {
+		t.Fatal("paused a cell that was still working")
+	}
+
+	fr.mu.Lock()
+	fr.cpu["oc-t"] = "1.00%" // compute ends; the I/O tail is invisible from here
+	fr.mu.Unlock()
+	for i := 1; i <= 5; i++ { // 50 s of quiet samples, inside the cooldown
+		now = now.Add(10 * time.Second)
+		s.ReconcileOnce(context.Background())
+		if fr.has("pause oc-t") {
+			t.Fatalf("froze the cell %d s after its CPU dropped, inside the cooldown", i*10)
+		}
+	}
+	now = now.Add(20 * time.Second) // past the cooldown
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-t") {
+		t.Fatalf("never hibernated after the cooldown elapsed: %v", fr.calls)
+	}
+}
+
+// The cooldown must not become a second way to keep a cell awake forever: a
+// cell that has never been busy sleeps on the ordinary idle rule.
+func TestCooldownDoesNotDelayACellThatWasNeverBusy(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-q": runtime.StateRunning},
+		netio: map[string]string{"oc-q": "1kB / 1kB"}, cpu: map[string]string{"oc-q": "2.00%"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, IdleCPUPct: 10,
+		IdleCPUCooldown: time.Minute, MaxPause: -1})
+	_ = reg.Put(registry.Cell{Name: "q", Container: "oc-q", Port: 1, IdleAfter: time.Minute})
+
+	s.ReconcileOnce(context.Background())
+	now = now.Add(2 * time.Minute)
+	s.ReconcileOnce(context.Background())
+	if !fr.has("pause oc-q") {
+		t.Fatalf("a never-busy cell was held awake by the cooldown: %v", fr.calls)
 	}
 }
 
@@ -251,9 +319,9 @@ func TestSustainedCPUStillBlocksHibernation(t *testing.T) {
 	fr.mu.Lock()
 	fr.cpu["oc-c"] = "2.00%" // work finishes
 	fr.mu.Unlock()
-	now = now.Add(10 * time.Second)
+	now = now.Add(2 * time.Minute) // past the CPU cooldown that bridges the I/O tail
 	s.ReconcileOnce(context.Background())
 	if !fr.has("pause oc-c") {
-		t.Fatalf("did not hibernate once the work stopped: %v", fr.calls)
+		t.Fatalf("did not hibernate once the work stopped and the cooldown elapsed: %v", fr.calls)
 	}
 }

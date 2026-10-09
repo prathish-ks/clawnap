@@ -84,6 +84,16 @@ type Options struct {
 	// cells are current their catch-up is short and the rotation speeds up.
 	// 0 = default (1).
 	MaintainConcurrent int
+	// IdleCPUCooldown keeps a cell awake for this long after its CPU last
+	// dropped below IdleCPUPct. Without it, a cell whose idle window elapsed
+	// while it was working hibernates on the first quiet sample, and OpenClaw's
+	// post-thaw work ends in a tail that is I/O-bound and invisible to both
+	// gates (see MinAwake, which covers the same tail but only for the first
+	// few minutes after a wake). Pausing inside that tail is what makes the
+	// next thaw several times slower. The length is a judgement, not a
+	// measurement: it costs at most this much extra awake time per sleep.
+	// 0 = default (1 m), negative = off.
+	IdleCPUCooldown time.Duration
 	// MaintainIdle is the idle timeout applied to a cell the rotation woke,
 	// instead of the cell's own IdleAfter. A cell's normal idle timeout is a
 	// grace period in case its tenant says something else; a maintenance wake
@@ -206,6 +216,12 @@ func (o *Options) defaults() {
 	if o.MaxRestarts == 0 {
 		o.MaxRestarts = 5
 	}
+	if o.IdleCPUCooldown == 0 {
+		o.IdleCPUCooldown = time.Minute
+	}
+	if o.IdleCPUCooldown < 0 {
+		o.IdleCPUCooldown = 0
+	}
 	if o.MaintainConcurrent <= 0 {
 		o.MaintainConcurrent = 1
 	}
@@ -295,8 +311,11 @@ type Supervisor struct {
 	// maintainAwake holds cells the rotation woke that have not gone back to
 	// sleep yet, so their cost is bounded by MaintainConcurrent.
 	maintainAwake map[string]bool
-	active        sync.WaitGroup // wakes and reconcile passes in flight, for Drain
-	m             *Metrics
+	// cpuBusyAt is when each cell was last seen above IdleCPUPct, for the
+	// cooldown. In-memory: a restart costs at most one early pause.
+	cpuBusyAt map[string]time.Time
+	active    sync.WaitGroup // wakes and reconcile passes in flight, for Drain
+	m         *Metrics
 }
 
 // maxPressureDefer is how many consecutive passes pressure reclaim may
@@ -353,7 +372,7 @@ func New(reg *registry.Store, rt runtime.Client, opt Options) *Supervisor {
 		recon: make(chan struct{}, opt.MaxConcurrent*4),
 		inflt: map[string]*wakeShare{}, cell: map[string]*sync.Mutex{}, wakeWant: map[string]bool{},
 		// start the rotation one pace in, not at boot, when the host is busiest
-		lastMaintain: opt.Now(), maintainSkip: map[string]time.Time{}, maintainAwake: map[string]bool{}, m: newMetrics()}
+		lastMaintain: opt.Now(), maintainSkip: map[string]time.Time{}, maintainAwake: map[string]bool{}, cpuBusyAt: map[string]time.Time{}, m: newMetrics()}
 }
 
 // Run loops until ctx is done. A pass is bounded by its slowest action (a
@@ -602,8 +621,16 @@ func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid in
 	// permanently awake and 1.2 GB free instead of the measured 8–9 GB. The
 	// gate still does its real job: the cell stays awake while the work runs,
 	// and sleeps once it stops and the idle window has genuinely elapsed.
-	if s.opt.IdleCPUPct > 0 && st.CPUPct > s.opt.IdleCPUPct {
-		d.ShouldSleep = false
+	if s.opt.IdleCPUPct > 0 {
+		switch {
+		case st.CPUPct > s.opt.IdleCPUPct:
+			s.noteCPUBusy(c.Name, cur.At)
+			d.ShouldSleep = false
+		case s.cpuBusyWithin(c.Name, cur.At, s.opt.IdleCPUCooldown):
+			// Just finished working. Its post-thaw tail is I/O-bound and
+			// invisible here, so give it a moment before freezing it.
+			d.ShouldSleep = false
+		}
 	}
 	forgive := c.Restarts > 0 && !c.WokeAt.IsZero() && cur.At.Sub(c.WokeAt) >= restartForgiveAfter
 	// Persist only when something moved: every Update rewrites and fsyncs
@@ -865,6 +892,24 @@ func maintainAge(c registry.Cell) time.Time {
 		return c.PausedAt
 	}
 	return c.UpdatedAt
+}
+
+func (s *Supervisor) noteCPUBusy(name string, at time.Time) {
+	s.mu.Lock()
+	s.cpuBusyAt[name] = at
+	s.mu.Unlock()
+}
+
+// cpuBusyWithin reports whether the cell was above the CPU gate inside the
+// last d. False when the cooldown is disabled or the cell has not been busy.
+func (s *Supervisor) cpuBusyWithin(name string, now time.Time, d time.Duration) bool {
+	if d <= 0 {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	last, ok := s.cpuBusyAt[name]
+	return ok && now.Sub(last) < d
 }
 
 // maintainHeld reports whether this cell is currently awake because the
@@ -1349,6 +1394,9 @@ func (s *Supervisor) hibernateLocked(ctx context.Context, name string) error {
 		return err
 	}
 	s.opt.Logger.Info("hibernated", "cell", name, "tier", c.Tier, "took", took)
+	s.mu.Lock()
+	delete(s.cpuBusyAt, name) // its cooldown ended with this sleep
+	s.mu.Unlock()
 	s.m.hibernate(string(c.Tier))
 	pausedAt := time.Time{}
 	if c.Tier != registry.TierStop {

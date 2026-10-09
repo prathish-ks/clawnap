@@ -144,6 +144,7 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 	minAwake := fs.Duration("min-awake", 3*time.Minute, "never hibernate a cell within this long of its last wake (OpenClaw's post-thaw maintenance must finish); 0 = default, negative = off")
 	maintain := fs.Duration("maintain-every", 0, "maintenance rotation: wake the longest-unwoken hibernated cell on a pace derived from the fleet, so every cell is reached at least this often and runs its own internal schedule (memory consolidation, weekly review, one heartbeat turn) even when nothing is sent to it; yields to real wakes and to the headroom policy; 0 = off")
 	maintainN := fs.Int("maintain-concurrent", 1, "cells the maintenance rotation may hold awake at once; a maintenance wake lasts until the cell's catch-up finishes and its idle timeout elapses, so this, not the pace, is what bounds the cost (~0.8 GB per cell)")
+	cpuCooldown := fs.Duration("idle-cpu-cooldown", time.Minute, "keep a cell awake this long after its CPU drops back below -idle-cpu-pct: OpenClaw's post-thaw work ends in an I/O-bound tail that neither gate can see, and pausing inside it makes the next thaw several times slower; negative = off")
 	maintainIdle := fs.Duration("maintain-idle", 30*time.Second, "idle timeout for a cell the rotation woke, instead of its own: a maintenance wake has no tenant to wait for, so the cell sleeps as soon as it goes quiet (-min-awake and the CPU gate still apply). A real message reverts it to the cell's own timeout; negative = off")
 	readSched := fs.Bool("read-schedules", false, "read each cell's own scheduled jobs from its state directory when it hibernates, and wake it before the ones a person is waiting for (one-shots and jobs that deliver somewhere); the cell's internal maintenance is left to catch up on its next wake. Off by default: it reads the gateway's internal store, and an upstream schema change falls back to the operator-set -next-due")
 	burst := fs.Int("burst-target", 0, "cold wakes to absorb at full speed at once; sets -headroom-mib to 800 MiB per wake when that flag is not given (measured: a woken cell holds ~800 MiB through its post-thaw window)")
@@ -154,7 +155,7 @@ func loopFlags(fs *flag.FlagSet) func() supervisor.Options {
 			head = int64(*burst) * 800
 		}
 		return supervisor.Options{Interval: *interval, ReclaimAfter: *reclaimAfter, MaxPause: *maxPause, PauseFallthrough: *fallthrough_,
-			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch, MaxConcurrent: *wakeConc, MaxRecovering: *maxRecov, IdleCPUPct: *idleCPU, MinAwake: *minAwake, MaintainEvery: *maintain, MaintainConcurrent: *maintainN, MaintainIdle: *maintainIdle, ReadSchedules: *readSched, Headroom: head << 20, ThawSettle: *settle, WarmKeep: *warmKeep << 20, HotSetDir: filepath.Join(dataDir(), "hotsets")}
+			ReclaimKeep: *reclaimKeep << 20, PrefetchOnWake: *prefetch, MaxConcurrent: *wakeConc, MaxRecovering: *maxRecov, IdleCPUPct: *idleCPU, IdleCPUCooldown: *cpuCooldown, MinAwake: *minAwake, MaintainEvery: *maintain, MaintainConcurrent: *maintainN, MaintainIdle: *maintainIdle, ReadSchedules: *readSched, Headroom: head << 20, ThawSettle: *settle, WarmKeep: *warmKeep << 20, HotSetDir: filepath.Join(dataDir(), "hotsets")}
 	}
 }
 
