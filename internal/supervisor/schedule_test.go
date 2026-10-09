@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,4 +313,99 @@ func TestRecurringJobStopsRetryingAfterItsIntervalHasPassed(t *testing.T) {
 	if !c.NextDueAt.After(now) {
 		t.Fatalf("advanced to a time that is still in the past: %v", c.NextDueAt)
 	}
+}
+
+// readOnlyDir makes a directory unwritable and reports whether that actually
+// prevents writes: running as root it does not, and the test cannot be run.
+func readOnlyDir(t *testing.T, dir string) bool {
+	t.Helper()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	probe := filepath.Join(dir, ".probe")
+	if err := os.WriteFile(probe, []byte("x"), 0o600); err == nil {
+		_ = os.Remove(probe)
+		return false
+	}
+	return true
+}
+
+// A wake that succeeds but cannot persist the new due time is not a success:
+// the old due time is still on disk, so the next pass wakes the cell again for
+// a job already served. The failure has to reach the caller rather than being
+// dropped.
+func TestFailureToPersistTheDueTimeIsReported(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	// Already running: a message woke this cell moments before its scheduled
+	// time, so the wake is a no-op success that writes nothing. The schedule
+	// still has to move, which leaves the advance as the only thing that can
+	// fail here.
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-p": runtime.StateRunning},
+		netio: map[string]string{"oc-p": "1kB / 1kB"}}
+	reg, err := registry.Open(filepath.Join(dir, "cells.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		Probe: func(context.Context, int) error { return nil }, WakeTimeout: time.Second, MaxPause: -1})
+	if err := reg.Put(registry.Cell{Name: "p", Container: "oc-p", Port: 1, IdleAfter: time.Minute,
+		Phase: registry.PhaseActive, NextDueAt: now, NextDueEvery: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	cell := mustGet(t, reg, "p")
+	if !readOnlyDir(t, dir) {
+		t.Skip("cannot make the registry unwritable (running as root?)")
+	}
+
+	err = s.wakeDue(context.Background(), cell)
+	if err == nil {
+		t.Fatal("a wake that could not persist its due time reported success")
+	}
+	if !strings.Contains(err.Error(), "could not advance") {
+		t.Fatalf("error does not say what went wrong: %v", err)
+	}
+}
+
+// When the wake itself fails and the advance also fails, the wake failure is
+// the one worth reporting: it is the cause, and an occurrence that did not
+// move is retried next pass anyway.
+func TestWakeFailureOutranksAFailedAdvance(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-w": runtime.StatePaused},
+		netio: map[string]string{"oc-w": "1kB / 1kB"}}
+	reg, err := registry.Open(filepath.Join(dir, "cells.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		WakeTimeout: 10 * time.Millisecond, ReclaimWakeTimeout: 10 * time.Millisecond, MaxPause: -1,
+		Probe: func(context.Context, int) error { return errors.New("gateway never came up") }})
+	if err := reg.Put(registry.Cell{Name: "w", Container: "oc-w", Port: 1, IdleAfter: time.Minute,
+		Phase: registry.PhaseHibernated, PausedAt: now.Add(-3 * time.Hour),
+		NextDueAt: now.Add(-90 * time.Minute), NextDueEvery: time.Hour}); err != nil { // past its interval
+		t.Fatal(err)
+	}
+	if !readOnlyDir(t, dir) {
+		t.Skip("cannot make the registry unwritable (running as root?)")
+	}
+
+	err = s.wakeDue(context.Background(), mustGet(t, reg, "w"))
+	if err == nil {
+		t.Fatal("expected the wake failure to be reported")
+	}
+	if strings.Contains(err.Error(), "could not advance") {
+		t.Fatalf("the bookkeeping failure masked the real cause: %v", err)
+	}
+}
+
+func mustGet(t *testing.T, reg *registry.Store, name string) registry.Cell {
+	t.Helper()
+	c, err := reg.Get(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }

@@ -575,9 +575,15 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info ru
 // still held the old time, a wake that succeeded advanced the schedule twice
 // and skipped an occurrence. The decision belongs here, after the attempt.
 func (s *Supervisor) wakeDue(ctx context.Context, c registry.Cell) error {
-	_, err := s.wakeLocked(ctx, c.Name)
-	if err == nil {
-		_ = s.advanceDue(c.Name)
+	_, wakeErr := s.wakeLocked(ctx, c.Name)
+	if wakeErr == nil {
+		// The wake succeeded, so the schedule has to move with it. If that
+		// does not persist, the old due time is still on disk and the next
+		// pass wakes this cell again for a job already served, so this is not
+		// a success to report quietly. The caller records it against the cell.
+		if err := s.advanceDue(c.Name); err != nil {
+			return fmt.Errorf("woke %s for its scheduled job but could not advance its due time: %w", c.Name, err)
+		}
 		return nil
 	}
 	// The wake failed: keep the due time so the next pass retries it. The one
@@ -589,9 +595,15 @@ func (s *Supervisor) wakeDue(ctx context.Context, c registry.Cell) error {
 	if c.NextDueEvery > 0 && s.opt.Now().Sub(c.NextDueAt) > c.NextDueEvery {
 		s.opt.Logger.Warn("schedule: giving up on a missed occurrence after repeated wake failures",
 			"cell", c.Name, "was_due", c.NextDueAt.Format(time.RFC3339), "every", c.NextDueEvery)
-		_ = s.advanceDue(c.Name)
+		if err := s.advanceDue(c.Name); err != nil {
+			// Report the wake failure, not this one: it is why we are here,
+			// and an occurrence that did not move is simply retried next pass,
+			// which is the same place a working advance would have left us.
+			s.opt.Logger.Warn("schedule: could not advance past the missed occurrence",
+				"cell", c.Name, "err", err)
+		}
 	}
-	return err
+	return wakeErr
 }
 
 func (s *Supervisor) observeRunning(ctx context.Context, c registry.Cell, pid int) error {
