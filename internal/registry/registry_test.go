@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -117,8 +119,7 @@ func TestCrossProcessWritesAreSeen(t *testing.T) {
 		t.Fatalf("reader missed a cell added by another process: %v", err)
 	}
 
-	// Same-size write: a field changes without the file length moving, which is
-	// the case the mtime+size check could in principle miss.
+	// Same-size write: a field changes without the file length moving.
 	if err := writer.Update("a", func(c *Cell) { c.Port = 9 }); err != nil {
 		t.Fatal(err)
 	}
@@ -130,15 +131,62 @@ func TestCrossProcessWritesAreSeen(t *testing.T) {
 		t.Fatalf("reader kept a stale copy after a same-size write: port=%d", got.Port)
 	}
 
-	// Restart recovery: a store opened fresh sees everything on disk.
-	after, err := Open(path)
+	// The edge case the skip could actually miss, forced rather than hoped for:
+	// a same-size write whose mtime is pinned to the value already recorded, so
+	// neither half of the check moves. On the nanosecond-mtime filesystems this
+	// runs on, two writes colliding like this is not reachable in practice, but
+	// a coarser clock could produce it, and a reader must not be able to serve
+	// a stale cell indefinitely.
+	// Update() also rewrites a timestamp, so it never produces a same-size
+	// write; force the collision by editing the bytes and pinning the mtime.
+	before, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c, err := after.Get("a"); err != nil || c.Port != 9 {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := bytes.Replace(raw, []byte(`"port": 9`), []byte(`"port": 8`), 1)
+	if bytes.Equal(edited, raw) || len(edited) != len(raw) {
+		t.Fatalf("could not build a same-size edit; the on-disk shape has changed: %s", firstLineOf(raw))
+	}
+	if err := os.WriteFile(path, edited, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, before.ModTime(), before.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	// Immediately afterwards the reader may still serve its cached copy: both
+	// halves of the check match, which is the whole point of the optimisation.
+	// What must not happen is that it serves it for ever.
+	time.Sleep(staleAfter + 250*time.Millisecond)
+	got, err = reader.Get("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Port != 8 {
+		t.Fatalf("a reader served a stale cell past the staleness bound (port=%d, want 8): "+
+			"with mtime and size pinned, nothing else would ever invalidate its cache", got.Port)
+	}
+
+	// Restart recovery: a store opened fresh reads the file itself, so it sees
+	// the latest write regardless of what any live reader cached.
+	restarted, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err := restarted.Get("a"); err != nil || c.Port != 8 {
 		t.Fatalf("a newly opened store did not recover the file: %+v err=%v", c, err)
 	}
-	if len(after.List()) != 2 {
-		t.Fatalf("want 2 cells after restart, got %d", len(after.List()))
+	if len(restarted.List()) != 2 {
+		t.Fatalf("want 2 cells after restart, got %d", len(restarted.List()))
 	}
+}
+
+func firstLineOf(b []byte) string {
+	if i := bytes.IndexByte(b, '\n'); i >= 0 {
+		return string(b[:i])
+	}
+	return string(b)
 }

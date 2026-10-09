@@ -3,6 +3,7 @@ package supervisor
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -230,5 +231,85 @@ func TestReaderClearsADueTimeTheCellNoLongerHas(t *testing.T) {
 	c, _ := reg.Get("z")
 	if !c.NextDueAt.IsZero() {
 		t.Fatalf("a served due time survived a successful read: %v", c.NextDueAt)
+	}
+}
+
+// A recurring job whose wake fails must keep its due time and be retried, and
+// a wake that succeeds must advance it exactly one occurrence. Both were wrong
+// while reconcileCell advanced an overdue recurring time before the attempt:
+// a failure discarded the occurrence, and because the caller held a stale copy
+// of the cell, a success advanced it twice and skipped one.
+func TestRecurringJobIsRetriedAfterAFailedWakeThenAdvancesOnce(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	ready := false
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-r": runtime.StatePaused},
+		netio: map[string]string{"oc-r": "1kB / 1kB"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		WakeTimeout: 10 * time.Millisecond, ReclaimWakeTimeout: 10 * time.Millisecond,
+		MaxPause: -1,
+		Probe: func(context.Context, int) error {
+			if !ready {
+				return errors.New("gateway not up")
+			}
+			return nil
+		}})
+	due := now.Add(-30 * time.Minute) // overdue, well inside its hourly interval
+	_ = reg.Put(registry.Cell{Name: "r", Container: "oc-r", Port: 1, IdleAfter: time.Minute,
+		Phase: registry.PhaseHibernated, PausedAt: now.Add(-2 * time.Hour),
+		NextDueAt: due, NextDueEvery: time.Hour})
+
+	s.ReconcileOnce(context.Background()) // wake fails
+	s.Drain(context.Background())
+	c, _ := reg.Get("r")
+	if !c.NextDueAt.Equal(due) {
+		t.Fatalf("a failed wake consumed the missed occurrence: want %v, got %v", due, c.NextDueAt)
+	}
+
+	ready = true
+	fr.mu.Lock()
+	fr.state["oc-r"] = runtime.StatePaused // it is still asleep, ready to retry
+	fr.mu.Unlock()
+	s.ReconcileOnce(context.Background()) // retry succeeds
+	s.Drain(context.Background())
+	if !fr.has("unpause oc-r") {
+		t.Fatalf("the missed occurrence was never retried: %v", fr.calls)
+	}
+	c, _ = reg.Get("r")
+	// Exactly one interval on from the first occurrence after the pre-wake
+	// horizon: advancing twice would land an hour further out.
+	want := due
+	for !want.After(now.Add(2 * time.Minute)) {
+		want = want.Add(time.Hour)
+	}
+	if !c.NextDueAt.Equal(want) {
+		t.Fatalf("schedule did not advance exactly one occurrence: want %v, got %v", want, c.NextDueAt)
+	}
+}
+
+// Retrying must be bounded: once an occurrence has been missed for longer than
+// its own interval, the next one is closer than the one that keeps failing.
+func TestRecurringJobStopsRetryingAfterItsIntervalHasPassed(t *testing.T) {
+	now := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	fr := &fakeRunner{state: map[string]runtime.State{"oc-s": runtime.StatePaused},
+		netio: map[string]string{"oc-s": "1kB / 1kB"}}
+	reg, _ := registry.Open(filepath.Join(t.TempDir(), "cells.json"))
+	s := New(reg, runtime.Client{R: fr}, Options{Now: func() time.Time { return now },
+		WakeTimeout: 10 * time.Millisecond, ReclaimWakeTimeout: 10 * time.Millisecond,
+		MaxPause: -1,
+		Probe:    func(context.Context, int) error { return errors.New("never ready") }})
+	due := now.Add(-90 * time.Minute) // missed by more than its hourly interval
+	_ = reg.Put(registry.Cell{Name: "s", Container: "oc-s", Port: 1, IdleAfter: time.Minute,
+		Phase: registry.PhaseHibernated, PausedAt: now.Add(-3 * time.Hour),
+		NextDueAt: due, NextDueEvery: time.Hour})
+
+	s.ReconcileOnce(context.Background())
+	s.Drain(context.Background())
+	c, _ := reg.Get("s")
+	if c.NextDueAt.Equal(due) {
+		t.Fatal("kept retrying an occurrence missed by more than a full interval")
+	}
+	if !c.NextDueAt.After(now) {
+		t.Fatalf("advanced to a time that is still in the past: %v", c.NextDueAt)
 	}
 }

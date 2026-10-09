@@ -500,12 +500,6 @@ func (s *Supervisor) ReconcileOnce(ctx context.Context) {
 }
 
 func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info runtime.Info) error {
-	// A recurring due time that slipped past its window (its wakes kept
-	// failing) is moved on, so the schedule survives one bad morning; a
-	// one-shot that slipped stays as a record and is ignored by dueSoon.
-	if c.NextDueEvery > 0 && !c.NextDueAt.IsZero() && c.NextDueAt.Before(s.opt.Now().Add(-s.opt.PreWake)) {
-		_ = s.advanceDue(c.Name)
-	}
 	switch info.State {
 	case runtime.StateMissing:
 		return s.reg.Update(c.Name, func(x *registry.Cell) { x.Phase = registry.PhaseFailed; x.LastError = "container missing" })
@@ -573,9 +567,28 @@ func (s *Supervisor) reconcileCell(ctx context.Context, c registry.Cell, info ru
 // wakeDue wakes a hibernated cell for its scheduled job and only then moves
 // the due time on, so a wake that fails is retried on the next pass instead
 // of the schedule being consumed by the attempt.
+//
+// reconcileCell used to advance an overdue recurring time before getting here,
+// which made sense only while dueSoon ignored overdue times. Now that it wakes
+// for them, that advance did two wrong things: it discarded the missed
+// occurrence if the wake then failed, and because the caller's copy of the cell
+// still held the old time, a wake that succeeded advanced the schedule twice
+// and skipped an occurrence. The decision belongs here, after the attempt.
 func (s *Supervisor) wakeDue(ctx context.Context, c registry.Cell) error {
 	_, err := s.wakeLocked(ctx, c.Name)
 	if err == nil {
+		_ = s.advanceDue(c.Name)
+		return nil
+	}
+	// The wake failed: keep the due time so the next pass retries it. The one
+	// exception is a recurring occurrence that has now been missed for longer
+	// than its own interval, where the following occurrence is closer than the
+	// one we keep failing on; move to it rather than retrying this one for
+	// ever. Retries are paced by the cell lock and the wake timeout, not by
+	// the reconcile interval, so this is a bound rather than a hot loop.
+	if c.NextDueEvery > 0 && s.opt.Now().Sub(c.NextDueAt) > c.NextDueEvery {
+		s.opt.Logger.Warn("schedule: giving up on a missed occurrence after repeated wake failures",
+			"cell", c.Name, "was_due", c.NextDueAt.Format(time.RFC3339), "every", c.NextDueEvery)
 		_ = s.advanceDue(c.Name)
 	}
 	return err

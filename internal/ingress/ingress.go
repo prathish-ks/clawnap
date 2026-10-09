@@ -42,10 +42,17 @@ const hookReadyTimeout = 20 * time.Second
 // with a 5xx while finishing its post-thaw channel restart.
 const hookRetryWindow = 3 * time.Second
 
-// waitServing polls the cell's hook path with a side-effect-free GET until
-// the listener answers any HTTP status at all (a 4xx is fine: it proves the
-// application is serving, and the platform's real request follows). A
-// connection reset, EOF or refusal means the listener is not up yet.
+// waitServing polls the cell's hook path with a side-effect-free GET until the
+// listener answers any HTTP status at all. A connection reset, EOF or refusal
+// means the listener is not up yet.
+//
+// This establishes listener availability, not application readiness, and the
+// distinction is deliberate. Any status counts, including a 503: a gateway part
+// way through its post-thaw channel restart answers 5xx while it finishes, and
+// treating that as "not serving" would burn the whole timeout waiting for a
+// listener that is already there. Application readiness is handled one layer
+// up, where a forward answered with the channel's own "not ready" 5xx is
+// retried within hookRetryWindow.
 func waitServing(ctx context.Context, port int, fullPath, cell string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	path := strings.TrimPrefix(fullPath, "/hook/"+cell)
