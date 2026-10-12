@@ -80,3 +80,13 @@ A host can work around 1 with a request-level probe plus a short retry and aroun
 
 **The ask.** The ownership split proposed here (OpenClaw owns component restore, scheduler/owner readiness and admission gating; host owns delivery, wake events and placement) matches what we needed. The one thing the host side cannot build for itself is the ready signal: a single external "admission/placement reopened" state, either on the existing `/ready` endpoint or the restored-admission status seam from #127602. With that, a host can hold inbound delivery until the gateway is actually able to take a turn, and the platform retry and the user-facing notice both disappear. Full timings and the method are reproducible; happy to share them here or test a build that exposes such a signal.
 ---
+
+## Watch list after the 2026-10-12 thesis review
+
+What changed: the readiness seam is not coming, so clawnap owns it.
+
+- **#114145** (scale-to-zero recovery contract) — our comment posted 3 Oct asked for a status seam distinct from `/ready` liveness. The three candidate contracts, **#112385**, **#112865** and **#112896**, were all closed as dormant prioritisation calls.
+- **#127602** (`gateway.restore.status` RPC) — no maintainer decision since Aug 22. Treat "admitted and ready for traffic" as something clawnap infers from the cell's own log, bounded by a timeout, not something it can request. Its bot review also flagged that a status RPC must reject mismatched operation IDs before returning recovery or generation identity; if our readiness check ever grows an external-facing endpoint, fence it the same way. Until then it stays host-internal.
+- **#119035 / #119040** (wake-only cron payload) — the supervisor requirement recorded above is now shipped as `-read-schedules`, so this is a possible simplification rather than an open gap. If it lands, the host still has to know *when* to wake, and `-maintain-every` is host policy for cells with nothing scheduled at all, so delegation would be partial. Owner decision was requested 7 Oct and is still pending.
+- **#165825** (Oct 8) — upstream has fully exited tenant-container lifecycle management, including anything adjacent to multi-host or billing. That is the roadmap read, not a code dependency.
+- **Point releases, not just majors.** 2026.9.8, 2026.9.9 and 2026.10.1-beta.1/2 landed in the week to 12 Oct. 9.7 already thawed slower than 9.6. The guard is a per-tag compatibility canary (item 5 of the re-planned Phase 1), asserting the log lines this project reads, `state/openclaw.sqlite` → `cron_jobs.nextRunAtMs`, `/health`'s shape, and that pause → reclaim → wake still works. Wake latency is not measurable on a CI runner and stays a scripted run on the Hetzner host.
