@@ -729,3 +729,159 @@ quickstart sizes the cold tier at 1 GB per cell and the provisioning scripts
 default to 100 GB. What a host with no reclaim headroom costs a burst is
 measured properly in the 100-cell headroom section above (8 GB available:
 4.1 / 7.7 / 10.5 s; 3 GB: 19.9 / 23.1 / 25.6 s).
+
+## 2026-10-12 · Does a cold cell grow with use? No — the cost that grows is swap (08:01–08:47 UTC)
+
+The 15 h soak left the open question at the end of the previous section: an aged
+fleet held ~98 MiB per cold cell against the ~65 MiB the README records, so free
+memory settled near 4 GB instead of 8–9. Two candidates: cells grow with use, or
+the two readings counted different things. Settled here by holding both side by
+side instead of comparing across weeks.
+
+Host powered back on with the fleet intact, clawnap **v0.2.0** (the shipped
+binary, not the `cpugate-fix` build), kernel 6.8.0-146, shipped unit. Ten aged
+cells (v21..v30, created 2026-10-02, woken repeatedly since) booted to health,
+then ten new cells (f1..f10) created and booted. **The fresh ten were pinned to
+the digest the aged ten run** (`sha256:0da12cd4…`, which is 2026.9.7): the aged
+fleet was created when `:latest` meant 9.7 and `:latest` has moved since, so
+pulling it would have measured a version difference and called it age. Both sets
+taken cold under the same policy and read in one pass.
+
+| Set | anon (RAM) | swap | state dir on disk |
+|---|---|---|---|
+| Aged, 8 cold | **98.3 MiB mean** (66, 97, 98, 100, 104, 105, 107, 109) | 815 MiB mean | 164 MB mean |
+| Fresh, 10 cold | **97.5 MiB mean** (79, 86, 91, 95, 101, 102, 104, 104, 105, 108) | 655 MiB mean | 104 MB mean |
+
+- **Age does not cost RAM.** 98.3 against 97.5 MiB is the same number. A cell a
+  week old and one an hour old hold the same anonymous memory at the cold floor,
+  so "cells grow with use" is not what the soak saw.
+- **Age costs swap: ~160 MiB more per cell**, tracking the 60 MB larger state
+  directories. That is disk, the resource this design trades into, and it is the
+  measured case for sizing swap at 1 GB per cell rather than 0.7.
+- **The soak's ~98 MiB was a correct reading of the wrong suspect.** It matches
+  this aged mean exactly; it simply is not about age. The next candidate was the
+  OpenClaw version, tested immediately afterwards and also ruled out — see the
+  following section.
+
+**Method note, and a correction to how these runs should read memory.**
+`memory.current` cannot answer this question: every cold cell reported exactly
+149 MiB and the two cells that stayed warm reported 299 MiB, which are
+`-reclaim-keep-mib 150` and `-warm-keep-mib 300`. It reports the floor the cell
+is parked at, including page cache, not the cell's own working set. The figures
+above are `memory.stat`'s `anon` plus `memory.swap.current`. Earlier sections
+that quote a per-cell RAM number should be read with that distinction in mind.
+
+Incidental corroboration: the twenty cells put 14.7 GB on swap, ~735 MiB each,
+independent of the ~784 MiB per cell recorded in the operational note below.
+
+## 2026-10-12 · Not the version either: the ~65 MiB cold cell does not reproduce (08:56–09:14 UTC)
+
+Same host and session as above, clawnap v0.2.0. The 2026.9.6 cells still resident
+on the host (`bob`, `p202696`) booted beside a 9.7 twin (`p202697`), all three
+taken cold under the same policy, read in one pass with already-cold cells as
+controls.
+
+| Cell | Version | anon | swap |
+|---|---|---|---|
+| bob | 2026.9.6 | **88 MiB** | 656 MiB |
+| p202696 | 2026.9.6 | **102 MiB** | 621 MiB |
+| p202697 | 2026.9.7 | 110 MiB | 843 MiB |
+| f1 / f2 / f3 (fresh 9.7) | 2026.9.7 | 108 / 102 / 91 MiB | 552 / 693 / 666 MiB |
+| v21 / v23 (aged 9.7) | 2026.9.7 | 66 / 104 MiB | 949 / 805 MiB |
+
+**The version hypothesis fails.** 9.6 reads 88 and 102 MiB against 9.7's 91–110;
+the ranges overlap and the sample for 9.6 is two cells. Whatever separates 9.6
+from 9.7 at thaw — and the A/B above shows it is real for latency and hot-set
+size — it is not tens of megabytes of resident memory at the cold floor.
+
+**What this means for the published density figure.** Across 28 cold cells read
+today, of both versions and both ages, every one sits between 66 and 110 MiB of
+anon, mean ~98. The README's `~65 MiB used` does not reproduce under the shipped
+v0.2.0 policy. At 100 cells that is the difference between the published 8–9 GB
+free and ~4–5 GB:
+
+    16 GB − ~1 GB OS − 100 × ~98 MiB ≈ 4.8 GB free
+
+which is what the 15 h soak measured at rest (4.2 GB) and what this session
+measures at 20 cells. The earlier 8–9 GB reading was taken directly from the host
+in the 28–29 Sep runs, before the warm floor and the 150 MiB cold floor were the
+shipped policy, so the most likely explanation is that the two were taken under
+different reclaim settings rather than that either was misread. **Open and now
+the only thing blocking the headline: boot the full 100 under v0.2.0 and read the
+host's own free memory.** Until that runs, quote ~4–5 GB free at 100 cells, not
+8–9, and do not attribute the difference to fleet age.
+
+**Method, carried forward.** Per-cell memory in this file means `memory.stat`'s
+`anon` plus `memory.swap.current`. `memory.current` reports the floor the cell is
+parked at (149 MiB cold, 299 MiB warm) and cannot distinguish cells at all.
+
+## 2026-10-12 · 100 cells under v0.2.0: the published 8–9 GB does not reproduce, and the reason is the host, not the cells (09:21–12:31 UTC)
+
+Set out to reproduce the README's headline the way it was originally taken: boot
+the same 100 cells under the shipped unit and read the host's own free memory.
+The 13 cells left over from the two tests above were stopped first.
+
+| | Result |
+|---|---|
+| Boot-all, ten at a time to /health | **8 456 s (2 h 21 m)** |
+| All 100 paused | 766 s after the last boot |
+| Available at T+5 / +15 / +30 min | 2 729 / 2 704 / 2 719 MB — flat |
+| Cell anon in RAM, 100 cells | 8 689 MiB, **mean 86 MiB** |
+| Swap | **81 917 MB used of 81 919 — two megabytes free** |
+| Memory pressure (PSI) | `some avg10=0.00  full avg10=0.00` |
+
+**The swapfile was 100 % full** — 81 917 MB of 81 919, two megabytes free, with
+nothing OOM-killed, every cell healthy and paused, and pressure reading zero: the
+silent mode the swap-sizing section warns about, reproduced live.
+
+**But that is not why free memory was low, and the test that proved it is
+recorded below.** The first reading of this run blamed the full swapfile: pages
+with nowhere to go, cells unable to trim toward their floor. A second 20 GB
+swapfile was added to test exactly that, and over the following 32 minutes
+available memory did not move (2 774 → 2 728 MB) and **the new file was never
+touched** — swap use stayed at 81 905 MB. Nothing was waiting to be reclaimed.
+The cells were already at their floor, at 86 MiB of anon against a 150 MiB
+`-reclaim-keep-mib`, and 100 of them hold 8.7 GB. Free memory is 2.7 GB because
+that is what the shipped policy costs at this density, not because the host was
+stuck.
+
+**Root cause is provisioning, not code.** This host carries one 80 GB swapfile
+for 100 cells. The guidance written a week earlier, after the first occurrence of
+exactly this, is 1 GB per cell — 100 GB — and the host was never resized to match
+it. The measurement ran into the wall the documentation exists to prevent, which
+is also the strongest evidence so far that the 1 GB figure is the right one.
+
+**What this rules in and out, with the two runs above.** Age does not cost RAM
+(98.3 vs 97.5 MiB). The OpenClaw version does not explain it either (9.6 at 88
+and 102 MiB against 9.7 at 91–110). What remains between the published 8–9 GB
+and everything measured today is the policy the figure was taken under: the 8–9
+GB readings predate the 300 MiB warm floor and 150 MiB cold floor being shipped
+defaults. Those floors buy wake latency and cost free memory, and that trade is
+currently invisible in the README.
+
+**Also worth documenting: booting a fleet takes far longer than the quickstart
+implies.** 2 h 21 m for 100 cells, most of it spent waiting between batches for
+available memory to recover, because `-reclaim-after 30m` governs when a paused
+cell's pages actually leave RAM. The provisioning notes say "ten at a time" and
+say nothing about waiting out a 30-minute timer between batches. A host being
+rebuilt after a reboot needs either a shorter `-reclaim-after` for the duration
+of the boot or an explicit warning about the wall-clock cost.
+
+**Where that leaves the headline.** Under v0.2.0 with the shipped floors, 100
+cold 2026.9.7 cells leave **2.7 GB available** on a 16 GB host, flat over 32
+minutes. The published 8–9 GB is not reproducible here, and the three candidate
+explanations tested today — fleet age, OpenClaw version, and swap exhaustion —
+are all ruled out by measurement. What is left is the reclaim configuration: the
+8–9 GB readings were taken in the 28–29 Sep runs, when a reclaimed cell went to
+~20–65 MiB and there was no warm floor, against today's 300 MiB warm / 150 MiB
+cold floors. Those floors were added deliberately, to buy wake latency and to
+stop the thrash that made later thaws 3–4x slower; what they cost, on this
+evidence, is roughly 3 GB of free memory at 100 cells. That trade is not stated
+anywhere in the README, and until it is measured directly — same host, same
+fleet, `-reclaim-keep-mib` lowered — the honest published figure at 100 cells is
+**~2.7 GB free, not 8–9**.
+
+The swapfile still needs to be 100 GB for 100 cells: it filled completely here,
+and a full swapfile removes the host's ability to reclaim the moment anything
+*does* need reclaiming, such as a burst of wakes. That it was not the cause of
+the low free memory does not make it safe.
