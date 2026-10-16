@@ -18,7 +18,7 @@ Use as the body of a DM, a Discord post in a hosting channel, or a reply under a
 ---
 I run a small host-side supervisor for stock OpenClaw cells (nothing changed inside the container) and have been measuring it on a Hetzner CX43, 8 vCPU / 16 GB:
 
-- Stock cells with zram degrade at ~35 per host. Supervised: **100 cells on the same host, all healthy, 8–9 GB of RAM still free on a freshly created fleet** (idle cells paused and their memory reclaimed to a swapfile; ~65 MiB of RAM per cold cell). A fleet that has been in use for a week holds more per cell, nearer 4 GB free; I am measuring whether that is cells growing with use or the two measurements counting different things, and will tell you which. The cell count holds either way.
+- Stock cells with zram degrade at ~35 per host. Supervised: **100 cells on the same host, all healthy**, with ~2.7 GB of RAM still free at rest (idle cells paused and their memory reclaimed to a swapfile; ~90 MiB of RAM per cold cell, the rest of its ~0.8 GB on disk). Cells do not get more expensive as they age — I measured a week-old cell against one created an hour earlier and they hold the same memory; what grows is their swap footprint, which is why I size swap at 1 GB per cell.
 - Wake on the first inbound Telegram message: recently active cells ~1 s; cold cells ~3 s alone, 3–8 s for the last of ten waking at once. At any instant no more than ~15 % of cells hold their memory (5 % warm, up to 10 mid-wake); the rest sit at ~65 MiB each.
 - No user-visible artefact of the freeze: the supervisor covers OpenClaw's post-thaw window from the cell's own log; the tenant's config stays at defaults.
 

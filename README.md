@@ -8,8 +8,8 @@ Measured on one Hetzner CX43 (8 shared vCPU, 16 GB, throttled NVMe), OpenClaw **
 
 | | Stock | With clawnap (2026.9.6) |
 |---|---|---|
-| Cells per 16 GB host | ~35 with zram; at 40, two died and three failed health | **100, all healthy, 8–9 GB RAM still free on a fresh fleet; ~4 GB after a week of use (see below)** |
-| RAM per idle cell | ~750 MiB | ~65 MiB cold (150 MiB floor, the rest is cache), 300 MiB warm |
+| Cells per 16 GB host | ~35 with zram; at 40, two died and three failed health | **100, all healthy** (free memory at that density is a function of the reclaim floors, measured on 2026.9.7 — see the note below) |
+| RAM per idle cell | ~750 MiB | ~86–98 MiB cold in RAM, plus ~0.7–0.8 GB on the swapfile; 300 MiB warm |
 | Wake of a recently active cell | always on | ~1 s (0.7–1.3 s) |
 | Wake of a cold cell on its first message | always on | ~3 s, answer delivered on the platform's first push |
 | Ten cold cells waking at once | – | last one ready to serve in 3–8 s (readiness, steady state: 2.8 / 5.4 / 8.3 s first / median / last; a reply adds the model round trip, measured 5 s end to end for a cold cell without a model call) |
@@ -24,13 +24,30 @@ The same host with 2026.9.7 cells, 100 cells, measured 2026-10-02:
 | Ten cold cells at once, nothing else active | 5.0 / 9.9 / 11.5 s |
 | Ten cold cells at once with 5 uncapped residents active (host over-committed, see Tuning) | 7.4 / 8.3 / 11.3 s |
 | Ten cold cells at once, first wake after a fleet boot | 17–28 s: each cell's post-thaw housekeeping is CPU-bound and runs once |
+| Free memory at 100 cold cells, shipped floors | **2.7 GB**, flat over 30 min (2026-10-12, v0.2.0); the 15 h soak measured 4.2 GB at rest on the same host and that 1.5 GB gap is not yet explained, so size for 2.7 |
+| Time to boot 100 cells to health | **2 h 21 m** ten at a time, most of it waiting out `-reclaim-after 30m` between batches. Shorten that flag for a bulk boot |
 
 Measured over 15 hours at these settings with 10 % of cells taking traffic: the
 fleet holds 1–3 cells awake, free memory sits near 4 GB, and a message to a
-sleeping cell is answered in 2.7 s at the median (3.5 s at p90). The 8–9 GB
-figure above was taken on a freshly created fleet; this one had been in use for
-a week, and its cold cells hold ~98 MiB each rather than ~65. Which of the two
-a host sees over months is not yet settled, so size for the lower one.
+sleeping cell is answered in 2.7 s at the median (3.5 s at p90).
+
+**On the memory figure, and an earlier claim this replaces.** Older versions of
+this table said 8–9 GB free at 100 cells and blamed the lower number on fleet
+age. That was wrong, and the correction is worth stating plainly because the
+number is the pitch. Measured on 2026-10-12 under v0.2.0: a week-old cell and
+one created an hour earlier, pinned to the same image digest, hold the same
+memory (98.3 against 97.5 MiB) — cells do not grow with use. Age costs swap, not
+RAM, about 160 MiB more per cell. The OpenClaw version does not explain it
+either (2026.9.6 at 88 and 102 MiB against 9.7 at 91–110). Booting the full 100
+under the shipped unit leaves **2.7 GB available, flat over half an hour** —
+against 4.2 GB measured at rest during the 15 h soak on the same host, a gap
+that is not yet explained and that argues for sizing on the lower figure. The
+8–9 GB readings came from runs that predate the 300 MiB warm floor and 150 MiB
+cold floor shipped today; those floors were added to buy wake latency and to
+stop the thrash that made later thaws 3–4x slower, and on current evidence they
+cost roughly 3 GB of free memory at 100 cells. Quantifying that trade directly,
+so the floors can be tuned rather than guessed at, is the open item. Full
+working, including the two wrong explanations, is in the measurements file.
 
 Every number, including the ones that did not work (zram, zswap, ZFS, dm-vdo, KSM, memory caps), is in [experiments/hetzner-measurements-2026-09-27.md](experiments/hetzner-measurements-2026-09-27.md). The plan and decisions are in [docs/plan.md](docs/plan.md).
 
@@ -41,7 +58,7 @@ A cell is a stock OpenClaw container with a label. clawnap watches its traffic a
 | Tier | What is in RAM | Wake |
 |---|---|---|
 | Warm | the cell's working set, ~300 MiB, trimmed with cgroup `memory.reclaim`; the pages the kernel kept are recorded as the cell's hot set | unpause, ~1 s |
-| Cold | ~65 MiB used (a 150 MiB floor, mostly cache); everything else on the host's swapfile | prefetch the hot set (~270 MiB on 2026.9.6, 330–420 MiB on 2026.9.7) with `process_madvise`, unpause, 2–3.5 s |
+| Cold | ~86–98 MiB of anonymous memory (under a 150 MiB floor whose remainder is cache); everything else, ~0.7–0.8 GB, on the host's swapfile | prefetch the hot set (~270 MiB on 2026.9.6, 330–420 MiB on 2026.9.7) with `process_madvise`, unpause, 2–3.5 s |
 | Active | unlimited (an idle running gateway holds ~0.8 GB) | running |
 
 Cells go warm as soon as they pause and cold only when the host's available memory falls below a target, longest-paused first, or after a timed limit; the target is kept under continuous traffic (measured: the pressure pass yields to wakes in flight for at most 30 s). Only idle cells can be reclaimed; what active cells hold is theirs. A woken cell stays awake at least three minutes so OpenClaw can finish its post-thaw housekeeping.
@@ -73,7 +90,7 @@ So the honest offer is two tiers, and both already ship:
 | Timed jobs aimed at a person | woken before they are due | on time |
 | Internal maintenance (memory consolidation, weekly review) | runs on the next wake; `-maintain-every` guarantees one | continuous |
 | Proactive check-in | once per maintenance wake | native cadence, every 30 min |
-| Cost to the host | ~65 MiB asleep | ~0.8 GB, permanently resident |
+| Cost to the host | ~90 MiB asleep | ~0.8 GB, permanently resident |
 
 With `-maintain-every 12h` a standard cell is woken twice a day, so its
 proactive check-in happens roughly twice a day instead of 48 times. That is the
@@ -133,7 +150,7 @@ clawnap check                            # read-only security inspection of host
 Four numbers describe a host. The daemon flags that set them, and the rule that ties them together (every term measured on the reference host):
 
 ```
-RAM  ≈ 1 GB (OS) + 65 MiB × cold cells + 300 MiB × warm cells
+RAM  ≈ 1 GB (OS) + 90 MiB × cold cells + 300 MiB × warm cells
        + 0.8 GB × active cells (uncapped residents: tenants in a conversation)
        + 0.8 GB × cold wakes you want at full speed at once (a woken cell holds ~0.8 GB through its post-thaw window; the page-in itself is ~0.3 GB)
 
@@ -172,7 +189,7 @@ Active cells are the term people forget. clawnap can only make room from idle ce
 | Flag (service default) | What it sets |
 |---|---|
 | `-warm-keep-mib 300` | the warm floor: a paused cell's resident set and the size of its hot set |
-| `-reclaim-keep-mib 150` | the cold floor (memory.current; ~65 MiB of it is not cache) |
+| `-reclaim-keep-mib 150` | the cold floor, as measured by `memory.current`; ~86–98 MiB of it is anonymous memory and the rest is cache. Lower floors free RAM and cost wake latency; the trade is not yet measured directly |
 | `-headroom-mib 4096` (or `-burst-target N` = 0.8 GB × N) | available memory the host keeps; below it, the longest-paused warm cells go cold. Size it for the burst of cold wakes you want to absorb. Active cells count against it and cannot be reclaimed |
 | `-reclaim-after 30m` | timed limit after which a warm cell goes cold anyway |
 | `-wake-concurrency 4` | page-ins in flight (a hot-set wake reads ~270 MiB on 2026.9.6, 330–420 MiB on 2026.9.7; four in flight fill a cloud volume's ~0.5 GB/s) |

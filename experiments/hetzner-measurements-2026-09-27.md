@@ -706,7 +706,7 @@ cells actually sleep, more messages pay a wake: latency went from p50 0.14 s
 (85 % of messages hit a cell that was still awake) to p50 2.71 s / p90 3.46 s /
 max 4.51 s. That is the documented cold-wake cost, bought with 3 GB of memory.
 
-**Open: density on an aged fleet.** At rest now — 100 cold cells, 1 active —
+**Open — now closed, see the 2026-10-12 sections below: it is not age.** At rest now — 100 cold cells, 1 active —
 free memory is 4.2 GB, not 8–9. The cells hold 10.1 GB resident between them,
 ~98 MiB each, against the ~65 MiB the README records at the cold floor. This
 fleet has been woken repeatedly over a week; the published figure was taken on
